@@ -340,7 +340,7 @@ func (m *Model) handleBrowserKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.screen = ScreenStructure
 		return m, nil
 	case key.Matches(msg, m.keys.Refresh):
-		m.setErr(b.Refresh(m.store))
+		m.setErr(b.Reload(m.store))
 		return m, nil
 	case key.Matches(msg, m.keys.ToggleSidebar):
 		m.showSidebar = !m.showSidebar

@@ -273,6 +273,45 @@ func TestModel_EditorHistoryNavigation(t *testing.T) {
 
 // TestModel_ConnectToPostgres valida el stack completo (store → browser → TUI)
 // contra PostgreSQL real. Se salta sin env var.
+func TestModel_RefreshShowsInsertedRow(t *testing.T) {
+	db := createTestDB(t)
+
+	m := New()
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	pressKey(t, m, "tab")
+	press(t, m, db)
+	pressKey(t, m, "enter")
+	if m.screen != ScreenBrowser {
+		t.Fatalf("setup: screen = %d", m.screen)
+	}
+
+	// seleccionar users (segunda alfabéticamente, tecla "2")
+	press(t, m, "2")
+	if m.browser.ActiveTable != "users" {
+		t.Fatalf("setup: ActiveTable = %q, want users", m.browser.ActiveTable)
+	}
+
+	// insertar una fila desde el editor
+	pressKey(t, m, "tab")
+	press(t, m, "INSERT INTO users (name, email) VALUES ('Carol','c@t.com')")
+	pressKey(t, m, "ctrl+r")
+	if m.editor == nil || m.editor.Result == nil || m.editor.Result.Affected != 1 {
+		t.Fatalf("insert no corrió: %+v", m.editor)
+	}
+
+	// volver al browser y refrescar con "r"
+	pressKey(t, m, "tab")
+	press(t, m, "r")
+
+	if m.browser.TotalRows != 3 {
+		t.Errorf("TotalRows = %d, want 3 tras refresh", m.browser.TotalRows)
+	}
+	v := m.View()
+	if !strings.Contains(v, "Carol") {
+		t.Errorf("View no muestra la fila Carol tras refresh: %q", v)
+	}
+}
+
 func TestModel_ConnectToPostgres(t *testing.T) {
 	host := os.Getenv("SQLISH_TEST_POSTGRES_HOST")
 	if host == "" {

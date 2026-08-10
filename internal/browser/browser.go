@@ -89,6 +89,39 @@ func (b *Browser) Refresh(st store.Store) error {
 	return nil
 }
 
+// Reload recarga la lista de tablas y los datos de la tabla activa. Si la base
+// no tenía tabla activa (p.ej. creaste una tabla desde el editor) o la activa ya
+// no existe, selecciona la primera. Cubre el caso de tablas creadas/borradas
+// externamente o desde el editor.
+func (b *Browser) Reload(st store.Store) error {
+	if err := b.Load(st); err != nil {
+		return err
+	}
+	if b.ActiveTable == "" || !hasString(b.Tables, b.ActiveTable) {
+		if len(b.Tables) > 0 {
+			return b.SelectTable(b.Tables[0], st)
+		}
+		b.ActiveTable = ""
+		b.Columns = nil
+		b.Indexes = nil
+		b.Rows = nil
+		b.TotalRows = 0
+		b.Page = 0
+		b.Cursor = 0
+		return nil
+	}
+	return b.Refresh(st)
+}
+
+func hasString(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
 // NextPage avanza a la página siguiente si existe.
 func (b *Browser) NextPage(st store.Store) error {
 	if !b.HasNextPage() {

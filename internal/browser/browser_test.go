@@ -166,3 +166,58 @@ func TestBrowser_EmptyDatabase(t *testing.T) {
 		t.Errorf("ActiveTable = %q, want vacío", b.ActiveTable)
 	}
 }
+
+func TestBrowser_ReloadPicksUpNewTableAndRows(t *testing.T) {
+	st := newTestStore(t)
+	b, err := New(st)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if b.ActiveTable != "orders" {
+		t.Fatalf("setup: ActiveTable = %q", b.ActiveTable)
+	}
+
+	// crear una tabla nueva y agregar una fila a la tabla activa (orders),
+	// como si viniera del editor
+	if _, err := st.Exec("CREATE TABLE products (id INTEGER PRIMARY KEY)"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := st.Exec("INSERT INTO orders (id) VALUES (1)"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	if err := b.Reload(st); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if len(b.Tables) != 3 {
+		t.Errorf("Tables = %v, want 3 (orders, products, users)", b.Tables)
+	}
+	if b.ActiveTable != "orders" {
+		t.Errorf("ActiveTable = %q, want orders (sigue activa)", b.ActiveTable)
+	}
+	if b.TotalRows != 1 {
+		t.Errorf("TotalRows = %d, want 1 (fila nueva en orders)", b.TotalRows)
+	}
+
+	// Reload con base sin tabla activa: selecciona la primera
+	cfg := conn.New(conn.DriverSQLite)
+	cfg.Path = ":memory:"
+	st2, err := store.New(cfg)
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	defer st2.Close()
+	b2, err := New(st2) // base vacía → ActiveTable ""
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := st2.Exec("CREATE TABLE recien (id INTEGER PRIMARY KEY)"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := b2.Reload(st2); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if b2.ActiveTable != "recien" {
+		t.Errorf("ActiveTable = %q, want recien (selecciona la primera)", b2.ActiveTable)
+	}
+}
