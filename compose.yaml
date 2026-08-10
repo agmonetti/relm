@@ -1,0 +1,74 @@
+# Bases de datos de prueba para relm.
+#
+# Levanta los 4 motores de red con credenciales fijas y una base "test"
+# auto-creada en el primer arranque. Uso:
+#
+#   docker compose up -d
+#   docker compose down        # detener (conserva volúmenes)
+#   docker compose down -v     # detener y borrar todo
+#
+# SQLite no necesita servidor: es solo un archivo (ver USAGE.md sección 1).
+#
+# Credenciales de conexión (coinciden con USAGE.md):
+#   PostgreSQL : localhost:5432  postgres/postgres  base test
+#   MySQL      : localhost:3306  root/root          base test
+#   MariaDB    : localhost:3307  root/root          base test
+#   SQL Server : localhost:1433  sa/Str0ng!Passw0rd base master
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: relm-pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: test
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mysql:
+    image: mysql:8
+    container_name: relm-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: test
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mariadb:
+    image: mariadb:11
+    container_name: relm-maria
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: test
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -uroot -proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: relm-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Str0ng!Passw0rd"
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Str0ng!Passw0rd' -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12

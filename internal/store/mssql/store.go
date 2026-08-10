@@ -1,0 +1,211 @@
+package mssql
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"net/url"
+	"time"
+
+	_ "github.com/microsoft/go-mssqldb" // registra el driver "sqlserver"
+
+	"relm/internal/conn"
+	"relm/internal/store"
+)
+
+// Store es la implementación SQL Server de store.Store.
+type Store struct {
+	db *sql.DB
+}
+
+// New abre una conexión a SQL Server.
+func New(cfg conn.ConnectionConfig) (*Store, error) {
+	if cfg.Host == "" {
+		return nil, fmt.Errorf("%w: falta el host", store.ErrConnection)
+	}
+	u := url.URL{
+		Scheme: "sqlserver",
+		User:   url.UserPassword(cfg.User, cfg.Password),
+		Host:   fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+	}
+	q := u.Query()
+	if cfg.Database != "" {
+		q.Set("database", cfg.Database)
+	}
+	q.Set("connection+timeout", "5")
+	u.RawQuery = q.Encode()
+
+	db, err := sql.Open("sqlserver", u.String())
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", store.ErrConnection, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("%w: %v", store.ErrConnection, err)
+	}
+	return &Store{db: db}, nil
+}
+
+func init() {
+	store.Register(conn.DriverMSSQL, func(cfg conn.ConnectionConfig) (store.Store, error) {
+		return New(cfg)
+	})
+}
+
+func (s *Store) Driver() string { return "mssql" }
+
+// Version devuelve la versión del servidor.
+func (s *Store) Version() (string, error) {
+	var v string
+	if err := s.db.QueryRow("SELECT @@VERSION").Scan(&v); err != nil {
+		return "", fmt.Errorf("store.Version: %w", err)
+	}
+	return v, nil
+}
+
+func (s *Store) Close() error { return s.db.Close() }
+
+// Tables devuelve las tablas de la base actual.
+func (s *Store) Tables() ([]string, error) {
+	rows, err := s.db.Query(`
+		SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+		WHERE TABLE_TYPE = 'BASE TABLE'
+		ORDER BY TABLE_NAME`)
+	if err != nil {
+		return nil, fmt.Errorf("store.Tables: %w", err)
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("store.Tables: %w", err)
+		}
+		tables = append(tables, name)
+	}
+	return tables, rows.Err()
+}
+
+// Columns devuelve las columnas de una tabla.
+func (s *Store) Columns(table string) ([]store.Column, error) {
+	rows, err := s.db.Query(`
+		SELECT c.COLUMN_NAME, c.DATA_TYPE,
+		       CASE WHEN c.IS_NULLABLE = 'NO' THEN 1 ELSE 0 END,
+		       ISNULL(c.COLUMN_DEFAULT, ''),
+		       CASE WHEN pk.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END
+		FROM INFORMATION_SCHEMA.COLUMNS c
+		LEFT JOIN (
+			SELECT ku.TABLE_NAME, ku.COLUMN_NAME
+			FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+			JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE ku
+			  ON tc.CONSTRAINT_NAME = ku.CONSTRAINT_NAME
+			WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+		) pk ON c.TABLE_NAME = pk.TABLE_NAME AND c.COLUMN_NAME = pk.COLUMN_NAME
+		WHERE c.TABLE_NAME = @p1
+		ORDER BY c.ORDINAL_POSITION`, table)
+	if err != nil {
+		return nil, fmt.Errorf("store.Columns(%s): %w", table, err)
+	}
+	defer rows.Close()
+
+	var cols []store.Column
+	for rows.Next() {
+		var (
+			c             store.Column
+			notNull, isPK bool
+		)
+		if err := rows.Scan(&c.Name, &c.Type, &notNull, &c.Default, &isPK); err != nil {
+			return nil, fmt.Errorf("store.Columns(%s): %w", table, err)
+		}
+		c.NotNull = notNull
+		c.PK = isPK
+		cols = append(cols, c)
+	}
+	return cols, rows.Err()
+}
+
+// Indexes devuelve los índices de una tabla.
+func (s *Store) Indexes(table string) ([]store.Index, error) {
+	rows, err := s.db.Query(`
+		SELECT i.name, col.name, i.is_unique
+		FROM sys.indexes i
+		JOIN sys.index_columns ic
+		  ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+		JOIN sys.columns col
+		  ON ic.object_id = col.object_id AND ic.column_id = col.column_id
+		JOIN sys.tables t ON i.object_id = t.object_id
+		WHERE t.name = @p1 AND i.name IS NOT NULL
+		ORDER BY i.name, ic.key_ordinal`, table)
+	if err != nil {
+		return nil, fmt.Errorf("store.Indexes(%s): %w", table, err)
+	}
+	defer rows.Close()
+
+	var indexes []store.Index
+	byName := map[string]*store.Index{}
+	var order []string
+	for rows.Next() {
+		var name, col string
+		var unique bool
+		if err := rows.Scan(&name, &col, &unique); err != nil {
+			return nil, fmt.Errorf("store.Indexes(%s): %w", table, err)
+		}
+		ix, ok := byName[name]
+		if !ok {
+			ix = &store.Index{Name: name, Unique: unique}
+			byName[name] = ix
+			order = append(order, name)
+		}
+		ix.Columns = append(ix.Columns, col)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, name := range order {
+		indexes = append(indexes, *byName[name])
+	}
+	return indexes, nil
+}
+
+// Query ejecuta SQL arbitrario.
+func (s *Store) Query(sql string) (*store.Result, error) {
+	rows, err := s.db.Query(sql)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return store.ScanResult(rows)
+}
+
+// Exec ejecuta SQL sin resultado.
+func (s *Store) Exec(sql string) (int64, error) {
+	res, err := s.db.Exec(sql)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// CountTable devuelve la cantidad de filas de una tabla.
+func (s *Store) CountTable(table string) (int, error) {
+	q := fmt.Sprintf("SELECT COUNT(*) FROM %s", QuoteIdent(table))
+	var n int
+	if err := s.db.QueryRow(q).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store.CountTable(%s): %w", table, err)
+	}
+	return n, nil
+}
+
+// SelectTablePage devuelve una página de filas de una tabla.
+func (s *Store) SelectTablePage(table string, limit, offset int) (*store.Result, error) {
+	q := fmt.Sprintf("SELECT * FROM %s %s", QuoteIdent(table), Limit(limit, offset))
+	return s.Query(q)
+}
