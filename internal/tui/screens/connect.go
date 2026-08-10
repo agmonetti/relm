@@ -444,7 +444,7 @@ func (c *ConnScreen) renderForm() string {
 			if f.checked {
 				t = " [x] "
 			}
-			box = style.Width(fieldBoxW).Render(t + styles.StyleHeaderDim.Render("abrir sin escrituras"))
+			box = style.Width(fieldBoxW).Render(t + styles.StyleHeaderDim.Render("abrir en modo lectura"))
 		} else {
 			box = style.Width(fieldBoxW).Render(f.input.View())
 		}
