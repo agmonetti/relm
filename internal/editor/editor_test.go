@@ -112,9 +112,6 @@ func TestEditor_ExecuteOnlyFirstStatement(t *testing.T) {
 	if err := e.Execute(st); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if e.Warning != "ejecutando solo el statement 1 de 2" {
-		t.Errorf("Warning = %q", e.Warning)
-	}
 	// la segunda sentencia no debe haberse ejecutado
 	n, err := st.CountTable("t")
 	if err != nil {
@@ -134,9 +131,6 @@ func TestEditor_ExecuteAtSelectsStatementAtCursor(t *testing.T) {
 	if err := e.ExecuteAt(st, 2); err != nil {
 		t.Fatalf("ExecuteAt: %v", err)
 	}
-	if e.Warning != "ejecutando solo el statement 3 de 3" {
-		t.Errorf("Warning = %q", e.Warning)
-	}
 	if e.Result == nil || len(e.Result.Columns) != 2 {
 		t.Errorf("Result = %+v, want 2 columnas de users", e.Result)
 	}
@@ -148,9 +142,6 @@ func TestEditor_ExecuteAtSingleStatementIgnoresLine(t *testing.T) {
 	e.Buffer = "INSERT INTO users (name) VALUES ('X')"
 	if err := e.ExecuteAt(st, 5); err != nil {
 		t.Fatalf("ExecuteAt: %v", err)
-	}
-	if e.Warning != "" {
-		t.Errorf("Warning = %q, want vacío (un solo statement)", e.Warning)
 	}
 	if e.Result == nil || e.Result.Affected != 1 {
 		t.Errorf("Result = %+v, want Affected=1", e.Result)
@@ -164,9 +155,6 @@ func TestEditor_ExecuteAtLineInPreamble(t *testing.T) {
 	// cursor en la línea 0 (espacios previos): cae en el primer statement
 	if err := e.ExecuteAt(st, 0); err != nil {
 		t.Fatalf("ExecuteAt: %v", err)
-	}
-	if e.Warning != "ejecutando solo el statement 1 de 2" {
-		t.Errorf("Warning = %q", e.Warning)
 	}
 	if _, err := st.CountTable("t"); err != nil {
 		t.Fatalf("CountTable: %v", err)
@@ -182,16 +170,10 @@ func TestEditor_ExecuteAtSeparateLines(t *testing.T) {
 	if err := e.ExecuteAt(st, 0); err != nil {
 		t.Fatalf("ExecuteAt CREATE: %v", err)
 	}
-	if e.Warning != "ejecutando solo el statement 1 de 2" {
-		t.Errorf("Warning = %q", e.Warning)
-	}
 
 	// cursor en la línea 1 → INSERT
 	if err := e.ExecuteAt(st, 1); err != nil {
 		t.Fatalf("ExecuteAt INSERT: %v", err)
-	}
-	if e.Warning != "ejecutando solo el statement 2 de 2" {
-		t.Errorf("Warning = %q", e.Warning)
 	}
 	if e.Result == nil || e.Result.Affected != 1 {
 		t.Errorf("Result = %+v, want Affected=1", e.Result)
@@ -199,21 +181,6 @@ func TestEditor_ExecuteAtSeparateLines(t *testing.T) {
 	n, _ := st.CountTable("t")
 	if n != 1 {
 		t.Errorf("CountTable = %d, want 1", n)
-	}
-}
-
-func TestEditor_ExecuteSingleNoWarning(t *testing.T) {
-	st := newTestStore(t)
-	e := New()
-	e.Buffer = "INSERT INTO users (name) VALUES ('X')"
-	if err := e.Execute(st); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if e.Warning != "" {
-		t.Errorf("Warning = %q, want vacío", e.Warning)
-	}
-	if e.Result == nil || e.Result.Affected != 1 {
-		t.Errorf("Result = %+v, want Affected=1", e.Result)
 	}
 }
 

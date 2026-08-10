@@ -2,7 +2,6 @@
 package editor
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/agmonetti/relm/internal/store"
@@ -24,7 +23,6 @@ type Editor struct {
 	History *History
 	Result  *store.Result
 	Error   string
-	Warning string // aviso no bloqueante (ej: qué statement se ejecutó)
 	Mode    EditorMode
 }
 
@@ -51,11 +49,8 @@ func (e *Editor) ExecuteAt(st store.Store, line int) error {
 	}
 
 	q := stmts[0].Text
-	e.Warning = ""
 	if len(stmts) > 1 {
-		idx := statementAt(stmts, line)
-		q = stmts[idx].Text
-		e.Warning = fmt.Sprintf("ejecutando solo el statement %d de %d", idx+1, len(stmts))
+		q = stmts[statementAt(stmts, line)].Text
 	}
 
 	e.Mode = EditorModeExecuting

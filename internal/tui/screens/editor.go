@@ -89,10 +89,6 @@ func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 	// separador
 	b.WriteString("\n" + styles.StyleBorder.Render(strings.Repeat("─", width-2)) + "\n")
 
-	if e.Warning != "" {
-		b.WriteString(styles.StyleWarning.Render("  ⚠ " + e.Warning) + "\n")
-	}
-
 	if e.Error != "" {
 		b.WriteString(styles.StyleError.Render(e.Error))
 		return b.String()
