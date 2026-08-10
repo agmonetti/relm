@@ -66,6 +66,11 @@ var (
 
 	// StyleBorder es una línea de separación.
 	StyleBorder = lipgloss.NewStyle().Foreground(ColorBorder)
+
+	// StyleLogo es el logo ASCII de la pantalla de conexión.
+	StyleLogo = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(ColorPrimary)
 )
 
 // NullCell devuelve la representación de un valor NULL.

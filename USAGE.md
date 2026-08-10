@@ -53,14 +53,23 @@ INSERT INTO users (name, email) VALUES ('Alice','alice@test.com'), ('Bob','bob@t
 ```
 ┌─────────────────────────────────────────────┐
 │ relm · sin conexión · — ·                 │
-├──────────────┬──────────────────────────────┤
-│ Conectar     │ Motor  sqlite  ←→ cambiar    │
-│              │ Archivo  /data/app.db        │
-│              │ Solo lectura  [ ]            │
-│ Guardadas    │                              │
-│              │ [ Conectar (enter) ]         │
-│              │ ctrl+s guardar · r limpiar   │
-├──────────────┴──────────────────────────────┤
+├─────────────────────────────────────────────┤
+│                     _                       │
+│                    | |                      │
+│            _ __ ___| |_ __ ___              │
+│           | '__/ _ \ | '_ ` _ \             │
+│           | | |  __/ | | | | | |            │
+│           |_|  \___|_|_| |_| |_|            │
+│                                             │
+│                  Conectar                   │
+│             Motor  sqlite  ←→               │
+│             Archivo  /data/app.db           │
+│             Solo lectura [ ]                │
+│         ╭────────────────────╮              │
+│         │  Conectar (enter)  │              │
+│         ╰────────────────────╯              │
+│         ctrl+s guardar · r limpiar          │
+├─────────────────────────────────────────────┤
 │ ↑↓ guardadas · tab motor/campos · ←→ motor · enter conectar │
 └─────────────────────────────────────────────┘
 ```
@@ -183,8 +192,8 @@ docker run -d --rm --name mssql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='Str0ng!Pa
 ### 2c. Guardar la conexión para la próxima
 
 Con la pantalla de conexión armada, `Ctrl+S` la guarda en
-`~/.config/relm/connections.json`. La próxima vez aparece en el panel
-`Guardadas` y se conecta con `Enter` sobre ella.
+`~/.config/relm/connections.json`. La próxima vez aparece en la sección
+`Guardadas` (debajo del formulario) y se conecta con `Enter` sobre ella.
 
 ---
 

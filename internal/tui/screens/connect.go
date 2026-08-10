@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/agmonetti/relm/internal/conn"
 	"github.com/agmonetti/relm/internal/tui/styles"
@@ -23,6 +24,16 @@ type SaveConnectionMsg struct {
 	Cfg conn.ConnectionConfig
 }
 
+// logoASCII es el logo de la pantalla de conexión (figlet "relm").
+const logoASCII = "\n" +
+	"          _\n" +
+	"         | |\n" +
+	" _ __ ___| |_ __ ___\n" +
+	"| '__/ _ \\ | '_ ` _ \\\n" +
+	"| | |  __/ | | | | | |\n" +
+	"|_|  \\___|_|_| |_| |_|\n" +
+	"\n" +
+	"\n"
 // field es una etiqueta + input del formulario. Si isToggle es true, el campo
 // es un booleano (checkbox) y input no se usa.
 type field struct {
@@ -346,7 +357,8 @@ func (c *ConnScreen) FocusOnField() bool {
 	return c.focus >= 1 && c.focus < c.savedFocus()
 }
 
-// View renderiza el formulario y la lista de guardadas.
+// View renderiza el menú centrado estilo lazyvim: logo arriba y debajo el
+// formulario y las conexiones guardadas, todo centrado en el área disponible.
 func (c *ConnScreen) View(width, height int) string {
 	if width > 0 {
 		c.width = width
@@ -355,20 +367,38 @@ func (c *ConnScreen) View(width, height int) string {
 		c.height = height
 	}
 
-	form := c.renderForm()
-	saved := c.renderSaved()
-	content := styles.StyleBordered.Width(width - 2).Height(c.height - 2).
-		Render(lipglossJoinHorizontal(form, saved))
-
-	errLine := ""
-	if c.err != "" {
-		errLine = "\n" + styles.StyleError.Render(c.err)
+	var b strings.Builder
+	b.WriteString(styles.StyleLogo.Render(logoASCII))
+	b.WriteString("\n\n")
+	b.WriteString(c.renderForm())
+	if len(c.saved) > 0 {
+		b.WriteString("\n\n")
+		b.WriteString(c.renderSaved())
 	}
-	return content + errLine
+	if c.err != "" {
+		b.WriteString("\n\n")
+		b.WriteString(styles.StyleError.Render(c.err))
+	}
+
+	content := centerLines(b.String())
+	return lipgloss.Place(c.width, c.height, lipgloss.Center, lipgloss.Center, content)
 }
 
-func lipglossJoinHorizontal(a, b string) string {
-	return a + "\n\n" + b
+// centerLines centra cada línea del bloque sobre el ancho máximo.
+func centerLines(content string) string {
+	lines := strings.Split(content, "\n")
+	blockW := 0
+	for _, l := range lines {
+		if w := lipgloss.Width(l); w > blockW {
+			blockW = w
+		}
+	}
+	for i, l := range lines {
+		if pad := (blockW - lipgloss.Width(l)) / 2; pad > 0 {
+			lines[i] = strings.Repeat(" ", pad) + l
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (c *ConnScreen) renderForm() string {
