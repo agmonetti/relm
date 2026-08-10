@@ -368,17 +368,35 @@ func (c *ConnScreen) View(width, height int) string {
 	b.WriteString(styles.StyleLogo.Render(logoASCII))
 	b.WriteString("\n\n")
 	b.WriteString(c.renderForm())
+	content := centerLines(b.String())
+
+	// Las conexiones guardadas solo se muestran si hay lugar junto al
+	// formulario; si no, se omiten para no ocultarlo.
 	if len(c.saved) > 0 {
-		b.WriteString("\n\n")
-		b.WriteString(c.renderSaved())
-	}
-	if c.err != "" {
-		b.WriteString("\n\n")
-		b.WriteString(styles.StyleError.Render(c.err))
+		saved := centerLines(c.renderSaved())
+		if lipgloss.Height(content)+2+lipgloss.Height(saved) <= c.height {
+			content += "\n\n" + saved
+		}
 	}
 
-	content := centerLines(b.String())
-	return lipgloss.Place(c.width, c.height, lipgloss.Center, lipgloss.Center, content)
+	if c.err != "" {
+		content += "\n\n" + styles.StyleError.Render(c.err)
+	}
+
+	// Centrado vertical si entra; si se desborda, anclado arriba para que el
+	// logo nunca quede oculto.
+	if lipgloss.Height(content) > c.height {
+		content = lipgloss.Place(c.width, c.height, lipgloss.Center, lipgloss.Top, content)
+	} else {
+		content = lipgloss.Place(c.width, c.height, lipgloss.Center, lipgloss.Center, content)
+	}
+
+	// bubbletea espera exactamente c.height líneas: recorta si hace falta.
+	lines := strings.Split(content, "\n")
+	if len(lines) > c.height {
+		content = strings.Join(lines[:c.height], "\n")
+	}
+	return content
 }
 
 // centerLines centra cada línea del bloque sobre el ancho máximo.
@@ -411,9 +429,9 @@ func (c *ConnScreen) renderForm() string {
 
 	// selector de motor
 	b.WriteString(c.fieldRow("Motor", c.renderMotorSelector()))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
-	// campos
+	// campos, apilados sin líneas en blanco para no desbordar en terminales chicas
 	for i := range c.fieldsVisible() {
 		f := c.fieldsVisible()[i]
 		style := styles.StyleInputBox
@@ -431,10 +449,11 @@ func (c *ConnScreen) renderForm() string {
 			box = style.Width(fieldBoxW).Render(f.input.View())
 		}
 		b.WriteString(c.fieldRow(f.label, box))
-		b.WriteString("\n\n")
+		b.WriteString("\n")
 	}
 
 	// botonera
+	b.WriteString("\n")
 	b.WriteString(styles.StyleBtnPrimary.Render("Enter · Conectar"))
 	b.WriteString("\n")
 	b.WriteString(strings.Join([]string{
@@ -469,12 +488,8 @@ func (c *ConnScreen) renderSaved() string {
 	var b strings.Builder
 	b.WriteString(styles.StyleHeader.Render("Guardadas"))
 	b.WriteString("\n\n")
-	if len(c.saved) == 0 {
-		b.WriteString(styles.StyleHeaderDim.Render("  sin conexiones guardadas"))
-		return b.String()
-	}
 	for i, s := range c.saved {
-		line := fmt.Sprintf("  %s  %s", s.Name, s.ToConfig().Label())
+		line := fmt.Sprintf("%s  %s", s.Name, s.ToConfig().Label())
 		if c.focus == c.savedFocus() && i == c.savedIdx {
 			b.WriteString(styles.StyleSidebarActive.Render("> " + line))
 		} else {
@@ -482,6 +497,5 @@ func (c *ConnScreen) renderSaved() string {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString("\n" + styles.StyleHeaderDim.Render("  enter conectar") + "\n")
 	return b.String()
 }
