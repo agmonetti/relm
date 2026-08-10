@@ -155,6 +155,20 @@ docker run -d --rm --name maria -e MARIADB_ROOT_PASSWORD=root -e MARIADB_DATABAS
 docker run -d --rm --name mssql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='Str0ng!Passw0rd' -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
 ```
 
+Para **dar de baja un contenedor** por nombre y revisar qué contenedores hay abiertos:
+
+```text
+❯ docker stop pg
+pg
+❯ docker ps -a
+CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
+```
+
+> En el ejemplo de arriba los contenedores se levantaron con `--rm`, así que al
+> detenerlos se eliminan solos y `docker ps -a` ya no los lista. Si querés
+> conservar uno para volver a usarlo, levantalo sin `--rm` (o usá `docker compose`,
+> que conserva los datos con `docker compose down`).
+
 > Los env vars `POSTGRES_DB` / `MYSQL_DATABASE` / `MARIADB_DATABASE` hacen que
 > cada servidor cree la base `test` sola. SQL Server no la necesita: ya trae `master`.
 > Podés crear tablas directamente desde el editor de `relm` (`Ctrl+R`) — no necesitás otro cliente.
