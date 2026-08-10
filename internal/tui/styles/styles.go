@@ -37,6 +37,10 @@ var (
 	StyleError = lipgloss.NewStyle().
 			Foreground(ColorError)
 
+	// StyleWarning es un aviso no bloqueante (ámbar).
+	StyleWarning = lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: "#A86E00", Dark: "#E8B04B"})
+
 	// StyleFooter es el pie de pantalla.
 	StyleFooter = lipgloss.NewStyle().
 			Foreground(ColorMuted)

@@ -444,6 +444,7 @@ func (m *Model) executeEditor() tea.Cmd {
 		return nil
 	}
 	buf := m.editorScreen.Value()
+	line := m.editorScreen.Line() // statement bajo el cursor
 	st := m.store
 	token := m.queryID
 	m.loading = true
@@ -454,7 +455,7 @@ func (m *Model) executeEditor() tea.Cmd {
 			ed := editor.New()
 			ed.History = m.editor.History
 			ed.Buffer = buf
-			err := ed.Execute(st)
+			err := ed.ExecuteAt(st, line)
 			return editorDoneMsg{ed: ed, err: err, token: token}
 		},
 		m.spinner.Tick,

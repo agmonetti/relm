@@ -104,3 +104,144 @@ func TestEditor_Clear(t *testing.T) {
 		t.Errorf("Clear no limpió: %+v", e)
 	}
 }
+
+func TestEditor_ExecuteOnlyFirstStatement(t *testing.T) {
+	st := newTestStore(t)
+	e := New()
+	e.Buffer = "CREATE TABLE t (x INT); INSERT INTO t VALUES (1)"
+	if err := e.Execute(st); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if e.Warning != "ejecutando solo el statement 1 de 2" {
+		t.Errorf("Warning = %q", e.Warning)
+	}
+	// la segunda sentencia no debe haberse ejecutado
+	n, err := st.CountTable("t")
+	if err != nil {
+		t.Fatalf("CountTable: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("CountTable = %d, want 0 (INSERT no debe correr)", n)
+	}
+}
+
+func TestEditor_ExecuteAtSelectsStatementAtCursor(t *testing.T) {
+	st := newTestStore(t)
+	e := New()
+	e.Buffer = "SELECT 1;\nSELECT 2;\nSELECT * FROM users"
+
+	// cursor en la línea 2 (0-based): el tercer statement
+	if err := e.ExecuteAt(st, 2); err != nil {
+		t.Fatalf("ExecuteAt: %v", err)
+	}
+	if e.Warning != "ejecutando solo el statement 3 de 3" {
+		t.Errorf("Warning = %q", e.Warning)
+	}
+	if e.Result == nil || len(e.Result.Columns) != 2 {
+		t.Errorf("Result = %+v, want 2 columnas de users", e.Result)
+	}
+}
+
+func TestEditor_ExecuteAtSingleStatementIgnoresLine(t *testing.T) {
+	st := newTestStore(t)
+	e := New()
+	e.Buffer = "INSERT INTO users (name) VALUES ('X')"
+	if err := e.ExecuteAt(st, 5); err != nil {
+		t.Fatalf("ExecuteAt: %v", err)
+	}
+	if e.Warning != "" {
+		t.Errorf("Warning = %q, want vacío (un solo statement)", e.Warning)
+	}
+	if e.Result == nil || e.Result.Affected != 1 {
+		t.Errorf("Result = %+v, want Affected=1", e.Result)
+	}
+}
+
+func TestEditor_ExecuteAtLineInPreamble(t *testing.T) {
+	st := newTestStore(t)
+	e := New()
+	e.Buffer = "\n\nCREATE TABLE t (x INT);\nINSERT INTO t VALUES (1)"
+	// cursor en la línea 0 (espacios previos): cae en el primer statement
+	if err := e.ExecuteAt(st, 0); err != nil {
+		t.Fatalf("ExecuteAt: %v", err)
+	}
+	if e.Warning != "ejecutando solo el statement 1 de 2" {
+		t.Errorf("Warning = %q", e.Warning)
+	}
+	if _, err := st.CountTable("t"); err != nil {
+		t.Fatalf("CountTable: %v", err)
+	}
+}
+
+func TestEditor_ExecuteAtSeparateLines(t *testing.T) {
+	st := newTestStore(t)
+	e := New()
+	e.Buffer = "CREATE TABLE t (x INT);\nINSERT INTO t VALUES (1)"
+
+	// cursor en la línea 0 → CREATE
+	if err := e.ExecuteAt(st, 0); err != nil {
+		t.Fatalf("ExecuteAt CREATE: %v", err)
+	}
+	if e.Warning != "ejecutando solo el statement 1 de 2" {
+		t.Errorf("Warning = %q", e.Warning)
+	}
+
+	// cursor en la línea 1 → INSERT
+	if err := e.ExecuteAt(st, 1); err != nil {
+		t.Fatalf("ExecuteAt INSERT: %v", err)
+	}
+	if e.Warning != "ejecutando solo el statement 2 de 2" {
+		t.Errorf("Warning = %q", e.Warning)
+	}
+	if e.Result == nil || e.Result.Affected != 1 {
+		t.Errorf("Result = %+v, want Affected=1", e.Result)
+	}
+	n, _ := st.CountTable("t")
+	if n != 1 {
+		t.Errorf("CountTable = %d, want 1", n)
+	}
+}
+
+func TestEditor_ExecuteSingleNoWarning(t *testing.T) {
+	st := newTestStore(t)
+	e := New()
+	e.Buffer = "INSERT INTO users (name) VALUES ('X')"
+	if err := e.Execute(st); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if e.Warning != "" {
+		t.Errorf("Warning = %q, want vacío", e.Warning)
+	}
+	if e.Result == nil || e.Result.Affected != 1 {
+		t.Errorf("Result = %+v, want Affected=1", e.Result)
+	}
+}
+
+func TestEditor_FirstStatementRespectsStrings(t *testing.T) {
+	// ";" dentro de un string literal no parte el statement
+	stmt, multiple := firstStatement("INSERT INTO users (name) VALUES ('a;b')")
+	if multiple {
+		t.Error("no debería partir por ';' dentro de un string")
+	}
+	if stmt != "INSERT INTO users (name) VALUES ('a;b')" {
+		t.Errorf("stmt = %q", stmt)
+	}
+
+	// comillas duplicadas '' dentro del string
+	stmt, multiple = firstStatement("INSERT INTO t VALUES ('it''s; ok'); DROP TABLE x")
+	if !multiple {
+		t.Error("debería detectar el ';' después del string")
+	}
+	if stmt != "INSERT INTO t VALUES ('it''s; ok')" {
+		t.Errorf("stmt = %q", stmt)
+	}
+
+	// backslash escapado dentro del string
+	stmt, multiple = firstStatement(`INSERT INTO t VALUES ('a\;b')`)
+	if multiple {
+		t.Error("no debería partir por ';' escapado")
+	}
+	if stmt != `INSERT INTO t VALUES ('a\;b')` {
+		t.Errorf("stmt = %q", stmt)
+	}
+}
