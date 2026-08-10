@@ -24,16 +24,13 @@ type SaveConnectionMsg struct {
 	Cfg conn.ConnectionConfig
 }
 
-// logoASCII es el logo de la pantalla de conexión (figlet "relm").
-const logoASCII = "\n" +
-	"          _\n" +
-	"         | |\n" +
-	" _ __ ___| |_ __ ___\n" +
-	"| '__/ _ \\ | '_ ` _ \\\n" +
-	"| | |  __/ | | | | | |\n" +
-	"|_|  \\___|_|_| |_| |_|\n" +
-	"\n" +
-	"\n"
+// logoASCII es el logo de la pantalla de conexión (figlet "relm", font blocks).
+const logoASCII = `  _____  ______  _      __  __ 
+ |  __ \|  ____|| |    |  \/  |
+ | |__) | |__   | |    | \  / |
+ |  _  /|  __|  | |    | |\/| |
+ | | \ \| |____ | |____| |  | |
+ |_|  \_\______|_\_____|_|  |_|`
 // field es una etiqueta + input del formulario. Si isToggle es true, el campo
 // es un booleano (checkbox) y input no se usa.
 type field struct {
@@ -401,45 +398,71 @@ func centerLines(content string) string {
 	return strings.Join(lines, "\n")
 }
 
+// Anchos fijos del formulario: label a la izquierda + caja del input.
+const (
+	fieldLabelW = 14
+	fieldBoxW   = 32
+)
+
 func (c *ConnScreen) renderForm() string {
 	var b strings.Builder
 	b.WriteString(styles.StyleHeader.Render("Conectar"))
 	b.WriteString("\n\n")
 
 	// selector de motor
-	sel := fmt.Sprintf("%s ", styles.StyleHeaderDim.Render("Motor "))
-	if c.focus == 0 {
-		sel += styles.StyleCursor.Render(string(c.driver()))
-	} else {
-		sel += string(c.driver())
-	}
-	sel += styles.StyleHeaderDim.Render("  ←→ cambiar")
-	b.WriteString(sel + "\n")
+	b.WriteString(c.fieldRow("Motor", c.renderMotorSelector()))
+	b.WriteString("\n\n")
 
 	// campos
 	for i := range c.fieldsVisible() {
 		f := c.fieldsVisible()[i]
-		label := styles.StyleHeaderDim.Render(f.label + " ")
-		var value string
-		if f.isToggle {
-			value = "[ ]"
-			if f.checked {
-				value = "[x]"
-			}
-		} else {
-			value = f.input.View()
-		}
+		style := styles.StyleInputBox
 		if c.focus == i+1 {
-			value = styles.StyleAccentInput.Render(value)
+			style = styles.StyleInputBoxFocus
 		}
-		b.WriteString(label + value + "\n")
+		var box string
+		if f.isToggle {
+			t := " [ ] "
+			if f.checked {
+				t = " [x] "
+			}
+			box = style.Width(fieldBoxW).Render(t + styles.StyleHeaderDim.Render("abrir sin escrituras"))
+		} else {
+			box = style.Width(fieldBoxW).Render(f.input.View())
+		}
+		b.WriteString(c.fieldRow(f.label, box))
+		b.WriteString("\n\n")
 	}
 
+	// botonera
+	b.WriteString(styles.StyleBtnPrimary.Render("Enter · Conectar"))
 	b.WriteString("\n")
-	btn := "  Conectar (enter)  "
-	b.WriteString(styles.StyleBordered.Render(btn) + "\n")
-	b.WriteString(styles.StyleHeaderDim.Render("  ctrl+s guardar · r limpiar") + "\n")
+	b.WriteString(strings.Join([]string{
+		styles.StyleBtnSecondary.Render("ctrl+s  guardar"),
+		styles.StyleBtnSecondary.Render("r  limpiar"),
+	}, "  "))
+	b.WriteString("\n")
 	return b.String()
+}
+
+// fieldRow une el label (ancho fijo, a la izquierda) con su caja.
+func (c *ConnScreen) fieldRow(label, box string) string {
+	lbl := styles.StyleFieldLabel.Width(fieldLabelW).Align(lipgloss.Right).Render(label)
+	return lipgloss.JoinHorizontal(lipgloss.Center, lbl, " ", box)
+}
+
+// renderMotorSelector dibuja el selector de motor como una caja enfocable.
+func (c *ConnScreen) renderMotorSelector() string {
+	style := styles.StyleInputBox
+	if c.focus == 0 {
+		style = styles.StyleInputBoxFocus
+	}
+	content := lipgloss.JoinHorizontal(lipgloss.Bottom,
+		styles.StyleHeader.Render(" "+string(c.driver())),
+		strings.Repeat(" ", 4),
+		styles.StyleHeaderDim.Render("←→ cambiar"),
+	)
+	return style.Width(fieldBoxW).Render(content)
 }
 
 func (c *ConnScreen) renderSaved() string {

@@ -54,21 +54,24 @@ INSERT INTO users (name, email) VALUES ('Alice','alice@test.com'), ('Bob','bob@t
 ┌─────────────────────────────────────────────┐
 │ relm · sin conexión · — ·                 │
 ├─────────────────────────────────────────────┤
-│                     _                       │
-│                    | |                      │
-│            _ __ ___| |_ __ ___              │
-│           | '__/ _ \ | '_ ` _ \             │
-│           | | |  __/ | | | | | |            │
-│           |_|  \___|_|_| |_| |_|            │
+│                _____  ______  _      __  __ │
+│               |  __ \|  ____|| |    |  \/  |│
+│               | |__) | |__   | |    | \  / |│
+│               |  _  /|  __|  | |    | |\/| |│
+│               | | \ \| |____ | |____| |  | |│
+│               |_|  \_\______|_\_____|_|  |_|│
 │                                             │
-│                  Conectar                   │
-│             Motor  sqlite  ←→               │
-│             Archivo  /data/app.db           │
-│             Solo lectura [ ]                │
-│         ╭────────────────────╮              │
-│         │  Conectar (enter)  │              │
-│         ╰────────────────────╯              │
-│         ctrl+s guardar · r limpiar          │
+│                    Conectar                 │
+│                                             │
+│            Motor  │ postgres    ←→ cambiar  │
+│                   └─────────────────────────│
+│            Host   │ localhost               │
+│                   └─────────────────────────│
+│            Puerto │ 5432                    │
+│            Base   │ mydb                    │
+│                                             │
+│                Enter · Conectar             │
+│          ctrl+s  guardar   r  limpiar       │
 ├─────────────────────────────────────────────┤
 │ ↑↓ guardadas · tab motor/campos · ←→ motor · enter conectar │
 └─────────────────────────────────────────────┘

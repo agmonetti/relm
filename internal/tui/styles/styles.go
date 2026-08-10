@@ -55,15 +55,6 @@ var (
 			Bold(true).
 			Foreground(ColorAccent)
 
-	// StyleAccentInput resalta el input enfocado.
-	StyleAccentInput = lipgloss.NewStyle().
-			Foreground(ColorAccent)
-
-	// StyleBordered es el contenedor con borde.
-	StyleBordered = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(ColorBorder)
-
 	// StyleBorder es una línea de separación.
 	StyleBorder = lipgloss.NewStyle().Foreground(ColorBorder)
 
@@ -71,6 +62,34 @@ var (
 	StyleLogo = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(ColorPrimary)
+
+	// StyleFieldLabel es el label de un campo del formulario de conexión.
+	StyleFieldLabel = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(ColorHeader)
+
+	// StyleInputBox es la caja visible de un input del formulario.
+	StyleInputBox = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(ColorBorder).
+			Padding(0, 1)
+
+	// StyleInputBoxFocus es la caja del input enfocado.
+	StyleInputBoxFocus = StyleInputBox.
+				BorderForeground(ColorAccent)
+
+	// StyleBtnPrimary es el botón principal (fondo sólido teal).
+	StyleBtnPrimary = lipgloss.NewStyle().
+				Background(ColorPrimary).
+				Foreground(lipgloss.Color("#000000")).
+				Bold(true).
+				Padding(0, 3)
+
+	// StyleBtnSecondary es un botón secundario (fondo gris tenue).
+	StyleBtnSecondary = lipgloss.NewStyle().
+				Background(ColorMuted).
+				Foreground(lipgloss.Color("#000000")).
+				Padding(0, 2)
 )
 
 // NullCell devuelve la representación de un valor NULL.
