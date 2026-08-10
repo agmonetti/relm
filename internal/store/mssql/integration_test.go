@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"relm/internal/conn"
+	"github.com/agmonetti/relm/internal/conn"
 )
 
 func envCfg(t *testing.T) conn.ConnectionConfig {

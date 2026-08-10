@@ -8,9 +8,9 @@ Este archivo documenta encrucijadas y decisiones que el agente toma durante el d
 
 **Encrucijada:** el SPEC dice `go mod init github.com/[usuario]/relm`, pero `[usuario]` con corchetes no es un path de módulo válido para Go y no hay repo real.
 
-**Decisión:** usar `module relm` (nombre simple). Si el proyecto se publica, es un `sed` de una línea.
+**Decisión:** usar `module relm` (nombre simple). Cuando el proyecto se publicó en `github.com/agmonetti/relm`, se cambió a `module github.com/agmonetti/relm` con un `sed` (`s|"relm/|"github.com/agmonetti/relm/|g` sobre los `*.go` + la línea de `module` en `go.mod`), lo que habilita `go install github.com/agmonetti/relm@latest`.
 
-**Lección:** cuando el SPEC tenga placeholders no válidos, resolver con la opción más simple y anotarlo acá en vez de preguntar.
+**Lección:** cuando el SPEC tenga placeholders no válidos, resolver con la opción más simple y anotarlo acá en vez de preguntar. El path del módulo se migra al publicar con un sed mecánico.
 
 ---
 
@@ -205,6 +205,16 @@ Este archivo documenta encrucijadas y decisiones que el agente toma durante el d
 **Decisión:** `compose.yaml` oficial: `docker compose up -d` levanta los 4 motores con credenciales fijas, base `test` auto-creada, y healthchecks. Se validó: los 4 quedan `healthy` y los tests de integración pasan con esas credenciales. Se dejó la alternativa `docker run` por contenedor (con env vars, sin `exec`).
 
 **Lección:** para "levantá el entorno de prueba", `docker compose` con healthchecks es la opción estándar y la más robusta. Una imagen docker de la TUI misma no aporta (necesita un TTY y no incluiría la base); el compose de las bases es lo que el usuario necesita.
+
+---
+
+## L-22 — Un checkbox en un formulario de textinputs rompe el modelo de foco
+
+**Encrucijada:** agregar el toggle `Solo lectura` (SQLite) y el campo `SSL` (PostgreSQL) al formulario de conexión. El toggle no es un `textinput`, pero el `ConnScreen` trata todos los campos iguales: `applyFocus()` llamaba `.Focus()` a todos, y `Update()` pasaba la tecla al input activo.
+
+**Decisión:** extender `field` con `isToggle bool` + `checked bool`. `applyFocus()` saltea los toggles (no tienen `.Focus()`); `Update()` alterna con `Espacio`/`Enter` y no reenvía la tecla al input; `renderForm()` dibuja `[ ]`/`[x]`; `reset()` los apaga. La cantidad de campos por motor cambió (sqlite: 2, postgres: 6), así que `connect_test.go` se actualizó y agregó tests del toggle y del `sslmode`.
+
+**Lección:** cuando un componente visual no encaja en el tipo base de los campos (`textinput`), no se fuerza — se modela como una variante del campo con su propio handler. El costo real está en el foco (qué elemento "tiene" la tecla), no en el render.
 
 ---
 

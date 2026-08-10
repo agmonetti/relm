@@ -10,10 +10,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	_ "github.com/mattn/go-sqlite3"
 
-	_ "relm/internal/store/mssql"
-	_ "relm/internal/store/mysql" // registra los motores para los tests
-	_ "relm/internal/store/postgres"
-	_ "relm/internal/store/sqlite"
+	_ "github.com/agmonetti/relm/internal/store/mssql"
+	_ "github.com/agmonetti/relm/internal/store/mysql" // registra los motores para los tests
+	_ "github.com/agmonetti/relm/internal/store/postgres"
+	_ "github.com/agmonetti/relm/internal/store/sqlite"
 )
 
 // createTestDB crea un sqlite temporal con tablas users y orders.

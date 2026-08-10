@@ -4,7 +4,7 @@ package editor
 import (
 	"strings"
 
-	"relm/internal/store"
+	"github.com/agmonetti/relm/internal/store"
 )
 
 // EditorMode es el estado operativo del editor.

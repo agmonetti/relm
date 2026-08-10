@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"relm/internal/conn"
+	"github.com/agmonetti/relm/internal/conn"
 )
 
 // envCfg arma la config desde env vars, o saltea si no está seteada.

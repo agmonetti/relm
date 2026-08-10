@@ -7,8 +7,8 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"relm/internal/editor"
-	"relm/internal/tui/styles"
+	"github.com/agmonetti/relm/internal/editor"
+	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
 // EditorScreen mantiene el input multilínea del editor SQL y su renderizado.

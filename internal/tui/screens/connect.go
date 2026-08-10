@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"relm/internal/conn"
-	"relm/internal/tui/styles"
+	"github.com/agmonetti/relm/internal/conn"
+	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
 // ConnectMsg se emite cuando el usuario pide conectar.
@@ -23,10 +23,13 @@ type SaveConnectionMsg struct {
 	Cfg conn.ConnectionConfig
 }
 
-// field es una etiqueta + input del formulario.
+// field es una etiqueta + input del formulario. Si isToggle es true, el campo
+// es un booleano (checkbox) y input no se usa.
 type field struct {
-	label string
-	input textinput.Model
+	label    string
+	input    textinput.Model
+	isToggle bool
+	checked  bool
 }
 
 // ConnScreen es el estado del formulario de conexión. El motor se selecciona
@@ -62,6 +65,14 @@ func (c *ConnScreen) fieldsVisible() []*field {
 			if drv == conn.DriverSQLite {
 				out = append(out, f)
 			}
+		case "Solo lectura":
+			if drv == conn.DriverSQLite {
+				out = append(out, f)
+			}
+		case "SSL":
+			if drv == conn.DriverPostgres {
+				out = append(out, f)
+			}
 		default: // Host, Puerto, Usuario, Password, Base
 			if drv != conn.DriverSQLite {
 				out = append(out, f)
@@ -87,6 +98,8 @@ func (c *ConnScreen) rebuildFields() {
 		mk("Usuario", "postgres"),
 		mk("Password", ""),
 		mk("Base", "mydb"),
+		{label: "Solo lectura", isToggle: true},
+		mk("SSL", "prefer"),
 	}
 	// la password se enmascara solo en motores de red
 	if c.driver() != conn.DriverSQLite {
@@ -108,7 +121,7 @@ func (c *ConnScreen) applyFocus() tea.Cmd {
 		c.fields[i].input.Blur()
 	}
 	vis := c.fieldsVisible()
-	if idx := c.focus - 1; idx >= 0 && idx < len(vis) {
+	if idx := c.focus - 1; idx >= 0 && idx < len(vis) && !vis[idx].isToggle {
 		cmds = append(cmds, vis[idx].input.Focus())
 	}
 	return tea.Batch(cmds...)
@@ -154,6 +167,14 @@ func (c *ConnScreen) cfg() conn.ConnectionConfig {
 		}
 		return ""
 	}
+	checked := func(label string) bool {
+		for i := range c.fields {
+			if c.fields[i].label == label && c.fields[i].isToggle {
+				return c.fields[i].checked
+			}
+		}
+		return false
+	}
 	cfg := conn.New(c.driver())
 	cfg.Path = val("Archivo")
 	cfg.Host = val("Host")
@@ -161,6 +182,8 @@ func (c *ConnScreen) cfg() conn.ConnectionConfig {
 	cfg.User = val("Usuario")
 	cfg.Password = val("Password")
 	cfg.Database = val("Base")
+	cfg.ReadOnly = checked("Solo lectura")
+	cfg.SSLMode = val("SSL")
 	return cfg
 }
 
@@ -184,6 +207,13 @@ func (c *ConnScreen) validate() error {
 		}
 	} else if cfg.Host == "" {
 		return fmt.Errorf("escribe el host")
+	}
+	if cfg.SSLMode != "" {
+		switch cfg.SSLMode {
+		case "prefer", "require", "verify-ca", "verify-full", "disable":
+		default:
+			return fmt.Errorf("ssl: usa prefer, require, verify-full o disable")
+		}
 	}
 	return nil
 }
@@ -216,15 +246,19 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 			c.nextFocus()
 			handled = true
 		case "enter":
-			if c.focus == c.savedFocus() && len(c.saved) > 0 {
-				cfg := c.saved[c.savedIdx].ToConfig()
-				cmds = append(cmds, func() tea.Msg { return ConnectMsg{Cfg: cfg} })
-			} else {
-				cmd, err := c.connect()
-				if err != nil {
-					c.err = err.Error()
-				} else if cmd != nil {
-					cmds = append(cmds, cmd)
+			if idx := c.focus - 1; idx >= 0 {
+				if vis := c.fieldsVisible(); idx < len(vis) && vis[idx].isToggle {
+					vis[idx].checked = !vis[idx].checked
+				} else if c.focus == c.savedFocus() && len(c.saved) > 0 {
+					cfg := c.saved[c.savedIdx].ToConfig()
+					cmds = append(cmds, func() tea.Msg { return ConnectMsg{Cfg: cfg} })
+				} else {
+					cmd, err := c.connect()
+					if err != nil {
+						c.err = err.Error()
+					} else if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
 				}
 			}
 			handled = true
@@ -252,9 +286,16 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 		if !handled {
 			vis := c.fieldsVisible()
 			if idx := c.focus - 1; idx >= 0 && idx < len(vis) {
-				updated, cmd := vis[idx].input.Update(msg)
-				vis[idx].input = updated
-				cmds = append(cmds, cmd)
+				f := vis[idx]
+				if f.isToggle {
+					if msg.String() == " " {
+						f.checked = !f.checked
+					}
+				} else {
+					updated, cmd := f.input.Update(msg)
+					f.input = updated
+					cmds = append(cmds, cmd)
+				}
 			}
 		}
 	}
@@ -266,6 +307,7 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 func (c *ConnScreen) reset() {
 	for i := range c.fields {
 		c.fields[i].input.SetValue("")
+		c.fields[i].checked = false
 	}
 	c.fields[2].input.Placeholder = strconv.Itoa(conn.DefaultPort(c.driver()))
 	c.err = ""
@@ -348,7 +390,15 @@ func (c *ConnScreen) renderForm() string {
 	for i := range c.fieldsVisible() {
 		f := c.fieldsVisible()[i]
 		label := styles.StyleHeaderDim.Render(f.label + " ")
-		value := f.input.View()
+		var value string
+		if f.isToggle {
+			value = "[ ]"
+			if f.checked {
+				value = "[x]"
+			}
+		} else {
+			value = f.input.View()
+		}
 		if c.focus == i+1 {
 			value = styles.StyleAccentInput.Render(value)
 		}

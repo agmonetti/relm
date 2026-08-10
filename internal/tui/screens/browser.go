@@ -6,8 +6,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
-	"relm/internal/browser"
-	"relm/internal/tui/styles"
+	"github.com/agmonetti/relm/internal/browser"
+	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
 // RenderBrowser renderiza el contenido principal del browser.

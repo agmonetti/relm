@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"relm/internal/conn"
+	"github.com/agmonetti/relm/internal/conn"
 )
 
 // Column describe una columna de una tabla.

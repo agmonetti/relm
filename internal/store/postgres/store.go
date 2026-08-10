@@ -9,8 +9,8 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib" // registra el driver "pgx"
 
-	"relm/internal/conn"
-	"relm/internal/store"
+	"github.com/agmonetti/relm/internal/conn"
+	"github.com/agmonetti/relm/internal/store"
 )
 
 // Store es la implementación PostgreSQL de store.Store.
@@ -30,7 +30,11 @@ func New(cfg conn.ConnectionConfig) (*Store, error) {
 		Path:   "/" + url.PathEscape(cfg.Database),
 	}
 	q := u.Query()
-	q.Set("sslmode", "prefer")
+	sslmode := cfg.SSLMode
+	if sslmode == "" {
+		sslmode = "prefer"
+	}
+	q.Set("sslmode", sslmode)
 	u.RawQuery = q.Encode()
 
 	db, err := sql.Open("pgx", u.String())

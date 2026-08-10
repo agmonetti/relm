@@ -7,8 +7,8 @@ import (
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
 
-	"relm/internal/conn"
-	"relm/internal/store"
+	"github.com/agmonetti/relm/internal/conn"
+	"github.com/agmonetti/relm/internal/store"
 )
 
 // Store es la implementación MySQL/MariaDB de store.Store.

@@ -8,8 +8,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"relm/internal/conn"
-	"relm/internal/store"
+	"github.com/agmonetti/relm/internal/conn"
+	"github.com/agmonetti/relm/internal/store"
 )
 
 // Store es la implementación SQLite de store.Store.
@@ -26,7 +26,12 @@ func New(cfg conn.ConnectionConfig) (*Store, error) {
 	if _, err := os.Stat(cfg.Path); err != nil && !isMemory(cfg.Path) {
 		return nil, fmt.Errorf("%w: %s: no such file", store.ErrConnection, cfg.Path)
 	}
-	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000", cfg.Path)
+	dsn := "file:" + cfg.Path
+	if cfg.ReadOnly {
+		dsn += "?mode=ro&_foreign_keys=on"
+	} else {
+		dsn += "?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000"
+	}
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", store.ErrConnection, err)

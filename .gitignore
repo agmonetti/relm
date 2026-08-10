@@ -1,0 +1,15 @@
+# Binarios
+/relm
+/bin/
+/sqlish
+
+# Bases de ejemplo
+/demo.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor
+*.swp
+.idea/
+.vscode/

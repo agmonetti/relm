@@ -3,9 +3,9 @@ package editor
 import (
 	"testing"
 
-	"relm/internal/conn"
-	"relm/internal/store"
-	_ "relm/internal/store/sqlite"
+	"github.com/agmonetti/relm/internal/conn"
+	"github.com/agmonetti/relm/internal/store"
+	_ "github.com/agmonetti/relm/internal/store/sqlite"
 )
 
 func newTestStore(t *testing.T) store.Store {

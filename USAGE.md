@@ -56,6 +56,7 @@ INSERT INTO users (name, email) VALUES ('Alice','alice@test.com'), ('Bob','bob@t
 ├──────────────┬──────────────────────────────┤
 │ Conectar     │ Motor  sqlite  ←→ cambiar    │
 │              │ Archivo  /data/app.db        │
+│              │ Solo lectura  [ ]            │
 │ Guardadas    │                              │
 │              │ [ Conectar (enter) ]         │
 │              │ ctrl+s guardar · r limpiar   │
@@ -63,6 +64,8 @@ INSERT INTO users (name, email) VALUES ('Alice','alice@test.com'), ('Bob','bob@t
 │ ↑↓ guardadas · tab motor/campos · ←→ motor · enter conectar │
 └─────────────────────────────────────────────┘
 ```
+
+- `Solo lectura` abre el archivo en modo `mode=ro`: cualquier escritura falla. Útil para bases de producción. Se alterna con `Enter` o `Espacio` cuando el foco está en el toggle.
 
 2. Con `Tab` movete al campo `Archivo`, escribí `test.db` (o el path completo) y presioná `Enter`.
 
@@ -147,7 +150,7 @@ docker run -d --rm --name mssql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='Str0ng!Pa
 ### 2b. Conectar desde la pantalla de conexión
 
 1. Con `←`/`→` sobre el selector de **Motor**, elegí el motor (SQLite, PostgreSQL, MySQL, MariaDB, SQL Server).
-2. El formulario cambia a `Host · Puerto · Usuario · Password · Base`:
+2. El formulario cambia a `Host · Puerto · Usuario · Password · Base` (PostgreSQL agrega `SSL`):
 
 ```
 │  Motor   [ PostgreSQL ▾ ]                  │
@@ -157,7 +160,11 @@ docker run -d --rm --name mssql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='Str0ng!Pa
 │  Usuario  [ postgres ]                      │
 │  Password [ •••••• ]                        │
 │  Base     [ test ]                          │
+│  SSL      [ prefer ]                        │
 ```
+
+> El campo `SSL` controla TLS: `prefer` (default), `require`, `verify-full` (valida
+> certificado) o `disable`. Para producción usá `require` o `verify-full`.
 
 3. Completá con los datos del servidor. Con los contenedores de arriba:
 

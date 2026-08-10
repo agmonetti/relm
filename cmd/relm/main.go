@@ -7,11 +7,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	_ "relm/internal/store/mssql"    // registra SQL Server
-	_ "relm/internal/store/mysql"    // registra MySQL y MariaDB
-	_ "relm/internal/store/postgres" // registra PostgreSQL
-	_ "relm/internal/store/sqlite"   // registra SQLite
-	"relm/internal/tui"
+	_ "github.com/agmonetti/relm/internal/store/mssql"    // registra SQL Server
+	_ "github.com/agmonetti/relm/internal/store/mysql"    // registra MySQL y MariaDB
+	_ "github.com/agmonetti/relm/internal/store/postgres" // registra PostgreSQL
+	_ "github.com/agmonetti/relm/internal/store/sqlite"   // registra SQLite
+	"github.com/agmonetti/relm/internal/tui"
 )
 
 func main() {

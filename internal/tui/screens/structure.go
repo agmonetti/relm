@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"relm/internal/browser"
-	"relm/internal/tui/styles"
+	"github.com/agmonetti/relm/internal/browser"
+	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
 // RenderStructure renderiza columnas e índices de la tabla activa.

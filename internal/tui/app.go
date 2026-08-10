@@ -9,12 +9,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"relm/internal/browser"
-	"relm/internal/conn"
-	"relm/internal/editor"
-	"relm/internal/store"
-	"relm/internal/tui/screens"
-	"relm/internal/tui/styles"
+	"github.com/agmonetti/relm/internal/browser"
+	"github.com/agmonetti/relm/internal/conn"
+	"github.com/agmonetti/relm/internal/editor"
+	"github.com/agmonetti/relm/internal/store"
+	"github.com/agmonetti/relm/internal/tui/screens"
+	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
 // Screen identifica la pantalla activa.

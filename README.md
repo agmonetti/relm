@@ -14,7 +14,7 @@ Soporta exactamente **cinco motores**: SQLite, PostgreSQL, MySQL, MariaDB y SQL 
 Requiere Go 1.22+ y `gcc` (por el driver CGO de SQLite).
 
 ```bash
-go install github.com/[usuario]/relm@latest
+go install github.com/agmonetti/relm@latest
 # o desde el repo:
 go build -o relm ./cmd/relm
 ```
@@ -54,6 +54,7 @@ Se abre la **pantalla de conexión**. Elegí el motor con `←`/`→`, completá
 - Editor SQL multilínea con historial de los últimos 100 queries.
 - Estructura de tablas: columnas, constraints e índices.
 - Conexiones guardadas en `~/.config/relm/connections.json`.
+- Modo `Solo lectura` para SQLite y campo `SSL` para PostgreSQL (ver `06-seguridad.md`).
 - NULL se muestra como `∅`; valores largos se truncan con `…`.
 - Sin servidor, sin configuración previa, un solo binario.
 
@@ -98,6 +99,8 @@ La especificación vive como documentos numerados en este directorio:
 | `03-ux-pantallas.md` | Pantallas, keymaps, estilos |
 | `04-implementacion.md` | Fases de implementación |
 | `05-decisiones-tecnicas.md` | DSNs, edge cases, dialectos |
+| `06-seguridad.md` | Modelo de amenazas y decisiones de seguridad (mantenedores) |
+| `07-seguridad-usuario.md` | Seguridad para el usuario final |
 | `LESSONS.md` | Decisiones del agente durante el desarrollo |
 
 Para la guía de uso paso a paso, ver [USAGE.md](USAGE.md).

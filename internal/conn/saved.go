@@ -11,11 +11,13 @@ type SavedConnection struct {
 	Name     string `json:"name"`
 	Driver   Driver `json:"driver"`
 	Path     string `json:"path,omitempty"`
+	ReadOnly bool   `json:"read_only,omitempty"`
 	Host     string `json:"host,omitempty"`
 	Port     int    `json:"port,omitempty"`
 	User     string `json:"user,omitempty"`
 	Password string `json:"password,omitempty"`
 	Database string `json:"database,omitempty"`
+	SSLMode  string `json:"ssl_mode,omitempty"`
 }
 
 // ToConfig convierte una conexión guardada a ConnectionConfig.
@@ -24,11 +26,13 @@ func (s SavedConnection) ToConfig() ConnectionConfig {
 		Driver:   s.Driver,
 		Name:     s.Name,
 		Path:     s.Path,
+		ReadOnly: s.ReadOnly,
 		Host:     s.Host,
 		Port:     s.Port,
 		User:     s.User,
 		Password: s.Password,
 		Database: s.Database,
+		SSLMode:  s.SSLMode,
 	}
 	if cfg.Port == 0 {
 		cfg.Port = DefaultPort(cfg.Driver)
@@ -42,11 +46,13 @@ func FromConfig(cfg ConnectionConfig) SavedConnection {
 		Name:     cfg.Name,
 		Driver:   cfg.Driver,
 		Path:     cfg.Path,
+		ReadOnly: cfg.ReadOnly,
 		Host:     cfg.Host,
 		Port:     cfg.Port,
 		User:     cfg.User,
 		Password: cfg.Password,
 		Database: cfg.Database,
+		SSLMode:  cfg.SSLMode,
 	}
 }
 

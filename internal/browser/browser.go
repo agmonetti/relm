@@ -5,7 +5,7 @@ package browser
 import (
 	"sort"
 
-	"relm/internal/store"
+	"github.com/agmonetti/relm/internal/store"
 )
 
 // PageSizeDefault es la cantidad de filas por página.
