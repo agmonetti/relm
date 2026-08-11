@@ -73,10 +73,10 @@ func renderDataTable(cols []string, rows [][]string, cursor, width, height int) 
 
 	var sb strings.Builder
 	// header
-	sb.WriteString(renderRow(cols, widths, -1) + "\n")
+	sb.WriteString(renderRow(cols, widths, false) + "\n")
 
 	for i := 0; i < visible; i++ {
-		sb.WriteString(renderRow(rows[i], widths, cursor) + "\n")
+		sb.WriteString(renderRow(rows[i], widths, i == cursor) + "\n")
 	}
 	return sb.String()
 }
@@ -128,8 +128,8 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 	return widths
 }
 
-// renderRow renders a row. cursor == idx highlights the row.
-func renderRow(cells []string, widths []int, cursor int) string {
+// renderRow renders a row. selected highlights the whole row.
+func renderRow(cells []string, widths []int, selected bool) string {
 	var sb strings.Builder
 	for i, cell := range cells {
 		if i >= len(widths) {
@@ -142,7 +142,7 @@ func renderRow(cells []string, widths []int, cursor int) string {
 			text = truncate(text, widths[i])
 		}
 		text = pad(text, widths[i])
-		if i == cursor {
+		if selected {
 			text = styles.StyleCursor.Render(text)
 		}
 		sb.WriteString(text)
