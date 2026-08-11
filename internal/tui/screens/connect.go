@@ -111,9 +111,19 @@ func (c *ConnScreen) rebuildFields() {
 	}
 	// the password is masked only for network engines
 	if c.driver() != conn.DriverSQLite {
-		c.fields[4].input.EchoMode = textinput.EchoPassword
+		c.field("Password").input.EchoMode = textinput.EchoPassword
 	}
-	c.fields[2].input.Placeholder = strconv.Itoa(conn.DefaultPort(c.driver()))
+	c.field("Port").input.Placeholder = strconv.Itoa(conn.DefaultPort(c.driver()))
+}
+
+// field returns the form field with the given label, or nil if it does not exist.
+func (c *ConnScreen) field(label string) *field {
+	for i := range c.fields {
+		if c.fields[i].label == label {
+			return &c.fields[i]
+		}
+	}
+	return nil
 }
 
 // driver returns the selected engine.
@@ -317,7 +327,7 @@ func (c *ConnScreen) reset() {
 		c.fields[i].input.SetValue("")
 		c.fields[i].checked = false
 	}
-	c.fields[2].input.Placeholder = strconv.Itoa(conn.DefaultPort(c.driver()))
+	c.field("Port").input.Placeholder = strconv.Itoa(conn.DefaultPort(c.driver()))
 	c.err = ""
 }
 

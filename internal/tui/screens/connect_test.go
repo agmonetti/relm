@@ -98,6 +98,25 @@ func TestConnScreen_DriverCyclesAll(t *testing.T) {
 	}
 }
 
+func TestConnScreen_FieldHelper(t *testing.T) {
+	c := NewConnScreen(nil)
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	if c.field("File") == nil || c.field("Read-only") == nil {
+		t.Fatal("expected File and Read-only fields to exist")
+	}
+	if c.field("nonexistent") != nil {
+		t.Fatal("expected nil for an unknown label")
+	}
+
+	// password is masked only for network engines
+	if c.driver() != conn.DriverSQLite {
+		if c.field("Password").input.EchoMode != textinput.EchoPassword {
+			t.Error("Password should be masked for network engines")
+		}
+	}
+}
+
 func TestConnScreen_Validate(t *testing.T) {
 	c := NewConnScreen(nil)
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
