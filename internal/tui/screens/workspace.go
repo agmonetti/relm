@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -34,19 +35,22 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		showSidebar = false
 	}
 
-	sidebarW := width / 4
+	sidebarW := width / 5
 	if sidebarW < 14 {
 		sidebarW = 14
 	}
-	if sidebarW > 36 {
-		sidebarW = 36
+	if sidebarW > 20 {
+		sidebarW = 20
 	}
-	editorH := height / 3
-	if editorH < 7 {
-		editorH = 7
+	editorH := height / 4
+	if editorH < 9 {
+		editorH = 9
 	}
-	if editorH > height-3 {
-		editorH = height - 3
+	if editorH > height-5 {
+		editorH = height - 5
+	}
+	if editorH < 2 {
+		editorH = 2
 	}
 	mainH := height - editorH
 	if mainH < 2 {
@@ -63,11 +67,21 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		rightW = 20
 	}
 
+	// main pane: a title line with the table name + count, then the content
+	mainTitle := ""
+	mainHasTitle := b != nil && b.ActiveTable != ""
+	if mainHasTitle {
+		mainTitle = fmt.Sprintf("%s · %d rows", b.ActiveTable, b.TotalRows)
+	}
+	mainBodyH := mainH - 2
+	if mainHasTitle {
+		mainBodyH--
+	}
 	var mainContent string
 	if b == nil {
 		mainContent = styles.StyleHeaderDim.Render("no connection")
 	} else if structure {
-		mainContent = RenderStructure(b, rightW-2, mainH-2)
+		mainContent = RenderStructure(b, rightW-2, mainBodyH)
 	} else if len(b.Tables) == 0 {
 		mainContent = styles.StyleHeaderDim.Render("no tables — use the editor to create one")
 	} else if b.ActiveTable != "" && len(b.Rows) == 0 {
@@ -77,10 +91,12 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		for i, c := range b.Columns {
 			cols[i] = c.Name
 		}
-		mainContent = RenderDataTable(cols, b.Rows, b.Cursor, rightW-2, mainH-2)
+		mainContent = RenderDataTable(cols, b.Rows, b.Cursor, rightW-2, mainBodyH)
 	}
+	mainContent = titled(mainTitle, mainContent)
 
-	editorContent := es.View(e, rightW-2, editorH-2)
+	// editor pane: title + editor
+	editorContent := titled("SQL EDITOR", es.View(e, rightW-2, editorH-2-1))
 
 	mainPane := boxed(mainContent, rightW, mainH, focus == FocusMain)
 	editorPane := boxed(editorContent, rightW, editorH, focus == FocusEditor)
@@ -90,23 +106,37 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		return right
 	}
 
-	sidebarContent := RenderSidebar(b, sidebarCursor, sidebarW-2, height-2)
+	sidebarContent := titled("TABLES", RenderSidebar(b, sidebarCursor, sidebarW-2, height-2-1))
 	sidebarPane := boxed(sidebarContent, sidebarW, height, focus == FocusSidebar)
 	return lipgloss.JoinHorizontal(lipgloss.Top, sidebarPane, gap, right)
 }
 
-// boxed wraps content in a bordered pane of the given size, with an accent
-// border when focused. Overflow lines are trimmed so the pane never exceeds
-// the requested height.
+// titled prepends a pane title line to the body, if any.
+func titled(title, body string) string {
+	if title == "" {
+		return body
+	}
+	return styles.StylePaneTitle.Render(title) + "\n" + body
+}
+
+// boxed wraps content in a bordered pane of exactly the given size, with an
+// accent border when focused. lipgloss Width/Height apply to the content, and
+// the border adds one line/column per side, so the content is sized to
+// width-2 × height-2 and overflow lines are trimmed.
 func boxed(content string, width, height int, focused bool) string {
-	if inner := height - 2; inner > 0 {
-		if lines := strings.Split(content, "\n"); len(lines) > inner {
-			content = strings.Join(lines[:inner], "\n")
+	innerW := width - 2
+	innerH := height - 2
+	if innerW < 0 {
+		innerW = 0
+	}
+	if innerH > 0 {
+		if lines := strings.Split(content, "\n"); len(lines) > innerH {
+			content = strings.Join(lines[:innerH], "\n")
 		}
 	}
 	style := styles.StylePane
 	if focused {
 		style = styles.StylePaneFocus
 	}
-	return style.Width(width).Height(height).Render(content)
+	return style.Width(innerW).Height(innerH).Render(content)
 }

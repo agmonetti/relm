@@ -109,4 +109,9 @@ var (
 	// StylePaneFocus is the border of the focused workspace pane.
 	StylePaneFocus = StylePane.
 			BorderForeground(ColorAccent)
+
+	// StylePaneTitle is the title line at the top of a workspace pane.
+	StylePaneTitle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(ColorAccent)
 )

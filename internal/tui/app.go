@@ -3,12 +3,14 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	term "github.com/charmbracelet/x/term"
 
 	"github.com/agmonetti/relm/internal/browser"
 	"github.com/agmonetti/relm/internal/conn"
@@ -17,6 +19,34 @@ import (
 	"github.com/agmonetti/relm/internal/tui/screens"
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
+
+// termGetSize is a seam for the size guard tests.
+var termGetSize = term.GetSize
+
+// correctSize returns a usable terminal size. Windows conhost reports the
+// screen buffer (e.g. 9001 rows of scrollback) instead of the visible window
+// in its resize events, so the raw value must not be trusted: when it looks
+// bogus it is re-queried with the OS viewport and clamped as a safety net.
+func correctSize(w, h int) (int, int) {
+	if w < 10 || h < 3 || w > 500 || h > 1000 {
+		if rw, rh, err := termGetSize(os.Stdout.Fd()); err == nil && rw >= 10 && rh >= 3 {
+			w, h = rw, rh
+		}
+	}
+	if w < 10 {
+		w = 10
+	}
+	if h < 3 {
+		h = 3
+	}
+	if w > 500 {
+		w = 500
+	}
+	if h > 1000 {
+		h = 1000
+	}
+	return w, h
+}
 
 // Screen identifies the active screen.
 type Screen int
@@ -86,7 +116,7 @@ func (m *Model) Init() tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
+		m.width, m.height = correctSize(msg.Width, msg.Height)
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -229,7 +259,7 @@ func (m *Model) renderFooter() string {
 	case ScreenWorkspace:
 		switch m.focus {
 		case screens.FocusSidebar:
-			left = "↑↓ tables · enter open · tab next · ctrl+1/2/3 focus · ? help"
+			left = "↑↓ tables · enter open · tab next · ? help"
 		case screens.FocusMain:
 			if m.structure {
 				left = "esc back · tab next"

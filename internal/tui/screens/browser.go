@@ -63,10 +63,25 @@ func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) 
 
 	var sb strings.Builder
 	// header
-	sb.WriteString(renderRow(cols, widths, false) + "\n")
+	sb.WriteString(renderHeader(cols, widths) + "\n")
 
 	for i := 0; i < visible; i++ {
 		sb.WriteString(renderRow(rows[i], widths, i == cursor) + "\n")
+	}
+	return sb.String()
+}
+
+// renderHeader renders the column header row with the column header style.
+func renderHeader(cells []string, widths []int) string {
+	var sb strings.Builder
+	for i, c := range cells {
+		if i >= len(widths) {
+			break
+		}
+		sb.WriteString(styles.StyleColHeader.Render(pad(truncate(c, widths[i]), widths[i])))
+		if i < len(cells)-1 {
+			sb.WriteString(" ")
+		}
 	}
 	return sb.String()
 }
