@@ -37,7 +37,6 @@ func ScanResult(rows *sql.Rows) (*Result, error) {
 		}
 		res.Rows = append(res.Rows, row)
 	}
-	res.Count = len(res.Rows)
 	return &res, rows.Err()
 }
 

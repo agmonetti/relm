@@ -23,7 +23,6 @@ type Column struct {
 type Result struct {
 	Columns  []string
 	Rows     [][]string
-	Count    int   // number of rows in the result (not paginated)
 	Affected int64 // rows affected by an Exec; -1 when not applicable (read query)
 }
 

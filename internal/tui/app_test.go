@@ -351,9 +351,6 @@ func TestModel_ConnectToPostgres(t *testing.T) {
 		t.Skip("SQLISH_TEST_POSTGRES_HOST not set")
 	}
 
-	db := t.TempDir() + "/none.db" // placeholder no usado
-	_ = db
-
 	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
