@@ -8,11 +8,11 @@ import (
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
-// RenderStructure renderiza columnas e índices de la tabla activa.
+// RenderStructure renders columns and indexes of the active table.
 func RenderStructure(b *browser.Browser, width, height int) string {
 	var sb strings.Builder
 
-	sb.WriteString(styles.StyleHeader.Render("Columnas") + "\n")
+	sb.WriteString(styles.StyleHeader.Render("Columns") + "\n")
 	for _, c := range b.Columns {
 		var flags []string
 		if c.PK {
@@ -30,9 +30,9 @@ func RenderStructure(b *browser.Browser, width, height int) string {
 	}
 
 	indexes := b.Indexes
-	sb.WriteString("\n" + styles.StyleHeader.Render("Índices") + "\n")
+	sb.WriteString("\n" + styles.StyleHeader.Render("Indexes") + "\n")
 	if len(indexes) == 0 {
-		sb.WriteString(styles.StyleHeaderDim.Render("  sin índices") + "\n")
+		sb.WriteString(styles.StyleHeaderDim.Render("  no indexes") + "\n")
 	}
 	for _, ix := range indexes {
 		uniq := ""

@@ -1,5 +1,5 @@
-// Package browser maneja el estado de navegación de tablas y filas,
-// independiente de la TUI y del motor.
+// Package browser manages the state for navigating tables and rows,
+// independent of the TUI and the engine.
 package browser
 
 import (
@@ -8,10 +8,10 @@ import (
 	"github.com/agmonetti/relm/internal/store"
 )
 
-// PageSizeDefault es la cantidad de filas por página.
+// PageSizeDefault is the number of rows per page.
 const PageSizeDefault = 50
 
-// Browser mantiene el estado de navegación de la base activa.
+// Browser keeps the navigation state of the active database.
 type Browser struct {
 	Tables      []string
 	ActiveTable string
@@ -24,7 +24,7 @@ type Browser struct {
 	Cursor      int
 }
 
-// New carga las tablas de la base y selecciona la primera.
+// New loads the tables of the database and selects the first one.
 func New(st store.Store) (*Browser, error) {
 	b := &Browser{PageSize: PageSizeDefault}
 	if err := b.Load(st); err != nil {
@@ -38,7 +38,7 @@ func New(st store.Store) (*Browser, error) {
 	return b, nil
 }
 
-// Load recarga la lista de tablas.
+// Load reloads the list of tables.
 func (b *Browser) Load(st store.Store) error {
 	tables, err := st.Tables()
 	if err != nil {
@@ -49,7 +49,7 @@ func (b *Browser) Load(st store.Store) error {
 	return nil
 }
 
-// SelectTable cambia la tabla activa, resetea la página y carga los datos.
+// SelectTable switches the active table, resets the page and loads its data.
 func (b *Browser) SelectTable(name string, st store.Store) error {
 	b.ActiveTable = name
 	b.Page = 0
@@ -69,7 +69,7 @@ func (b *Browser) SelectTable(name string, st store.Store) error {
 	return b.Refresh(st)
 }
 
-// Refresh recarga la página actual de la tabla activa.
+// Refresh reloads the current page of the active table.
 func (b *Browser) Refresh(st store.Store) error {
 	if b.ActiveTable == "" {
 		return nil
@@ -89,10 +89,10 @@ func (b *Browser) Refresh(st store.Store) error {
 	return nil
 }
 
-// Reload recarga la lista de tablas y los datos de la tabla activa. Si la base
-// no tenía tabla activa (p.ej. creaste una tabla desde el editor) o la activa ya
-// no existe, selecciona la primera. Cubre el caso de tablas creadas/borradas
-// externamente o desde el editor.
+// Reload reloads the table list and the active table data. If the database
+// had no active table (e.g. you created a table from the editor) or the active
+// one no longer exists, it selects the first. Covers tables created/dropped
+// externally or from the editor.
 func (b *Browser) Reload(st store.Store) error {
 	if err := b.Load(st); err != nil {
 		return err
@@ -122,7 +122,7 @@ func hasString(list []string, want string) bool {
 	return false
 }
 
-// NextPage avanza a la página siguiente si existe.
+// NextPage advances to the next page if it exists.
 func (b *Browser) NextPage(st store.Store) error {
 	if !b.HasNextPage() {
 		return nil
@@ -132,7 +132,7 @@ func (b *Browser) NextPage(st store.Store) error {
 	return b.Refresh(st)
 }
 
-// PrevPage retrocede a la página anterior si existe.
+// PrevPage goes back to the previous page if it exists.
 func (b *Browser) PrevPage(st store.Store) error {
 	if !b.HasPrevPage() {
 		return nil
@@ -142,18 +142,18 @@ func (b *Browser) PrevPage(st store.Store) error {
 	return b.Refresh(st)
 }
 
-// MoveCursor mueve la fila seleccionada dentro de la página visible.
+// MoveCursor moves the selected row within the visible page.
 func (b *Browser) MoveCursor(delta int) {
 	b.Cursor += delta
 	b.clampCursor()
 }
 
-// HasNextPage indica si hay más páginas después de la actual.
+// HasNextPage reports whether there are more pages after the current one.
 func (b *Browser) HasNextPage() bool {
 	return (b.Page+1)*b.PageSize < b.TotalRows
 }
 
-// HasPrevPage indica si hay páginas anteriores a la actual.
+// HasPrevPage reports whether there are pages before the current one.
 func (b *Browser) HasPrevPage() bool {
 	return b.Page > 0
 }

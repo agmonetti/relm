@@ -20,7 +20,7 @@ jobs:
         run: go vet ./...
 
       - name: go test
-        # Los tests de motores de red se saltan sin env vars (ver README).
+        # Network engine tests are skipped without env vars (see README).
         run: go test ./...
 
       - name: go build

@@ -11,7 +11,7 @@ func envCfg(t *testing.T, prefix string) conn.ConnectionConfig {
 	t.Helper()
 	host := os.Getenv(prefix + "_HOST")
 	if host == "" {
-		t.Skipf("env %s_HOST no seteada; salteando test de integración", prefix)
+		t.Skipf("env %s_HOST not set; skipping integration test", prefix)
 	}
 	port := 3306
 	return conn.ConnectionConfig{
@@ -24,14 +24,14 @@ func envCfg(t *testing.T, prefix string) conn.ConnectionConfig {
 	}
 }
 
-// TestIntegrationMySQL ejercita el motor contra MySQL real.
+// TestIntegrationMySQL exercises the engine against a real MySQL.
 func TestIntegrationMySQL(t *testing.T) {
 	cfg := envCfg(t, "SQLISH_TEST_MYSQL")
 	cfg.Driver = conn.DriverMySQL
 	testStore(t, cfg)
 }
 
-// TestIntegrationMariaDB ejercita el motor contra MariaDB real.
+// TestIntegrationMariaDB exercises the engine against a real MariaDB.
 func TestIntegrationMariaDB(t *testing.T) {
 	cfg := envCfg(t, "SQLISH_TEST_MARIADB")
 	cfg.Driver = conn.DriverMariaDB
@@ -71,7 +71,7 @@ func testStore(t *testing.T, cfg conn.ConnectionConfig) {
 		t.Fatalf("Tables: %v", err)
 	}
 	if !contains(tables, "relm_test") {
-		t.Errorf("Tables no incluye relm_test: %v", tables)
+		t.Errorf("Tables does not include relm_test: %v", tables)
 	}
 
 	cols, err := s.Columns("relm_test")

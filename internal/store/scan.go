@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// ScanResult lee todas las filas de un Rows y las convierte a Result.
-// NULL va como ""; tipos binarios, time y numéricos se serializan a string.
+// ScanResult reads all rows from a Rows and converts them to a Result.
+// NULL becomes ""; binary, time and numeric types are serialized to string.
 func ScanResult(rows *sql.Rows) (*Result, error) {
 	colTypes, err := rows.ColumnTypes()
 	if err != nil {
@@ -20,7 +20,7 @@ func ScanResult(rows *sql.Rows) (*Result, error) {
 	}
 
 	var res Result
-	res.Affected = -1 // query de lectura
+	res.Affected = -1 // read query
 	res.Columns = columns
 	for rows.Next() {
 		vals := make([]any, len(columns))
@@ -41,7 +41,7 @@ func ScanResult(rows *sql.Rows) (*Result, error) {
 	return &res, rows.Err()
 }
 
-// Stringify convierte un valor escaneado de database/sql a string.
+// Stringify converts a value scanned from database/sql into a string.
 func Stringify(v any) string {
 	switch t := v.(type) {
 	case nil:

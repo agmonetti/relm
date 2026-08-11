@@ -1,4 +1,4 @@
-// Package screens contiene las pantallas de la TUI.
+// Package screens contains the TUI screens.
 package screens
 
 import (
@@ -14,25 +14,25 @@ import (
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
-// ConnectMsg se emite cuando el usuario pide conectar.
+// ConnectMsg is emitted when the user asks to connect.
 type ConnectMsg struct {
 	Cfg conn.ConnectionConfig
 }
 
-// SaveConnectionMsg se emite cuando el usuario guarda la conexión actual.
+// SaveConnectionMsg is emitted when the user saves the current connection.
 type SaveConnectionMsg struct {
 	Cfg conn.ConnectionConfig
 }
 
-// logoASCII es el logo de la pantalla de conexión (figlet "relm", font blocks).
+// logoASCII is the connect screen logo (figlet "relm", blocks font).
 const logoASCII = `  _____  ______  _      __  __ 
  |  __ \|  ____|| |    |  \/  |
  | |__) | |__   | |    | \  / |
  |  _  /|  __|  | |    | |\/| |
  | | \ \| |____ | |____| |  | |
  |_|  \_\______|_\_____|_|  |_|`
-// field es una etiqueta + input del formulario. Si isToggle es true, el campo
-// es un booleano (checkbox) y input no se usa.
+// field is a form label + input. If isToggle is true, the field is a boolean
+// (checkbox) and input is not used.
 type field struct {
 	label    string
 	input    textinput.Model
@@ -40,13 +40,13 @@ type field struct {
 	checked  bool
 }
 
-// ConnScreen es el estado del formulario de conexión. El motor se selecciona
-// con ←/→ cuando el foco está en el selector; Tab recorre los campos.
+// ConnScreen is the state of the connection form. The engine is selected with
+// ←/→ when the focus is on the selector; Tab moves across the fields.
 type ConnScreen struct {
 	driverIdx int
 	saved     []conn.SavedConnection
 	savedIdx  int
-	focus     int // 0 = motor, 1..len(fields) = campos, len(fields)+1 = guardadas
+	focus     int // 0 = engine, 1..len(fields) = fields, len(fields)+1 = saved
 	fields    []field
 	err       string
 
@@ -54,7 +54,7 @@ type ConnScreen struct {
 	height int
 }
 
-// NewConnScreen crea la pantalla con las conexiones guardadas cargadas.
+// NewConnScreen creates the screen with the saved connections loaded.
 func NewConnScreen(saved []conn.SavedConnection) *ConnScreen {
 	c := &ConnScreen{saved: saved}
 	c.rebuildFields()
@@ -62,18 +62,18 @@ func NewConnScreen(saved []conn.SavedConnection) *ConnScreen {
 	return c
 }
 
-// fieldsVisible devuelve los campos según el motor seleccionado.
+// fieldsVisible returns the fields for the selected engine.
 func (c *ConnScreen) fieldsVisible() []*field {
 	drv := c.driver()
 	var out []*field
 	for i := range c.fields {
 		f := &c.fields[i]
 		switch f.label {
-		case "Archivo":
+		case "File":
 			if drv == conn.DriverSQLite {
 				out = append(out, f)
 			}
-		case "Solo lectura":
+		case "Read-only":
 			if drv == conn.DriverSQLite {
 				out = append(out, f)
 			}
@@ -81,7 +81,7 @@ func (c *ConnScreen) fieldsVisible() []*field {
 			if drv == conn.DriverPostgres {
 				out = append(out, f)
 			}
-		default: // Host, Puerto, Usuario, Password, Base
+		default: // Host, Port, User, Password, Database
 			if drv != conn.DriverSQLite {
 				out = append(out, f)
 			}
@@ -90,7 +90,7 @@ func (c *ConnScreen) fieldsVisible() []*field {
 	return out
 }
 
-// rebuildFields crea los inputs persistentes (uno por campo posible).
+// rebuildFields creates the persistent inputs (one per possible field).
 func (c *ConnScreen) rebuildFields() {
 	mk := func(label, placeholder string) field {
 		in := textinput.New()
@@ -100,29 +100,29 @@ func (c *ConnScreen) rebuildFields() {
 		return field{label: label, input: in}
 	}
 	c.fields = []field{
-		mk("Archivo", "/data/app.db"),
+		mk("File", "/data/app.db"),
 		mk("Host", "localhost"),
-		mk("Puerto", strconv.Itoa(conn.DefaultPort(c.driver()))),
-		mk("Usuario", "postgres"),
+		mk("Port", strconv.Itoa(conn.DefaultPort(c.driver()))),
+		mk("User", "postgres"),
 		mk("Password", ""),
-		mk("Base", "mydb"),
-		{label: "Solo lectura", isToggle: true},
+		mk("Database", "mydb"),
+		{label: "Read-only", isToggle: true},
 		mk("SSL", "prefer"),
 	}
-	// la password se enmascara solo en motores de red
+	// the password is masked only for network engines
 	if c.driver() != conn.DriverSQLite {
 		c.fields[4].input.EchoMode = textinput.EchoPassword
 	}
 	c.fields[2].input.Placeholder = strconv.Itoa(conn.DefaultPort(c.driver()))
 }
 
-// driver devuelve el motor seleccionado.
+// driver returns the selected engine.
 func (c *ConnScreen) driver() conn.Driver { return conn.Drivers[c.driverIdx] }
 
-// savedFocus es el índice de foco de la lista de guardadas.
+// savedFocus is the focus index of the saved list.
 func (c *ConnScreen) savedFocus() int { return len(c.fieldsVisible()) + 1 }
 
-// applyFocus enfoca el input activo y desenfoca el resto.
+// applyFocus focuses the active input and blurs the rest.
 func (c *ConnScreen) applyFocus() tea.Cmd {
 	var cmds []tea.Cmd
 	for i := range c.fields {
@@ -136,7 +136,7 @@ func (c *ConnScreen) applyFocus() tea.Cmd {
 }
 
 func (c *ConnScreen) nextFocus() {
-	total := c.savedFocus() + 1 // +1 para volver al motor
+	total := c.savedFocus() + 1 // +1 to return to the engine
 	c.focus = (c.focus + 1) % total
 	c.applyFocus()
 }
@@ -165,7 +165,7 @@ func (c *ConnScreen) moveSaved(up bool) {
 	}
 }
 
-// cfg construye la config actual del formulario.
+// cfg builds the current config of the form.
 func (c *ConnScreen) cfg() conn.ConnectionConfig {
 	val := func(label string) string {
 		for i := range c.fields {
@@ -184,13 +184,13 @@ func (c *ConnScreen) cfg() conn.ConnectionConfig {
 		return false
 	}
 	cfg := conn.New(c.driver())
-	cfg.Path = val("Archivo")
+	cfg.Path = val("File")
 	cfg.Host = val("Host")
-	cfg.Port = parsePort(val("Puerto"), conn.DefaultPort(c.driver()))
-	cfg.User = val("Usuario")
+	cfg.Port = parsePort(val("Port"), conn.DefaultPort(c.driver()))
+	cfg.User = val("User")
 	cfg.Password = val("Password")
-	cfg.Database = val("Base")
-	cfg.ReadOnly = checked("Solo lectura")
+	cfg.Database = val("Database")
+	cfg.ReadOnly = checked("Read-only")
 	cfg.SSLMode = val("SSL")
 	return cfg
 }
@@ -206,27 +206,27 @@ func parsePort(s string, def int) int {
 	return n
 }
 
-// validate verifica los campos obligatorios según el motor.
+// validate checks the required fields for the engine.
 func (c *ConnScreen) validate() error {
 	cfg := c.cfg()
 	if cfg.Driver == conn.DriverSQLite {
 		if cfg.Path == "" {
-			return fmt.Errorf("escribe el path del archivo")
+			return fmt.Errorf("type the file path")
 		}
 	} else if cfg.Host == "" {
-		return fmt.Errorf("escribe el host")
+		return fmt.Errorf("type the host")
 	}
 	if cfg.SSLMode != "" {
 		switch cfg.SSLMode {
 		case "prefer", "require", "verify-ca", "verify-full", "disable":
 		default:
-			return fmt.Errorf("ssl: usa prefer, require, verify-full o disable")
+			return fmt.Errorf("ssl: use prefer, require, verify-full or disable")
 		}
 	}
 	return nil
 }
 
-// connectCmd arma el mensaje de conexión.
+// connectCmd builds the connection message.
 func (c *ConnScreen) connectCmd() tea.Cmd {
 	cfg := c.cfg()
 	return func() tea.Msg { return ConnectMsg{Cfg: cfg} }
@@ -239,7 +239,7 @@ func (c *ConnScreen) connect() (tea.Cmd, error) {
 	return c.connectCmd(), nil
 }
 
-// Update maneja teclas y redimensiona.
+// Update handles keys and resizing.
 func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 	var cmds []tea.Cmd
 	handled := false
@@ -311,7 +311,7 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 	return c, tea.Batch(cmds...)
 }
 
-// reset limpia el formulario y el error.
+// reset clears the form and the error.
 func (c *ConnScreen) reset() {
 	for i := range c.fields {
 		c.fields[i].input.SetValue("")
@@ -321,10 +321,10 @@ func (c *ConnScreen) reset() {
 	c.err = ""
 }
 
-// ResetForm limpia el formulario (para nueva sesión).
+// ResetForm clears the form (for a new session).
 func (c *ConnScreen) ResetForm() { c.reset() }
 
-// SetSaved actualiza la lista de conexiones guardadas.
+// SetSaved updates the list of saved connections.
 func (c *ConnScreen) SetSaved(saved []conn.SavedConnection) {
 	c.saved = saved
 	if c.savedIdx >= len(c.saved) {
@@ -332,13 +332,13 @@ func (c *ConnScreen) SetSaved(saved []conn.SavedConnection) {
 	}
 }
 
-// SetError muestra un error de conexión en la pantalla.
+// SetError shows a connection error on the screen.
 func (c *ConnScreen) SetError(err string) { c.err = err }
 
-// Error devuelve el error actual de la pantalla.
+// Error returns the current screen error.
 func (c *ConnScreen) Error() string { return c.err }
 
-// FieldValue devuelve el valor de un campo del formulario por etiqueta.
+// FieldValue returns the value of a form field by label.
 func (c *ConnScreen) FieldValue(label string) string {
 	for i := range c.fields {
 		if c.fields[i].label == label {
@@ -348,14 +348,14 @@ func (c *ConnScreen) FieldValue(label string) string {
 	return ""
 }
 
-// FocusOnField indica si el foco está en un input de texto (no en el motor ni
-// en la lista de guardadas).
+// FocusOnField reports whether the focus is on a text input (not the engine or
+// the saved list).
 func (c *ConnScreen) FocusOnField() bool {
 	return c.focus >= 1 && c.focus < c.savedFocus()
 }
 
-// View renderiza el menú centrado estilo lazyvim: logo arriba y debajo el
-// formulario y las conexiones guardadas, todo centrado en el área disponible.
+// View renders the lazyvim-style centered menu: logo on top and below the form
+// and the saved connections, all centered in the available area.
 func (c *ConnScreen) View(width, height int) string {
 	if width > 0 {
 		c.width = width
@@ -370,8 +370,8 @@ func (c *ConnScreen) View(width, height int) string {
 	b.WriteString(c.renderForm())
 	content := centerLines(b.String())
 
-	// Las conexiones guardadas solo se muestran si hay lugar junto al
-	// formulario; si no, se omiten para no ocultarlo.
+	// Saved connections are only shown if there is room next to the form;
+	// otherwise they are omitted so they don't hide it.
 	if len(c.saved) > 0 {
 		saved := centerLines(c.renderSaved())
 		if lipgloss.Height(content)+2+lipgloss.Height(saved) <= c.height {
@@ -383,15 +383,15 @@ func (c *ConnScreen) View(width, height int) string {
 		content += "\n\n" + styles.StyleError.Render(c.err)
 	}
 
-	// Centrado vertical si entra; si se desborda, anclado arriba para que el
-	// logo nunca quede oculto.
+	// Center vertically if it fits; if it overflows, anchor to the top so the
+	// logo is never hidden.
 	if lipgloss.Height(content) > c.height {
 		content = lipgloss.Place(c.width, c.height, lipgloss.Center, lipgloss.Top, content)
 	} else {
 		content = lipgloss.Place(c.width, c.height, lipgloss.Center, lipgloss.Center, content)
 	}
 
-	// bubbletea espera exactamente c.height líneas: recorta si hace falta.
+	// bubbletea expects exactly c.height lines: trim if needed.
 	lines := strings.Split(content, "\n")
 	if len(lines) > c.height {
 		content = strings.Join(lines[:c.height], "\n")
@@ -399,7 +399,7 @@ func (c *ConnScreen) View(width, height int) string {
 	return content
 }
 
-// centerLines centra cada línea del bloque sobre el ancho máximo.
+// centerLines centers each line of the block to the maximum width.
 func centerLines(content string) string {
 	lines := strings.Split(content, "\n")
 	blockW := 0
@@ -416,7 +416,7 @@ func centerLines(content string) string {
 	return strings.Join(lines, "\n")
 }
 
-// Anchos fijos del formulario: label a la izquierda + caja del input.
+// Fixed form widths: label on the left + input box.
 const (
 	fieldLabelW = 14
 	fieldBoxW   = 32
@@ -424,14 +424,14 @@ const (
 
 func (c *ConnScreen) renderForm() string {
 	var b strings.Builder
-	b.WriteString(styles.StyleHeader.Render("Conectar"))
+	b.WriteString(styles.StyleHeader.Render("Connect"))
 	b.WriteString("\n\n")
 
-	// selector de motor
-	b.WriteString(c.fieldRow("Motor", c.renderMotorSelector()))
+	// engine selector
+	b.WriteString(c.fieldRow("Engine", c.renderMotorSelector()))
 	b.WriteString("\n")
 
-	// campos, apilados sin líneas en blanco para no desbordar en terminales chicas
+	// fields, stacked without blank lines so they don't overflow on small terminals
 	for i := range c.fieldsVisible() {
 		f := c.fieldsVisible()[i]
 		style := styles.StyleInputBox
@@ -444,7 +444,7 @@ func (c *ConnScreen) renderForm() string {
 			if f.checked {
 				t = " [x] "
 			}
-			box = style.Width(fieldBoxW).Render(t + styles.StyleHeaderDim.Render("abrir en modo lectura"))
+			box = style.Width(fieldBoxW).Render(t + styles.StyleHeaderDim.Render("open read-only"))
 		} else {
 			box = style.Width(fieldBoxW).Render(f.input.View())
 		}
@@ -452,25 +452,25 @@ func (c *ConnScreen) renderForm() string {
 		b.WriteString("\n")
 	}
 
-	// botonera
+	// buttons
 	b.WriteString("\n")
-	b.WriteString(styles.StyleBtnPrimary.Render("Enter · Conectar"))
+	b.WriteString(styles.StyleBtnPrimary.Render("Enter · Connect"))
 	b.WriteString("\n")
 	b.WriteString(strings.Join([]string{
-		styles.StyleBtnSecondary.Render("ctrl+s  guardar"),
-		styles.StyleBtnSecondary.Render("r  limpiar"),
+		styles.StyleBtnSecondary.Render("ctrl+s  save"),
+		styles.StyleBtnSecondary.Render("r  clear"),
 	}, "  "))
 	b.WriteString("\n")
 	return b.String()
 }
 
-// fieldRow une el label (ancho fijo, a la izquierda) con su caja.
+// fieldRow joins the label (fixed width, on the left) with its box.
 func (c *ConnScreen) fieldRow(label, box string) string {
 	lbl := styles.StyleFieldLabel.Width(fieldLabelW).Align(lipgloss.Right).Render(label)
 	return lipgloss.JoinHorizontal(lipgloss.Center, lbl, " ", box)
 }
 
-// renderMotorSelector dibuja el selector de motor como una caja enfocable.
+// renderMotorSelector draws the engine selector as a focusable box.
 func (c *ConnScreen) renderMotorSelector() string {
 	style := styles.StyleInputBox
 	if c.focus == 0 {
@@ -479,14 +479,14 @@ func (c *ConnScreen) renderMotorSelector() string {
 	content := lipgloss.JoinHorizontal(lipgloss.Bottom,
 		styles.StyleHeader.Render(" "+string(c.driver())),
 		strings.Repeat(" ", 4),
-		styles.StyleHeaderDim.Render("←→ cambiar"),
+		styles.StyleHeaderDim.Render("←→ switch"),
 	)
 	return style.Width(fieldBoxW).Render(content)
 }
 
 func (c *ConnScreen) renderSaved() string {
 	var b strings.Builder
-	b.WriteString(styles.StyleHeader.Render("Guardadas"))
+	b.WriteString(styles.StyleHeader.Render("Saved"))
 	b.WriteString("\n\n")
 	for i, s := range c.saved {
 		line := fmt.Sprintf("%s  %s", s.Name, s.ToConfig().Label())

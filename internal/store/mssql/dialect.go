@@ -1,4 +1,4 @@
-// Package mssql implementa la interfaz store.Store para SQL Server.
+// Package mssql implements the store.Store interface for SQL Server.
 package mssql
 
 import (
@@ -6,13 +6,13 @@ import (
 	"strings"
 )
 
-// QuoteIdent escapa un identificador con corchetes.
+// QuoteIdent escapes an identifier with brackets.
 func QuoteIdent(ident string) string {
 	return "[" + strings.ReplaceAll(ident, "]", "]]") + "]"
 }
 
-// Limit genera la cláusula de paginación de SQL Server.
-// SQL Server exige ORDER BY para OFFSET/FETCH; se ordena por la primera columna.
+// Limit builds the SQL Server pagination clause.
+// SQL Server requires ORDER BY for OFFSET/FETCH; it orders by the first column.
 func Limit(limit, offset int) string {
 	return fmt.Sprintf("ORDER BY 1 OFFSET %d ROWS FETCH NEXT %d ROWS ONLY", offset, limit)
 }

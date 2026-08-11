@@ -25,11 +25,11 @@ func TestDriversList(t *testing.T) {
 
 func TestNeedsNetwork(t *testing.T) {
 	if NeedsNetwork(DriverSQLite) {
-		t.Error("sqlite no requiere red")
+		t.Error("sqlite should not require the network")
 	}
 	for _, d := range Drivers {
 		if d != DriverSQLite && !NeedsNetwork(d) {
-			t.Errorf("%s debería requerir red", d)
+			t.Errorf("%s should require the network", d)
 		}
 	}
 }

@@ -31,13 +31,13 @@ func TestEditor_ExecuteSelect(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 	if e.Error != "" {
-		t.Errorf("Error = %q, want vacío", e.Error)
+		t.Errorf("Error = %q, want empty", e.Error)
 	}
 	if e.Result == nil || len(e.Result.Columns) != 2 {
-		t.Errorf("Result = %+v, want 2 columnas", e.Result)
+		t.Errorf("Result = %+v, want 2 columns", e.Result)
 	}
 	if e.Result.Affected != -1 {
-		t.Errorf("Affected = %d, want -1 (lectura)", e.Result.Affected)
+		t.Errorf("Affected = %d, want -1 (read)", e.Result.Affected)
 	}
 }
 
@@ -59,10 +59,10 @@ func TestEditor_ExecuteInvalidSQL(t *testing.T) {
 	e.Buffer = "SELLECT * FROM users"
 	err := e.Execute(st)
 	if err == nil {
-		t.Fatal("esperaba error de SQL")
+		t.Fatal("expected an SQL error")
 	}
 	if e.Error == "" || e.Result != nil {
-		t.Errorf("Error=%q Result=%+v, want error y nil result", e.Error, e.Result)
+		t.Errorf("Error=%q Result=%+v, want error and nil result", e.Error, e.Result)
 	}
 }
 
@@ -71,7 +71,7 @@ func TestEditor_ExecuteEmptyBuffer(t *testing.T) {
 	e := New()
 	e.Buffer = "   "
 	if err := e.Execute(st); err != nil {
-		t.Fatalf("Execute vacío: %v", err)
+		t.Fatalf("Execute empty: %v", err)
 	}
 	if e.Result != nil {
 		t.Errorf("Result = %+v, want nil", e.Result)
@@ -86,11 +86,11 @@ func TestEditor_HistoryPushedOnExecute(t *testing.T) {
 	if e.History.Len() != 1 {
 		t.Errorf("History.Len = %d, want 1", e.History.Len())
 	}
-	// Query inválida no entra al historial
+	// an invalid query is not added to the history
 	e.Buffer = "BROKEN SQL"
 	_ = e.Execute(st)
 	if e.History.Len() != 1 {
-		t.Errorf("History.Len = %d, want 1 (solo queries exitosas)", e.History.Len())
+		t.Errorf("History.Len = %d, want 1 (only successful queries)", e.History.Len())
 	}
 }
 
@@ -101,7 +101,7 @@ func TestEditor_Clear(t *testing.T) {
 	_ = e.Execute(st)
 	e.Clear()
 	if e.Buffer != "" || e.Result != nil || e.Error != "" {
-		t.Errorf("Clear no limpió: %+v", e)
+		t.Errorf("Clear did not reset: %+v", e)
 	}
 }
 
@@ -112,13 +112,13 @@ func TestEditor_ExecuteOnlyFirstStatement(t *testing.T) {
 	if err := e.Execute(st); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	// la segunda sentencia no debe haberse ejecutado
+	// the second statement must not have run
 	n, err := st.CountTable("t")
 	if err != nil {
 		t.Fatalf("CountTable: %v", err)
 	}
 	if n != 0 {
-		t.Errorf("CountTable = %d, want 0 (INSERT no debe correr)", n)
+		t.Errorf("CountTable = %d, want 0 (INSERT must not run)", n)
 	}
 }
 
@@ -127,12 +127,12 @@ func TestEditor_ExecuteAtSelectsStatementAtCursor(t *testing.T) {
 	e := New()
 	e.Buffer = "SELECT 1;\nSELECT 2;\nSELECT * FROM users"
 
-	// cursor en la línea 2 (0-based): el tercer statement
+	// cursor on line 2 (0-based): the third statement
 	if err := e.ExecuteAt(st, 2); err != nil {
 		t.Fatalf("ExecuteAt: %v", err)
 	}
 	if e.Result == nil || len(e.Result.Columns) != 2 {
-		t.Errorf("Result = %+v, want 2 columnas de users", e.Result)
+		t.Errorf("Result = %+v, want 2 columns from users", e.Result)
 	}
 }
 
@@ -152,7 +152,7 @@ func TestEditor_ExecuteAtLineInPreamble(t *testing.T) {
 	st := newTestStore(t)
 	e := New()
 	e.Buffer = "\n\nCREATE TABLE t (x INT);\nINSERT INTO t VALUES (1)"
-	// cursor en la línea 0 (espacios previos): cae en el primer statement
+	// cursor on line 0 (leading whitespace): falls into the first statement
 	if err := e.ExecuteAt(st, 0); err != nil {
 		t.Fatalf("ExecuteAt: %v", err)
 	}
@@ -166,12 +166,12 @@ func TestEditor_ExecuteAtSeparateLines(t *testing.T) {
 	e := New()
 	e.Buffer = "CREATE TABLE t (x INT);\nINSERT INTO t VALUES (1)"
 
-	// cursor en la línea 0 → CREATE
+	// cursor on line 0 → CREATE
 	if err := e.ExecuteAt(st, 0); err != nil {
 		t.Fatalf("ExecuteAt CREATE: %v", err)
 	}
 
-	// cursor en la línea 1 → INSERT
+	// cursor on line 1 → INSERT
 	if err := e.ExecuteAt(st, 1); err != nil {
 		t.Fatalf("ExecuteAt INSERT: %v", err)
 	}
@@ -185,28 +185,28 @@ func TestEditor_ExecuteAtSeparateLines(t *testing.T) {
 }
 
 func TestEditor_FirstStatementRespectsStrings(t *testing.T) {
-	// ";" dentro de un string literal no parte el statement
+	// ";" inside a string literal does not split the statement
 	stmt, multiple := firstStatement("INSERT INTO users (name) VALUES ('a;b')")
 	if multiple {
-		t.Error("no debería partir por ';' dentro de un string")
+		t.Error("should not split on ';' inside a string")
 	}
 	if stmt != "INSERT INTO users (name) VALUES ('a;b')" {
 		t.Errorf("stmt = %q", stmt)
 	}
 
-	// comillas duplicadas '' dentro del string
+	// doubled quotes '' inside the string
 	stmt, multiple = firstStatement("INSERT INTO t VALUES ('it''s; ok'); DROP TABLE x")
 	if !multiple {
-		t.Error("debería detectar el ';' después del string")
+		t.Error("should detect the ';' after the string")
 	}
 	if stmt != "INSERT INTO t VALUES ('it''s; ok')" {
 		t.Errorf("stmt = %q", stmt)
 	}
 
-	// backslash escapado dentro del string
+	// escaped backslash inside the string
 	stmt, multiple = firstStatement(`INSERT INTO t VALUES ('a\;b')`)
 	if multiple {
-		t.Error("no debería partir por ';' escapado")
+		t.Error("should not split on an escaped ';'")
 	}
 	if stmt != `INSERT INTO t VALUES ('a\;b')` {
 		t.Errorf("stmt = %q", stmt)

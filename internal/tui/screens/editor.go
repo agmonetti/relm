@@ -11,53 +11,53 @@ import (
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
-// EditorScreen mantiene el input multilínea del editor SQL y su renderizado.
+// EditorScreen keeps the multiline SQL editor input and its rendering.
 type EditorScreen struct {
 	ta textarea.Model
 }
 
-// NewEditorScreen crea el textarea del editor.
+// NewEditorScreen creates the editor textarea.
 func NewEditorScreen() *EditorScreen {
 	ta := textarea.New()
-	ta.Placeholder = "SELECT * FROM tabla LIMIT 10"
+	ta.Placeholder = "SELECT * FROM table LIMIT 10"
 	ta.ShowLineNumbers = true
 	ta.Prompt = ""
 	ta.CharLimit = 0
 	return &EditorScreen{ta: ta}
 }
 
-// SetValue reemplaza el contenido del textarea.
+// SetValue replaces the textarea content.
 func (s *EditorScreen) SetValue(v string) { s.ta.SetValue(v) }
 
-// Value devuelve el contenido actual del textarea.
+// Value returns the current textarea content.
 func (s *EditorScreen) Value() string { return s.ta.Value() }
 
-// Focus enfoca el textarea y lleva el cursor al final.
+// Focus focuses the textarea and moves the cursor to the end.
 func (s *EditorScreen) Focus() tea.Cmd {
 	cmd := s.ta.Focus()
 	s.ta.CursorEnd()
 	return cmd
 }
 
-// FocusStart enfoca el textarea y lleva el cursor al inicio.
+// FocusStart focuses the textarea and moves the cursor to the start.
 func (s *EditorScreen) FocusStart() tea.Cmd {
 	cmd := s.ta.Focus()
 	s.ta.CursorStart()
 	return cmd
 }
 
-// Blur desenfoca el textarea.
+// Blur blurs the textarea.
 func (s *EditorScreen) Blur() { s.ta.Blur() }
 
-// Update pasa el mensaje al textarea.
+// Update forwards the message to the textarea.
 func (s *EditorScreen) Update(msg tea.Msg) (*EditorScreen, tea.Cmd) {
 	ta, cmd := s.ta.Update(msg)
 	s.ta = ta
 	return s, cmd
 }
 
-// AtBoundary indica si el cursor está en el borde superior (up=true) o
-// inferior (up=false) del input.
+// AtBoundary reports whether the cursor is at the top (up=true) or bottom
+// (up=false) edge of the input.
 func (s *EditorScreen) AtBoundary(up bool) bool {
 	if up {
 		return s.ta.Line() == 0
@@ -65,13 +65,13 @@ func (s *EditorScreen) AtBoundary(up bool) bool {
 	return s.ta.Line() >= s.ta.LineCount()-1
 }
 
-// Line devuelve la línea actual del cursor.
+// Line returns the current cursor line.
 func (s *EditorScreen) Line() int { return s.ta.Line() }
 
-// LineCount devuelve la cantidad de líneas del input.
+// LineCount returns the number of lines in the input.
 func (s *EditorScreen) LineCount() int { return s.ta.LineCount() }
 
-// View renderiza input + resultados del editor.
+// View renders the editor input + results.
 func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 	if width < 1 {
 		width = 80
@@ -86,7 +86,7 @@ func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 	var b strings.Builder
 	b.WriteString(s.ta.View())
 
-	// separador
+	// separator
 	b.WriteString("\n" + styles.StyleBorder.Render(strings.Repeat("─", width-2)) + "\n")
 
 	if e.Error != "" {
@@ -95,14 +95,14 @@ func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 	}
 
 	if e.Result == nil {
-		b.WriteString(styles.StyleHeaderDim.Render("  ctrl+r para ejecutar"))
+		b.WriteString(styles.StyleHeaderDim.Render("  ctrl+r to run"))
 		return b.String()
 	}
 
 	if len(e.Result.Columns) > 0 {
 		b.WriteString(renderDataTable(e.Result.Columns, e.Result.Rows, -1, width-2, height-inputHeight))
 	} else if e.Result.Affected >= 0 {
-		b.WriteString(fmt.Sprintf("  %d filas afectadas", e.Result.Affected))
+		b.WriteString(fmt.Sprintf("  %d rows affected", e.Result.Affected))
 	}
 	return b.String()
 }

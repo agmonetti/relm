@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// SavedConnection es una conexión persistida para reutilizar.
+// SavedConnection is a persisted connection for reuse.
 type SavedConnection struct {
 	Name     string `json:"name"`
 	Driver   Driver `json:"driver"`
@@ -20,7 +20,7 @@ type SavedConnection struct {
 	SSLMode  string `json:"ssl_mode,omitempty"`
 }
 
-// ToConfig convierte una conexión guardada a ConnectionConfig.
+// ToConfig converts a saved connection to a ConnectionConfig.
 func (s SavedConnection) ToConfig() ConnectionConfig {
 	cfg := ConnectionConfig{
 		Driver:   s.Driver,
@@ -40,7 +40,7 @@ func (s SavedConnection) ToConfig() ConnectionConfig {
 	return cfg
 }
 
-// FromConfig crea una SavedConnection a partir de una config.
+// FromConfig creates a SavedConnection from a config.
 func FromConfig(cfg ConnectionConfig) SavedConnection {
 	return SavedConnection{
 		Name:     cfg.Name,
@@ -56,7 +56,7 @@ func FromConfig(cfg ConnectionConfig) SavedConnection {
 	}
 }
 
-// savedPath devuelve la ruta del archivo de conexiones guardadas.
+// savedPath returns the path of the saved connections file.
 func savedPath() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
@@ -65,7 +65,7 @@ func savedPath() (string, error) {
 	return filepath.Join(dir, "relm", "connections.json"), nil
 }
 
-// LoadSaved lee las conexiones guardadas. Devuelve lista vacía si no existe.
+// LoadSaved reads the saved connections. Returns an empty list if it does not exist.
 func LoadSaved() ([]SavedConnection, error) {
 	path, err := savedPath()
 	if err != nil {
@@ -85,7 +85,7 @@ func LoadSaved() ([]SavedConnection, error) {
 	return conns, nil
 }
 
-// SaveSaved escribe las conexiones guardadas con permisos 0600.
+// SaveSaved writes the saved connections with 0600 permissions.
 func SaveSaved(conns []SavedConnection) error {
 	path, err := savedPath()
 	if err != nil {
@@ -101,7 +101,7 @@ func SaveSaved(conns []SavedConnection) error {
 	return os.WriteFile(path, data, 0o600)
 }
 
-// SaveNamed agrega o actualiza una conexión en la lista por nombre.
+// SaveNamed adds or updates a connection in the list by name.
 func SaveNamed(conns []SavedConnection, cfg ConnectionConfig) []SavedConnection {
 	sc := FromConfig(cfg)
 	for i := range conns {

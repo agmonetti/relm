@@ -11,12 +11,12 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	_ "github.com/agmonetti/relm/internal/store/mssql"
-	_ "github.com/agmonetti/relm/internal/store/mysql" // registra los motores para los tests
+	_ "github.com/agmonetti/relm/internal/store/mysql" // registers the engines for the tests
 	_ "github.com/agmonetti/relm/internal/store/postgres"
 	_ "github.com/agmonetti/relm/internal/store/sqlite"
 )
 
-// createTestDB crea un sqlite temporal con tablas users y orders.
+// createTestDB creates a temporary sqlite with users and orders tables.
 func createTestDB(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "test.db")
@@ -38,7 +38,7 @@ func createTestDB(t *testing.T) string {
 	return path
 }
 
-// press envia un KeyMsg con runas al modelo (texto escrito).
+// press sends a KeyMsg with runes to the model (typed text).
 func press(t *testing.T, m *Model, text string) {
 	t.Helper()
 	step(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text)})
@@ -64,24 +64,24 @@ var namedKeys = map[string]tea.KeyType{
 	"ctrl+s": tea.KeyCtrlS,
 }
 
-// pressKey envia un KeyMsg tipado (tab, enter, ctrl+n, etc.).
+// pressKey sends a typed KeyMsg (tab, enter, ctrl+n, etc.).
 func pressKey(t *testing.T, m *Model, key string) {
 	t.Helper()
 	kt, ok := namedKeys[key]
 	if !ok {
-		t.Fatalf("tecla %q no mapeada en el test", key)
+		t.Fatalf("key %q not mapped in the test", key)
 	}
 	step(t, m, tea.KeyMsg{Type: kt})
 }
 
-// step aplica un mensaje al modelo y ejecuta el cmd devuelto, realimentando
-// los mensajes que produzca (como hace el programa de bubbletea en runtime).
+// step applies a message to the model and runs the returned cmd, feeding back
+// the messages it produces (like the bubbletea program does at runtime).
 func step(t *testing.T, m *Model, msg tea.Msg) {
 	t.Helper()
 	updated, cmd := m.Update(msg)
 	m2, ok := updated.(*Model)
 	if !ok {
-		t.Fatalf("Update devolvió %T, quiero *Model", updated)
+		t.Fatalf("Update returned %T, want *Model", updated)
 	}
 	*m = *m2
 	if cmd != nil {
@@ -109,8 +109,8 @@ func TestModel_StartsOnConnect(t *testing.T) {
 		t.Fatalf("screen = %d, want ScreenConnect", m.screen)
 	}
 	v := m.View()
-	if !strings.Contains(v, "relm") || !strings.Contains(v, "Conectar") {
-		t.Errorf("View no muestra la pantalla de conexión: %q", v)
+	if !strings.Contains(v, "relm") || !strings.Contains(v, "Connect") {
+		t.Errorf("View does not show the connection screen: %q", v)
 	}
 }
 
@@ -120,25 +120,25 @@ func TestModel_ConnectToSQLiteShowsBrowser(t *testing.T) {
 	m := New()
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
-	// Tab: foco al campo Archivo
+	// Tab: focus the File field
 	pressKey(t, m, "tab")
 	// escribir el path
 	press(t, m, db)
-	// Enter: conectar
+	// Enter: connect
 	pressKey(t, m, "enter")
 
 	if m.screen != ScreenBrowser {
 		t.Fatalf("screen = %d, want ScreenBrowser", m.screen)
 	}
 	if m.browser == nil {
-		t.Fatal("browser nil tras conectar")
+		t.Fatal("browser nil after connecting")
 	}
 	if m.browser.ActiveTable != "orders" {
 		t.Errorf("ActiveTable = %q, want orders", m.browser.ActiveTable)
 	}
 	v := m.View()
 	if !strings.Contains(v, "users") || !strings.Contains(v, "orders") {
-		t.Errorf("View no muestra el sidebar con tablas: %q", v)
+		t.Errorf("View does not show the sidebar with tables: %q", v)
 	}
 }
 
@@ -151,10 +151,10 @@ func TestModel_ConnectErrorStaysOnConnect(t *testing.T) {
 	pressKey(t, m, "enter")
 
 	if m.screen != ScreenConnect {
-		t.Fatalf("screen = %d, want ScreenConnect tras error", m.screen)
+		t.Fatalf("screen = %d, want ScreenConnect after error", m.screen)
 	}
 	if m.connect == nil || m.connect.Error() == "" {
-		t.Error("esperaba error de conexión visible")
+		t.Error("expected a visible connection error")
 	}
 }
 
@@ -209,17 +209,17 @@ func TestModel_EditorExecutesQuery(t *testing.T) {
 	pressKey(t, m, "ctrl+r")
 
 	if m.loading {
-		t.Fatal("query no terminó: loading quedó true")
+		t.Fatal("query did not finish: loading stayed true")
 	}
 	if m.editor == nil || m.editor.Result == nil {
-		t.Fatalf("editor sin resultado tras ejecutar")
+		t.Fatalf("editor without result after running")
 	}
 	if len(m.editor.Result.Rows) != 2 {
 		t.Errorf("Rows = %d, want 2", len(m.editor.Result.Rows))
 	}
 	v := m.View()
 	if !strings.Contains(v, "Alice") {
-		t.Errorf("View no muestra la fila Alice: %q", v)
+		t.Errorf("View does not show the Alice row: %q", v)
 	}
 }
 
@@ -237,10 +237,10 @@ func TestModel_EditorShowsError(t *testing.T) {
 	pressKey(t, m, "ctrl+r")
 
 	if m.editor == nil || m.editor.Error == "" {
-		t.Fatalf("esperaba error SQL en el editor")
+		t.Fatalf("expected an SQL error in the editor")
 	}
 	if m.editor.Result != nil {
-		t.Error("no debería haber resultado con error")
+		t.Error("there should be no result with an error")
 	}
 }
 
@@ -256,14 +256,14 @@ func TestModel_EditorHistoryNavigation(t *testing.T) {
 
 	press(t, m, "SELECT 1")
 	pressKey(t, m, "ctrl+r")
-	pressKey(t, m, "ctrl+l") // limpiar antes del siguiente query
+	pressKey(t, m, "ctrl+l") // clear before the next query
 	press(t, m, "SELECT 2")
 	pressKey(t, m, "ctrl+r")
-	pressKey(t, m, "ctrl+l") // limpiar para navegar el historial
+	pressKey(t, m, "ctrl+l") // clear to navigate the history
 
 	pressKey(t, m, "up")
 	if m.editor.Buffer != "SELECT 2" {
-		t.Errorf("Buffer = %q, want SELECT 2 (query más reciente)", m.editor.Buffer)
+		t.Errorf("Buffer = %q, want SELECT 2 (most recent query)", m.editor.Buffer)
 	}
 	pressKey(t, m, "up")
 	if m.editor.Buffer != "SELECT 1" {
@@ -285,21 +285,21 @@ func TestModel_RefreshShowsInsertedRow(t *testing.T) {
 		t.Fatalf("setup: screen = %d", m.screen)
 	}
 
-	// seleccionar users (segunda alfabéticamente, tecla "2")
+	// select users (second alphabetically, key "2")
 	press(t, m, "2")
 	if m.browser.ActiveTable != "users" {
 		t.Fatalf("setup: ActiveTable = %q, want users", m.browser.ActiveTable)
 	}
 
-	// insertar una fila desde el editor
+	// insert a row from the editor
 	pressKey(t, m, "tab")
 	press(t, m, "INSERT INTO users (name, email) VALUES ('Carol','c@t.com')")
 	pressKey(t, m, "ctrl+r")
 	if m.editor == nil || m.editor.Result == nil || m.editor.Result.Affected != 1 {
-		t.Fatalf("insert no corrió: %+v", m.editor)
+		t.Fatalf("insert did not run: %+v", m.editor)
 	}
 
-	// volver al browser y refrescar con "r"
+	// go back to the browser and refresh with "r"
 	pressKey(t, m, "tab")
 	press(t, m, "r")
 
@@ -308,14 +308,14 @@ func TestModel_RefreshShowsInsertedRow(t *testing.T) {
 	}
 	v := m.View()
 	if !strings.Contains(v, "Carol") {
-		t.Errorf("View no muestra la fila Carol tras refresh: %q", v)
+		t.Errorf("View does not show the Carol row after refresh: %q", v)
 	}
 }
 
 func TestModel_ConnectToPostgres(t *testing.T) {
 	host := os.Getenv("SQLISH_TEST_POSTGRES_HOST")
 	if host == "" {
-		t.Skip("SQLISH_TEST_POSTGRES_HOST no seteada")
+		t.Skip("SQLISH_TEST_POSTGRES_HOST not set")
 	}
 
 	db := t.TempDir() + "/none.db" // placeholder no usado
@@ -324,16 +324,16 @@ func TestModel_ConnectToPostgres(t *testing.T) {
 	m := New()
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
-	// Conectar por el formulario completo: motor postgres, host, user, pass, base
+	// Connect through the full form: postgres engine, host, user, pass, database
 	pressKey(t, m, "right") // sqlite -> postgres
-	pressKey(t, m, "tab")   // focus: Archivo (oculto) -> Host
+	pressKey(t, m, "tab")   // focus: File (hidden) -> Host
 	press(t, m, host)
-	pressKey(t, m, "tab") // Puerto
-	pressKey(t, m, "tab") // Usuario
+	pressKey(t, m, "tab") // Port
+	pressKey(t, m, "tab") // User
 	press(t, m, os.Getenv("SQLISH_TEST_POSTGRES_USER"))
 	pressKey(t, m, "tab") // Password
 	press(t, m, os.Getenv("SQLISH_TEST_POSTGRES_PASSWORD"))
-	pressKey(t, m, "tab") // Base
+	pressKey(t, m, "tab") // Database
 	press(t, m, os.Getenv("SQLISH_TEST_POSTGRES_DATABASE"))
 	pressKey(t, m, "enter")
 
@@ -341,7 +341,7 @@ func TestModel_ConnectToPostgres(t *testing.T) {
 		t.Fatalf("screen = %d, want ScreenBrowser. connectErr=%q", m.screen, m.connect.Error())
 	}
 	if m.browser == nil || len(m.browser.Tables) == 0 {
-		t.Fatalf("browser sin tablas")
+		t.Fatalf("browser without tables")
 	}
 	_ = m.View()
 }

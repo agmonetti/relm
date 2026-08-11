@@ -1,42 +1,42 @@
-# USAGE — primer uso paso a paso
+# USAGE — first steps, step by step
 
-`relm` **no levanta servidores ni crea archivos por su cuenta**. Se conecta a
-bases que **ya existen y están corriendo** — vos traés la base, `relm` te abre
-una ventana para mirarla y consultarla.
+`relm` **does not start servers or create files on its own**. It connects to
+databases that **already exist and are running** — you bring the database, `relm`
+opens a window to look at it and query it.
 
-- **SQLite** = un archivo `.db` en tu disco (no hay servidor). Lo creás vos con `sqlite3` (sección 1a).
-- **PostgreSQL / MySQL / MariaDB / SQL Server** = servidores que ya deben estar corriendo (en tu máquina, en docker, o en la nube). El repo trae un `compose.yaml` para levantarlos de prueba (sección 2a).
+- **SQLite** = a `.db` file on your disk (no server). You create it yourself with `sqlite3` (section 1a).
+- **PostgreSQL / MySQL / MariaDB / SQL Server** = servers that must already be running (on your machine, in docker, or in the cloud). The repo ships a `compose.yaml` to start them for testing (section 2a).
 
-No hay configuración previa ni instalación de servidores por parte de `relm`.
-Solo necesitás el binario y acceso a la base.
+There is no prior configuration or server installation done by `relm`.
+You only need the binary and access to the database.
 
 ---
 
-## 0. Compilar el binario
+## 0. Build the binary
 
 ```bash
 go build -o relm ./cmd/relm
 ./relm
 ```
 
-(Requiere Go 1.22+ y `gcc`. Sin gcc, ver la alternativa `modernc.org/sqlite` en `05-decisiones-tecnicas.md`.)
+(Requires Go 1.22+ and `gcc`. Without gcc, see the `modernc.org/sqlite` alternative in `05-technical-decisions.md`.)
 
 ---
 
-## 1. Primera prueba rápida con SQLite (no necesitás ningún servidor)
+## 1. First quick test with SQLite (no server needed)
 
-### 1a. Crear una base de prueba
+### 1a. Create a test database
 
-`relm` no crea archivos: si le pasás un path que no existe, te muestra `no such file`.
-Creá una base vos. Dos opciones:
+`relm` does not create files: if you give it a path that does not exist, it shows `no such file`.
+Create the database yourself. Two options:
 
-**Con `make demo`** (crea `demo.db` con tablas de ejemplo y datos):
+**With `make demo`** (creates `demo.db` with example tables and data):
 
 ```bash
 make demo && ./bin/relm
 ```
 
-**A mano con el CLI de sqlite:**
+**By hand with the sqlite CLI:**
 
 ```bash
 sqlite3 test.db "
@@ -46,13 +46,13 @@ INSERT INTO users (name, email) VALUES ('Alice','alice@test.com'), ('Bob','bob@t
 "
 ```
 
-### 1b. Conectar
+### 1b. Connect
 
-1. Ejecutá `./relm`. Se abre la **pantalla de conexión**:
+1. Run `./relm`. The **connection screen** opens:
 
 ```
 ┌─────────────────────────────────────────────┐
-│ relm · sin conexión · — ·                 │
+│ relm · no connection · — ·                 │
 ├─────────────────────────────────────────────┤
 │                _____  ______  _      __  __ │
 │               |  __ \|  ____|| |    |  \/  |│
@@ -61,34 +61,34 @@ INSERT INTO users (name, email) VALUES ('Alice','alice@test.com'), ('Bob','bob@t
 │               | | \ \| |____ | |____| |  | |│
 │               |_|  \_\______|_\_____|_|  |_|│
 │                                             │
-│                    Conectar                 │
+│                    Connect                  │
 │                                             │
-│            Motor  │ postgres    ←→ cambiar  │
+│            Engine │ postgres    ←→ switch   │
 │                   └─────────────────────────│
 │            Host   │ localhost               │
 │                   └─────────────────────────│
-│            Puerto │ 5432                    │
-│            Base   │ mydb                    │
+│            Port   │ 5432                    │
+│            Database│ mydb                   │
 │                                             │
-│                Enter · Conectar             │
-│          ctrl+s  guardar   r  limpiar       │
+│                Enter · Connect              │
+│          ctrl+s  save   r  clear            │
 ├─────────────────────────────────────────────┤
-│ ↑↓ guardadas · tab motor/campos · ←→ motor · enter conectar │
+│ ↑↓ saved · tab engine/fields · ←→ engine · enter connect │
 └─────────────────────────────────────────────┘
 ```
 
-- `Solo lectura` abre el archivo en modo `mode=ro`: cualquier escritura falla. Útil para bases de producción. Se alterna con `Enter` o `Espacio` cuando el foco está en el toggle.
+- `Read-only` opens the file in `mode=ro` mode: any write fails. Useful for production databases. Toggle it with `Enter` or `Space` when the focus is on the toggle.
 
-2. Con `Tab` movete al campo `Archivo`, escribí `test.db` (o el path completo) y presioná `Enter`.
+2. With `Tab` move to the `File` field, type `test.db` (or the full path) and press `Enter`.
 
-3. Ya estás en el **browser**. El sidebar lista las tablas y la primera alfabéticamente (`orders`) queda seleccionada — en la base de ejemplo está vacía:
+3. You are now in the **browser**. The sidebar lists the tables and the first alphabetically (`orders`) is selected — it is empty in the example database:
 
 ```
-│ > orders    │ tabla vacía
+│ > orders    │ empty table
 │   users     │
 ```
 
-Presioná `↓` para bajar a `users` y `Enter` para seleccionarla:
+Press `↓` to go down to `users` and `Enter` to select it:
 
 ```
 │   orders    │ id  name        email          │
@@ -96,15 +96,15 @@ Presioná `↓` para bajar a `users` y `Enter` para seleccionarla:
 │             │ 2   Bob         bob@test.com   │
 ```
 
-- `↑↓` / `j k` navegan las filas, `PgUp/PgDn` cambian de página.
-- `i` muestra la estructura de la tabla activa (columnas, constraints, índices).
-- `r` recarga la tabla.
+- `↑↓` / `j k` navigate the rows, `PgUp/PgDn` change the page.
+- `i` shows the active table structure (columns, constraints, indexes).
+- `r` reloads the table.
 
-### 1c. Correr queries
+### 1c. Run queries
 
-1. Presioná `Tab` para ir al **editor SQL**.
-2. Escribí un query, por ejemplo `SELECT * FROM users WHERE id > 1;` y presioná `Ctrl+R`.
-3. El resultado aparece abajo, con las columnas como header:
+1. Press `Tab` to go to the **SQL editor**.
+2. Type a query, e.g. `SELECT * FROM users WHERE id > 1;` and press `Ctrl+R`.
+3. The result appears below, with the columns as header:
 
 ```
 │ SELECT * FROM users WHERE id > 1          │
@@ -113,40 +113,40 @@ Presioná `↓` para bajar a `users` y `Enter` para seleccionarla:
 │ 2   Bob   bob@test.com                    │
 ```
 
-- `INSERT/UPDATE/DELETE` muestran `N filas afectadas`.
-- Si el query tiene un error de SQL, se muestra el mensaje en rojo, sin crashear.
-- `↑`/`↓` con el input vacío recorren el historial de los últimos 100 queries.
-- `Ctrl+L` limpia el input.
-- `Tab` vuelve al browser.
+- `INSERT/UPDATE/DELETE` show `N rows affected`.
+- If the query has an SQL error, the message is shown in red, without crashing.
+- `↑`/`↓` with an empty input browse the history of the last 100 queries.
+- `Ctrl+L` clears the input.
+- `Tab` returns to the browser.
 
 ---
 
-## 2. Conectarse a PostgreSQL / MySQL / MariaDB / SQL Server
+## 2. Connecting to PostgreSQL / MySQL / MariaDB / SQL Server
 
-### 2a. Si no tenés un servidor: levantá los 4 con un solo comando
+### 2a. If you have no server: start all 4 with a single command
 
-El repo incluye un `compose.yaml` que levanta los cuatro motores a la vez,
-con credenciales fijas y la base `test` **auto-creada en el primer arranque**
-(no hace falta crear bases a mano):
+The repo includes a `compose.yaml` that starts all four engines at once,
+with fixed credentials and the `test` database **auto-created on first start**
+(no need to create databases by hand):
 
 ```bash
 docker compose up -d
 ```
 
-Esperá unos segundos a que estén `healthy`:
+Wait a few seconds until they are `healthy`:
 
 ```bash
-docker compose ps        # todos deben decir healthy
+docker compose ps        # all should say healthy
 ```
 
-Para detenerlos:
+To stop them:
 
 ```bash
-docker compose down      # detiene, conserva los datos
-docker compose down -v   # detiene y borra todo
+docker compose down      # stops, keeps the data
+docker compose down -v   # stops and removes everything
 ```
 
-**Alternativa sin compose** (un comando por motor, mismos resultados):
+**Alternative without compose** (one command per engine, same results):
 
 ```bash
 docker run -d --rm --name pg    -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=test -p 5432:5432 postgres:16
@@ -155,7 +155,7 @@ docker run -d --rm --name maria -e MARIADB_ROOT_PASSWORD=root -e MARIADB_DATABAS
 docker run -d --rm --name mssql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='Str0ng!Passw0rd' -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
 ```
 
-Para **dar de baja un contenedor** por nombre y revisar qué contenedores hay abiertos:
+To **take down a container** by name and check which containers are open:
 
 ```text
 ❯ docker stop pg
@@ -164,82 +164,82 @@ pg
 CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
 ```
 
-> En el ejemplo de arriba los contenedores se levantaron con `--rm`, así que al
-> detenerlos se eliminan solos y `docker ps -a` ya no los lista. Si querés
-> conservar uno para volver a usarlo, levantalo sin `--rm` (o usá `docker compose`,
-> que conserva los datos con `docker compose down`).
+> In the example above the containers were started with `--rm`, so when you stop
+> them they remove themselves and `docker ps -a` no longer lists them. If you want
+> to keep one for reuse, start it without `--rm` (or use `docker compose`,
+> which keeps the data with `docker compose down`).
 
-> Los env vars `POSTGRES_DB` / `MYSQL_DATABASE` / `MARIADB_DATABASE` hacen que
-> cada servidor cree la base `test` sola. SQL Server no la necesita: ya trae `master`.
-> Podés crear tablas directamente desde el editor de `relm` (`Ctrl+R`) — no necesitás otro cliente.
+> The `POSTGRES_DB` / `MYSQL_DATABASE` / `MARIADB_DATABASE` env vars make each
+> server create the `test` database on its own. SQL Server does not need it: it already ships `master`.
+> You can create tables directly from the `relm` editor (`Ctrl+R`) — no other client needed.
 
-### 2b. Conectar desde la pantalla de conexión
+### 2b. Connect from the connection screen
 
-1. Con `←`/`→` sobre el selector de **Motor**, elegí el motor (SQLite, PostgreSQL, MySQL, MariaDB, SQL Server).
-2. El formulario cambia a `Host · Puerto · Usuario · Password · Base` (PostgreSQL agrega `SSL`):
+1. With `←`/`→` on the **Engine** selector, pick the engine (SQLite, PostgreSQL, MySQL, MariaDB, SQL Server).
+2. The form changes to `Host · Port · User · Password · Database` (PostgreSQL adds `SSL`):
 
 ```
-│  Motor   [ PostgreSQL ▾ ]                  │
+│  Engine  [ PostgreSQL ▾ ]                  │
 │  ─────────────────────                      │
 │  Host     [ localhost ]                     │
-│  Puerto   [ 5432 ]                          │
-│  Usuario  [ postgres ]                      │
+│  Port     [ 5432 ]                          │
+│  User     [ postgres ]                      │
 │  Password [ •••••• ]                        │
-│  Base     [ test ]                          │
+│  Database [ test ]                          │
 │  SSL      [ prefer ]                        │
 ```
 
-> El campo `SSL` controla TLS: `prefer` (default), `require`, `verify-full` (valida
-> certificado) o `disable`. Para producción usá `require` o `verify-full`.
+> The `SSL` field controls TLS: `prefer` (default), `require`, `verify-full` (validates
+> the certificate) or `disable`. For production use `require` or `verify-full`.
 
-3. Completá con los datos del servidor. Con los contenedores de arriba:
+3. Fill in the server data. With the containers above:
 
-| Motor | Host | Puerto | Usuario | Password | Base |
+| Engine | Host | Port | User | Password | Database |
 |---|---|---|---|---|---|
 | PostgreSQL | `localhost` | `5432` | `postgres` | `postgres` | `test` |
 | MySQL | `localhost` | `3306` | `root` | `root` | `test` |
 | MariaDB | `localhost` | `3307` | `root` | `root` | `test` |
 | SQL Server | `localhost` | `1433` | `sa` | `Str0ng!Passw0rd` | `master` |
 
-4. `Enter` conecta. Vas al browser con las tablas de esa base.
+4. `Enter` connects. You go to the browser with the tables of that database.
 
-> En MySQL/MariaDB una base vacía muestra `sin tablas — usá el editor para crear una`.
-> Escribí en el editor `CREATE TABLE ...` y `Ctrl+R`, y la tabla aparece en el sidebar tras `r`.
+> In MySQL/MariaDB an empty database shows `no tables — use the editor to create one`.
+> Type `CREATE TABLE ...` in the editor and `Ctrl+R`, and the table appears in the sidebar after `r`.
 
-### 2c. Guardar la conexión para la próxima
+### 2c. Save the connection for next time
 
-Con la pantalla de conexión armada, `Ctrl+S` la guarda en
-`~/.config/relm/connections.json`. La próxima vez aparece en la sección
-`Guardadas` (debajo del formulario) y se conecta con `Enter` sobre ella.
+With the connection screen ready, `Ctrl+S` saves it in
+`~/.config/relm/connections.json`. Next time it appears in the
+`Saved` section (below the form) and you connect with `Enter` on it.
 
 ---
 
-## 3. Problemas comunes al primer uso
+## 3. Common first-use problems
 
-| Síntoma | Causa | Solución |
+| Symptom | Cause | Solution |
 |---|---|---|
-| `no such file` | El path del `.db` no existe | `relm` no crea archivos. Creá la base con `sqlite3 test.db "..."` (ver sección 1a) |
-| `connection refused` | No hay servidor en ese host/puerto | Levantá el contenedor docker (sección 2a) o revisá host/puerto |
-| `password authentication failed` / `Access denied` | Credenciales incorrectas | Revisá usuario/password. Con docker: `postgres/postgres`, `root/root`, `sa/Str0ng!Passw0rd` |
-| `Unknown database` / `database "x" does not exist` | La base no existe | Levantá los contenedores con los env vars `POSTGRES_DB`/`MYSQL_DATABASE`/`MARIADB_DATABASE` (sección 2a) que crean `test` solas, o creala desde el editor de `relm` con `CREATE DATABASE` + `Ctrl+R` |
-| El query da error | Dialecto SQL del motor | `relm` pasa tu SQL tal cual al motor. Escribí SQL del motor al que estás conectado |
-| La pantalla se ve cortada | Terminal muy chica | Agrandá la terminal; debajo de ~60 columnas se oculta el sidebar |
+| `no such file` | The `.db` path does not exist | `relm` does not create files. Create the database with `sqlite3 test.db "..."` (see section 1a) |
+| `connection refused` | No server on that host/port | Start the docker container (section 2a) or check the host/port |
+| `password authentication failed` / `Access denied` | Wrong credentials | Check user/password. With docker: `postgres/postgres`, `root/root`, `sa/Str0ng!Passw0rd` |
+| `Unknown database` / `database "x" does not exist` | The database does not exist | Start the containers with the `POSTGRES_DB`/`MYSQL_DATABASE`/`MARIADB_DATABASE` env vars (section 2a) that create `test` on their own, or create it from the `relm` editor with `CREATE DATABASE` + `Ctrl+R` |
+| The query errors | Engine SQL dialect | `relm` passes your SQL as-is to the engine. Write SQL for the engine you are connected to |
+| The screen looks cut off | Terminal too small | Enlarge the terminal; below ~60 columns the sidebar is hidden |
 
 ---
 
-## 4. Resumen de atajos
+## 4. Shortcut summary
 
-| Tecla | Acción |
+| Key | Action |
 |---|---|
-| `Ctrl+C` / `q` | Salir |
-| `Ctrl+N` | Nueva conexión |
-| `Ctrl+S` | Guardar conexión |
+| `Ctrl+C` / `q` | Quit |
+| `Ctrl+N` | New connection |
+| `Ctrl+S` | Save connection |
 | `Tab` | Browser ↔ Editor |
-| `i` | Estructura de la tabla activa |
-| `↑↓` / `j k` | Navegar filas |
-| `PgUp` / `PgDn` | Cambiar página |
-| `r` | Refrescar |
-| `Ctrl+R` | Ejecutar query (editor) |
-| `Ctrl+L` | Limpiar editor |
-| `↑↓` (editor, input vacío) | Historial de queries |
-| `?` | Ayuda |
+| `i` | Active table structure |
+| `↑↓` / `j k` | Navigate rows |
+| `PgUp` / `PgDn` | Change page |
+| `r` | Refresh |
+| `Ctrl+R` | Run query (editor) |
+| `Ctrl+L` | Clear editor |
+| `↑↓` (editor, empty input) | Query history |
+| `?` | Help |

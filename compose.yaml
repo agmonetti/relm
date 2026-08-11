@@ -1,19 +1,19 @@
-# Bases de datos de prueba para relm.
+# Test databases for relm.
 #
-# Levanta los 4 motores de red con credenciales fijas y una base "test"
-# auto-creada en el primer arranque. Uso:
+# Starts the 4 network engines with fixed credentials and a "test" database
+# auto-created on first start. Usage:
 #
 #   docker compose up -d
-#   docker compose down        # detener (conserva volúmenes)
-#   docker compose down -v     # detener y borrar todo
+#   docker compose down        # stop (keeps volumes)
+#   docker compose down -v     # stop and remove everything
 #
-# SQLite no necesita servidor: es solo un archivo (ver USAGE.md sección 1).
+# SQLite needs no server: it is just a file (see USAGE.md section 1).
 #
-# Credenciales de conexión (coinciden con USAGE.md):
-#   PostgreSQL : localhost:5432  postgres/postgres  base test
-#   MySQL      : localhost:3306  root/root          base test
-#   MariaDB    : localhost:3307  root/root          base test
-#   SQL Server : localhost:1433  sa/Str0ng!Passw0rd base master
+# Connection credentials (match USAGE.md):
+#   PostgreSQL : localhost:5432  postgres/postgres  database test
+#   MySQL      : localhost:3306  root/root          database test
+#   MariaDB    : localhost:3307  root/root          database test
+#   SQL Server : localhost:1433  sa/Str0ng!Passw0rd database master
 
 services:
   postgres:

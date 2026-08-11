@@ -1,4 +1,4 @@
-// Package postgres implementa la interfaz store.Store para PostgreSQL.
+// Package postgres implements the store.Store interface for PostgreSQL.
 package postgres
 
 import (
@@ -6,12 +6,12 @@ import (
 	"strings"
 )
 
-// QuoteIdent escapa un identificador con comillas dobles.
+// QuoteIdent escapes an identifier with double quotes.
 func QuoteIdent(ident string) string {
 	return `"` + strings.ReplaceAll(ident, `"`, `""`) + `"`
 }
 
-// Limit genera la cláusula de paginación de PostgreSQL.
+// Limit builds the PostgreSQL pagination clause.
 func Limit(limit, offset int) string {
 	return fmt.Sprintf("LIMIT %d OFFSET %d", limit, offset)
 }

@@ -11,25 +11,25 @@ import (
 	"github.com/agmonetti/relm/internal/store"
 )
 
-// Store es la implementación MySQL/MariaDB de store.Store.
+// Store is the MySQL/MariaDB implementation of store.Store.
 type Store struct {
 	db     *sql.DB
 	driver conn.Driver
 }
 
-// NewMySQL abre una conexión a MySQL.
+// NewMySQL opens a MySQL connection.
 func NewMySQL(cfg conn.ConnectionConfig) (*Store, error) {
 	return newStore(cfg, conn.DriverMySQL)
 }
 
-// NewMariaDB abre una conexión a MariaDB.
+// NewMariaDB opens a MariaDB connection.
 func NewMariaDB(cfg conn.ConnectionConfig) (*Store, error) {
 	return newStore(cfg, conn.DriverMariaDB)
 }
 
 func newStore(cfg conn.ConnectionConfig, drv conn.Driver) (*Store, error) {
 	if cfg.Host == "" {
-		return nil, fmt.Errorf("%w: falta el host", store.ErrConnection)
+		return nil, fmt.Errorf("%w: missing host", store.ErrConnection)
 	}
 	mc := mysqlDriver.NewConfig()
 	mc.User = cfg.User
@@ -62,7 +62,7 @@ func init() {
 
 func (s *Store) Driver() string { return string(s.driver) }
 
-// Version devuelve la versión del servidor.
+// Version returns the server version.
 func (s *Store) Version() (string, error) {
 	var v string
 	if err := s.db.QueryRow("SELECT VERSION()").Scan(&v); err != nil {
@@ -73,7 +73,7 @@ func (s *Store) Version() (string, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// Tables devuelve las tablas de la base actual.
+// Tables returns the tables of the current database.
 func (s *Store) Tables() ([]string, error) {
 	rows, err := s.db.Query(`
 		SELECT table_name FROM information_schema.tables
@@ -95,7 +95,7 @@ func (s *Store) Tables() ([]string, error) {
 	return tables, rows.Err()
 }
 
-// Columns devuelve las columnas de una tabla de la base actual.
+// Columns returns the columns of a table in the current database.
 func (s *Store) Columns(table string) ([]store.Column, error) {
 	rows, err := s.db.Query(`
 		SELECT column_name, column_type, (is_nullable = 'NO'),
@@ -119,7 +119,7 @@ func (s *Store) Columns(table string) ([]store.Column, error) {
 	return cols, rows.Err()
 }
 
-// Indexes devuelve los índices de una tabla de la base actual.
+// Indexes returns the indexes of a table in the current database.
 func (s *Store) Indexes(table string) ([]store.Index, error) {
 	rows, err := s.db.Query(`
 		SELECT index_name, column_name, (non_unique = 0)
@@ -157,7 +157,7 @@ func (s *Store) Indexes(table string) ([]store.Index, error) {
 	return indexes, nil
 }
 
-// Query ejecuta SQL arbitrario.
+// Query runs arbitrary SQL.
 func (s *Store) Query(sql string) (*store.Result, error) {
 	rows, err := s.db.Query(sql)
 	if err != nil {
@@ -167,7 +167,7 @@ func (s *Store) Query(sql string) (*store.Result, error) {
 	return store.ScanResult(rows)
 }
 
-// Exec ejecuta SQL sin resultado.
+// Exec runs SQL without a result.
 func (s *Store) Exec(sql string) (int64, error) {
 	res, err := s.db.Exec(sql)
 	if err != nil {
@@ -180,7 +180,7 @@ func (s *Store) Exec(sql string) (int64, error) {
 	return n, nil
 }
 
-// CountTable devuelve la cantidad de filas de una tabla.
+// CountTable returns the number of rows in a table.
 func (s *Store) CountTable(table string) (int, error) {
 	q := fmt.Sprintf("SELECT COUNT(*) FROM %s", QuoteIdent(table))
 	var n int
@@ -190,7 +190,7 @@ func (s *Store) CountTable(table string) (int, error) {
 	return n, nil
 }
 
-// SelectTablePage devuelve una página de filas de una tabla.
+// SelectTablePage returns a page of rows from a table.
 func (s *Store) SelectTablePage(table string, limit, offset int) (*store.Result, error) {
 	q := fmt.Sprintf("SELECT * FROM %s %s", QuoteIdent(table), Limit(limit, offset))
 	return s.Query(q)

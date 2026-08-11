@@ -2,12 +2,12 @@ package store
 
 import "errors"
 
-// Errores propios del paquete store.
+// Package-level errors for the store package.
 var (
-	// ErrUnsupportedDriver indica que el driver no está en el registro de motores.
-	ErrUnsupportedDriver = errors.New("motor no soportado")
-	// ErrConnection indica un fallo al establecer la conexión.
-	ErrConnection = errors.New("error de conexión")
-	// ErrTableNotFound indica que la tabla solicitada no existe en el esquema.
-	ErrTableNotFound = errors.New("tabla no encontrada")
+	// ErrUnsupportedDriver means the driver is not registered in the engine registry.
+	ErrUnsupportedDriver = errors.New("unsupported engine")
+	// ErrConnection indicates a failure establishing the connection.
+	ErrConnection = errors.New("connection error")
+	// ErrTableNotFound means the requested table does not exist in the schema.
+	ErrTableNotFound = errors.New("table not found")
 )

@@ -1,233 +1,230 @@
-# LESSONS — lecciones del agente
+# LESSONS — agent lessons
 
-Este archivo documenta encrucijadas y decisiones que el agente toma durante el desarrollo, para reutilizarlas en el futuro. Se actualiza continuamente.
-
----
-
-## L-01 — Módulo Go sin repo real: no usar `[usuario]` literal
-
-**Encrucijada:** el SPEC dice `go mod init github.com/[usuario]/relm`, pero `[usuario]` con corchetes no es un path de módulo válido para Go y no hay repo real.
-
-**Decisión:** usar `module relm` (nombre simple). Cuando el proyecto se publicó en `github.com/agmonetti/relm`, se cambió a `module github.com/agmonetti/relm` con un `sed` (`s|"relm/|"github.com/agmonetti/relm/|g` sobre los `*.go` + la línea de `module` en `go.mod`), lo que habilita `go install github.com/agmonetti/relm@latest`.
-
-**Lección:** cuando el SPEC tenga placeholders no válidos, resolver con la opción más simple y anotarlo acá en vez de preguntar. El path del módulo se migra al publicar con un sed mecánico.
+This file documents crossroads and decisions the agent makes during development, so they can be reused in the future. It is updated continuously.
 
 ---
 
-## L-02 — Stack mínimo primero, features después
+## L-01 — Go module without a real repo: don't use the literal `[usuario]`
 
-**Encrucijada:** el SPEC pide `cobra` como opcional, spinners, etc. Empezar todo de golpe complica el debug.
+**Crossroads:** the SPEC says `go mod init github.com/[usuario]/relm`, but `[usuario]` with brackets is not a valid module path for Go and there is no real repo.
 
-**Decisión:** implementar por fases del SPEC. Fase 1 = solo `store` + `conn` + `cmd` con salida a stdout. No TUI todavía.
+**Decision:** use `module relm` (simple name). When the project was published to `github.com/agmonetti/relm`, it was changed to `module github.com/agmonetti/relm` with a `sed` (`s|"relm/|"github.com/agmonetti/relm/|g` over the `*.go` files plus the `module` line in `go.mod`), which enables `go install github.com/agmonetti/relm@latest`.
 
-**Lección:** seguir `04-implementacion.md` al pie de la letra. Cada fase tiene criterio de done verificable con `go test`/`go build`. No saltar fases.
-
----
-
-## L-03 — La interfaz `Store` es el contrato sagrado
-
-**Encrucijada:** el TUI necesita saber si un query devuelve filas o "filas afectadas" para renderizar.
-
-**Decisión:** `Query()` devuelve siempre `*Result` con `Columns`/`Rows`. La UI decide cómo mostrar según `len(Result.Columns)`. `Exec()` es para `rowsAffected`. Nunca importar `database/sql` fuera de `internal/store/**`.
-
-**Lección:** mantener la neutralidad de `Store` es lo que hace posible agregar motores sin tocar la UI. Si un requisito parece exigir lógica de motor afuera, es señal de que la interfaz está mal — arreglar la interfaz.
+**Lesson:** when the SPEC has invalid placeholders, resolve with the simplest option and note it here instead of asking. The module path is migrated on publish with a mechanical sed.
 
 ---
 
-## L-04 — Dependencias con CGO complican el build, tener plan B
+## L-02 — Minimal stack first, features later
 
-**Encrucijada:** `mattn/go-sqlite3` requiere gcc. En esta máquina hay gcc, pero cross-compile va a fallar.
+**Crossroads:** the SPEC asks for `cobra` as optional, spinners, etc. Starting everything at once complicates debugging.
 
-**Decisión:** usar `mattn` ahora (SPEC lo pide). Dejar documentada la alternativa `modernc.org/sqlite` para builds sin CGO.
+**Decision:** implement in SPEC phases. Phase 1 = only `store` + `conn` + `cmd` with output to stdout. No TUI yet.
 
-**Lección:** el costo de CGO se paga en release. Anotar el escape hatch en el README y en `05-decisiones-tecnicas.md`.
-
----
-
-## L-05 — Motor por paquete + registro en `init()` evita el import cycle
-
-**Encrucijada:** `store` (factory) necesita importar `sqlite`, pero `sqlite` importa `store` por los tipos compartidos (`store.Store`, `store.Column`...) → ciclo de imports. Es inevitable con el patrón del SPEC.
-
-**Decisión:** patrón de registro:
-- `store` define la interfaz, tipos, errores y un `Register(driver, constructor)` + `New(cfg)` que busca en el registro.
-- Cada motor llama `store.Register(...)` en su `init()`.
-- `cmd` importa los motores en blanco (`_ "relm/internal/store/sqlite"`) para que se registren.
-- `store` NO importa a ningún motor → sin ciclo.
-
-**Lección:** el "plugin registry con init()" es el patrón Go para evitar ciclos entre un contrato y sus implementaciones. El registro es configuración de compilación, no estado de runtime — no viola "no global state".
+**Lesson:** follow `04-implementation.md` to the letter. Each phase has a done criterion verifiable with `go test`/`go build`. Don't skip phases.
 
 ---
 
-## L-06 — SQLite crea archivos inexistentes: validar con os.Stat
+## L-03 — The `Store` interface is the sacred contract
 
-**Encrucijada:** el SPEC exige "archivo no existe → error", pero el driver SQLite crea el archivo en blanco al abrir un path inexistente.
+**Crossroads:** the TUI needs to know if a query returns rows or "rows affected" to render.
 
-**Decisión:** `os.Stat(cfg.Path)` antes de abrir; si no existe, `ErrConnection: no such file`. Excepción: `:memory:` y `file::memory:` (bases en memoria para tests) se saltan el check.
+**Decision:** `Query()` always returns `*Result` with `Columns`/`Rows`. The UI decides how to display based on `len(Result.Columns)`. `Exec()` is for `rowsAffected`. Never import `database/sql` outside `internal/store/**`.
 
-**Lección:** los drivers de SQLite tienen comportamientos de auto-creación que contradicen el contrato esperado. Validar en la capa del store, no asumir.
-
----
-
-## L-07 — Tests del factory van en paquete externo (`package store_test`)
-
-**Encrucijada:** el test del factory de `store` necesita importar `sqlite` (para registrarlo), y `sqlite` importa `store` → ciclo de imports en el test.
-
-**Decisión:** test en `package store_test` (test externo). El paquete externo puede importar paquetes que importan al paquete bajo test, sin crear ciclo.
-
-**Lección:** cuando el patrón de registro genera ciclos, los tests del contrato van en `package <name>_test`. Si algo "no se usa" en el test tras el cambio, es señal de que las llamadas quedaron sin prefijo (`New` → `store.New`).
+**Lesson:** keeping `Store` neutral is what makes it possible to add engines without touching the UI. If a requirement seems to demand engine logic outside, that's a sign the interface is wrong — fix the interface.
 
 ---
 
-## L-08 — `Result` necesita distinguir tabla de "filas afectadas"
+## L-04 — Dependencies with CGO complicate the build, have a plan B
 
-**Encrucijada:** la UI decide cómo mostrar un resultado: tabla si hay columnas, "N filas afectadas" para INSERT/UPDATE/DELETE. La interfaz `Store` no tenía cómo expresar lo segundo.
+**Crossroads:** `mattn/go-sqlite3` requires gcc. There is gcc on this machine, but cross-compiling will fail.
 
-**Decisión:** agregar `Affected int64` a `store.Result`. Queries de lectura lo setean a `-1`; `Exec` lo setea a `rowsAffected`. La UI decide con `len(Columns) > 0` (tabla) o `Affected >= 0` (filas afectadas).
+**Decision:** use `mattn` for now (the SPEC asks for it). Leave the `modernc.org/sqlite` alternative documented for CGO-less builds.
 
-**Lección:** cuando un requisito de la UI no tiene dónde vivir en el modelo, el modelo está incompleto — no parchear la UI. Un campo nuevo en `Result` es más simple que inspeccionar strings en el TUI.
-
----
-
-## L-09 — La heurística SELECT es frágil; que el store dicte la verdad
-
-**Encrucijada:** ¿`Query()` o `Exec()` para el buffer del editor? `strings.HasPrefix(SELECT)` falla con `WITH ... SELECT`, `PRAGMA`, `EXPLAIN`.
-
-**Decisión:** el editor usa una lista corta de keywords que devuelven filas (`SELECT, WITH, PRAGMA, SHOW, EXPLAIN, DESCRIBE, VALUES, TABLE`) y documenta que es un hint. El resultado final lo dicta el store (un `Result` con columnas vs `Affected`), no el editor.
-
-**Lección:** toda decisión de presentación se basa en el `Result` del store, nunca en re-parsear SQL en la capa UI.
+**Lesson:** the cost of CGO is paid at release time. Note the escape hatch in the README and in `05-technical-decisions.md`.
 
 ---
 
-## L-10 — `Ctrl+I` y `Tab` son indistinguibles en la terminal
+## L-05 — Engine per package + registration in `init()` avoids the import cycle
 
-**Encrucijada:** el SPEC mapeaba `Ctrl+I` a "ver estructura". Al probar la TUI, `Ctrl+I` abría el editor: el handler de `Tab` lo capturaba.
+**Crossroads:** `store` (factory) needs to import `sqlite`, but `sqlite` imports `store` for the shared types (`store.Store`, `store.Column`...) → import cycle. It's inevitable with the SPEC's pattern.
 
-**Decisión:** en la terminal `Ctrl+I` y `Tab` son el mismo byte (0x09, HT). bubbletea los normaliza a `KeyTab` (su `String()` es "tab"), así que un binding `ctrl+i` nunca matchea. Cambié inspección de estructura a `i` (info) y actualicé los docs.
+**Decision:** registry pattern:
+- `store` defines the interface, types, errors and a `Register(driver, constructor)` + `New(cfg)` that looks up the registry.
+- Each engine calls `store.Register(...)` in its `init()`.
+- `cmd` imports the engines blank (`_ "relm/internal/store/sqlite"`) so they register.
+- `store` does NOT import any engine → no cycle.
 
-**Lección:** nunca diseñar keymaps con `Ctrl+I` si `Tab` está ocupado. Antes de escribir un binding, verificar que no colisione con otra tecla de control con el mismo código ANSI (`Ctrl+J`=`Enter`, `Ctrl+M`=`Enter`/CR, `Ctrl+H`=`Backspace`, `Ctrl+I`=`Tab`). Esta es una clase de bug que solo aparece probando la TUI de verdad, no en tests unitarios de modelo — por eso vale la pena testear el flujo completo con keys.
-
----
-
-## L-11 — Testear el flujo completo de la TUI ejecutando los `tea.Cmd`
-
-**Encrucijada:** los tests del Model pasaban mensajes con `m.Update(msg)` pero ignoraban el `tea.Cmd` devuelto. El flujo de conexión nunca conectaba en los tests, aunque funcionaba en runtime.
-
-**Decisión:** un helper `step()` en los tests ejecuta el `cmd` devuelto y realimenta el mensaje que produzca (como hace el programa de bubbletea). Sin esto, los mensajes diferidos (`ConnectMsg`) nunca llegan al modelo en el test.
-
-**Lección:** para testear una arquitectura de mensajes hay que simular el runtime: ejecutar cmds y re-alimentar sus mensajes. Además, los tests del TUI necesitan el import en blanco del motor (`_ "relm/internal/store/sqlite"`) o el registro nunca corre.
+**Lesson:** the "plugin registry with init()" is the Go pattern to avoid cycles between a contract and its implementations. The registry is build-time configuration, not runtime state — it doesn't violate "no global state".
 
 ---
 
-## L-12 — `tea.BatchMsg` es `[]Cmd` en bubbletea v1.x, no mensajes
+## L-06 — SQLite creates nonexistent files: validate with os.Stat
 
-**Encrucijada:** el helper de tests que ejecutaba cmds trataba `tea.BatchMsg` como una lista de mensajes y los pasaba a `Update`; el resultado de la query nunca se aplicaba y `loading` quedaba `true`.
+**Crossroads:** the SPEC requires "file doesn't exist → error", but the SQLite driver creates a blank file when opening a nonexistent path.
 
-**Decisión:** en bubbletea v1.3.x, `BatchMsg` es `[]Cmd` (comandos). El programa los ejecuta uno por uno y entrega cada mensaje resultante a `Update`. El helper de tests ahora ejecuta cada sub-cmd y realimenta su mensaje.
+**Decision:** `os.Stat(cfg.Path)` before opening; if it doesn't exist, `ErrConnection: no such file`. Exception: `:memory:` and `file::memory:` (in-memory databases for tests) skip the check.
 
-**Lección:** siempre verificar la firma real de `tea.Batch`/`BatchMsg` en la versión instalada. La API cambió entre v0.x y v1.x.
-
----
-
-## L-13 — El historial se pierde si cada ejecución crea un editor nuevo
-
-**Encrucijada:** al hacer la ejecución del editor asíncrona, cada query corría en un `editor.Editor` nuevo. El historial quedaba con un solo elemento porque cada editor nuevo empezaba vacío.
-
-**Decisión:** compartir el puntero al `History` entre el editor del modelo y el editor de la goroutine (`ed.History = m.editor.History`). La goroutine solo muta el ring buffer; la navegación en la UI se guarda con `!m.loading` para evitar races. Verificado con `go test -race`.
-
-**Lección:** al mover una operación a una goroutine, el estado que debe sobrevivir entre llamadas (historial, contadores) tiene que vivir en un objeto compartido. La copia del struct no comparte slices/pointers salvo que se copie el puntero explícitamente.
+**Lesson:** SQLite drivers have auto-creation behaviors that contradict the expected contract. Validate at the store layer, don't assume.
 
 ---
 
-## L-14 — `Ctrl+I`/`Tab` ya documentado; el patrón se repite (teclas de control ambiguas)
+## L-07 — Factory tests go in an external package (`package store_test`)
 
-**Encrucijada:** `Ctrl+I` se ligó a "estructura" pero colisionaba con `Tab`.
+**Crossroads:** the `store` factory test needs to import `sqlite` (to register it), and `sqlite` imports `store` → import cycle in the test.
 
-**Decisión:** usar `i`. Ya documentado en L-10. La lección se extiende: revisar el keymap completo antes de implementar para detectar colisiones ANSI.
+**Decision:** test in `package store_test` (external test). The external package can import packages that import the package under test, without creating a cycle.
 
-**Lección:** cuando un keymap del SPEC es técnicamente inviable, la TUI real es la única forma de detectarlo — probar el flujo completo con keys simuladas, no solo renderizar.
-
----
-
-## L-15 — SQL Server no soporta expresiones booleanas en SELECT
-
-**Encrucijada:** el query de introspección de columnas de mssql usaba `(c.IS_NULLABLE = 'NO')` directamente en el SELECT. Error `Incorrect syntax near '='`.
-
-**Decisión:** usar `CASE WHEN ... THEN 1 ELSE 0 END` para derivar booleanos en SQL Server. También `ISNULL()` en vez de `COALESCE()` (ambos funcionan, ISNULL es el idiosincrático de T-SQL).
-
-**Lección:** el `information_schema` de SQL Server tiene el mismo aspecto que el de Postgres/MySQL pero la sintaxis T-SQL difiere. Los tests de integración contra contenedores docker reales son la única forma confiable de validar queries de introspección — y son rápidos de correr una vez que docker está arriba.
+**Lesson:** when the registry pattern creates cycles, contract tests go in `package <name>_test`. If something "is unused" in the test after the change, it's a sign the calls were left without a prefix (`New` → `store.New`).
 
 ---
 
-## L-16 — Validar cada motor contra un servidor real, no solo "compila"
+## L-08 — `Result` needs to distinguish a table from "rows affected"
 
-**Encrucijada:** los motores compilaban y los dialectos unit-test pasaban, pero solo contra servidores reales (docker) aparecieron bugs reales de sintaxis e introspección (el caso de mssql arriba).
+**Crossroads:** the UI decides how to show a result: table if there are columns, "N rows affected" for INSERT/UPDATE/DELETE. The `Store` interface had no way to express the latter.
 
-**Decisión:** tests de integración por motor gatillados por env vars (`SQLISH_TEST_<MOTOR>_HOST`, etc.) que ejercitan toda la interfaz `Store`: tablas, columnas, constraints, índices, count, paginación, versión. Se saltan con `t.Skip` si no hay env var, así `go test ./...` siempre pasa.
+**Decision:** add `Affected int64` to `store.Result`. Read queries set it to `-1`; `Exec` sets it to `rowsAffected`. The UI decides with `len(Columns) > 0` (table) or `Affected >= 0` (rows affected).
 
-**Lección:** el criterio de done de la fase 7 ("conectar a cada motor en docker") es el que realmente valida el trabajo. Docker está disponible en este entorno: usar contenedores efímeros (`--rm`) con puertos estándar.
-
----
-
-## L-17 — CGO limita el cross-compile; `modernc` lo habilita
-
-**Encrucijada:** `CGO_ENABLED=1` cross-compilando a darwin desde linux falla (`clang: unsupported option '-arch'`). El SPEC pedía build multi-plataforma.
-
-**Decisión:** verifiqué que `modernc.org/sqlite` (driver pure-Go, registra "sqlite") compila a `darwin/arm64` con `CGO_ENABLED=0`. Documentado en el Makefile como escape hatch. El binario linux con los 5 drivers pesa 21MB (tope: 40MB).
-
-**Lección:** cuando una dependencia trae CGO, cross-compile no es gratis. Validar la alternativa pure-Go de forma concreta (compilar de verdad) antes de prometerla en los docs.
+**Lesson:** when a UI requirement has nowhere to live in the model, the model is incomplete — don't patch the UI. A new field on `Result` is simpler than inspecting strings in the TUI.
 
 ---
 
-## L-18 — El `EchoMode` de password se aplicó al campo equivocado
+## L-09 — The SELECT heuristic is fragile; let the store dictate the truth
 
-**Encrucijada:** en el formulario de conexión, `EchoMode = EchoPassword` se aplicaba por índice `c.fields[2]` (Puerto) en vez de `c.fields[4]` (Password). Bug silencioso: la password no se enmascaraba y el puerto sí.
+**Crossroads:** `Query()` or `Exec()` for the editor buffer? `strings.HasPrefix(SELECT)` fails with `WITH ... SELECT`, `PRAGMA`, `EXPLAIN`.
 
-**Decisión:** corregir el índice y agregar tests de pantalla (`connect_test.go`) que verifican campos visibles por motor y enmascaramiento.
+**Decision:** the editor uses a short list of keywords that return rows (`SELECT, WITH, PRAGMA, SHOW, EXPLAIN, DESCRIBE, VALUES, TABLE`) and documents it as a hint. The final result is dictated by the store (a `Result` with columns vs `Affected`), not the editor.
 
-**Lección:** los índices mágicos en slices de campos son frágiles. Un test de pantalla que valida comportamiento visible (cuántos campos, si se enmascara) atrapa esta clase de bug que compila pero funciona mal.
-
----
-
-## L-19 — Los comandos de la documentación hay que probarlos, no copiarlos
-
-**Encrucijada:** `USAGE.md` tenía `docker exec maria mysql -uroot -proot -e "CREATE DATABASE test"`. Al ejecutarlo: la imagen `mariadb:11` no trae el binario `mysql`, solo los `mariadb-*` (`mariadb`, `mariadb-admin`, ...).
-
-**Decisión:** verificar cada comando del USAGE ejecutándolo de verdad (one-liner de sqlite, 4 `docker run`, credenciales). Corregir usando `mariadb` y, mejor, eliminar el paso manual: los env vars `POSTGRES_DB` / `MYSQL_DATABASE` / `MARIADB_DATABASE` hacen que las imágenes oficiales auto-creen la base en el primer arranque.
-
-**Lección:** un comando que no se ejecuta en la doc puede estar roto y nadie lo nota. Los binarios de los contenedores de MariaDB se llaman `mariadb-*` (no `mysql-*`), y las imágenes oficiales crean bases con env vars — usar eso en vez de pasos `exec` manuales.
+**Lesson:** every presentation decision is based on the store's `Result`, never on re-parsing SQL at the UI layer.
 
 ---
 
-## L-20 — `docker compose` es la mejor forma de ofrecer DBs de prueba
+## L-10 — `Ctrl+I` and `Tab` are indistinguishable in the terminal
 
-**Encrucijada:** el usuario preguntó si conviene una imagen docker o un `docker run` para "levantar la base". Cuatro `docker run` sueltos son ruido y propensos a errores.
+**Crossroads:** the SPEC mapped `Ctrl+I` to "view structure". When testing the TUI, `Ctrl+I` opened the editor: the `Tab` handler captured it.
 
-**Decisión:** `compose.yaml` oficial: `docker compose up -d` levanta los 4 motores con credenciales fijas, base `test` auto-creada, y healthchecks. Se validó: los 4 quedan `healthy` y los tests de integración pasan con esas credenciales. Se dejó la alternativa `docker run` por contenedor (con env vars, sin `exec`).
+**Decision:** in the terminal `Ctrl+I` and `Tab` are the same byte (0x09, HT). bubbletea normalizes them to `KeyTab` (its `String()` is "tab"), so a `ctrl+i` binding never matches. I changed structure inspection to `i` (info) and updated the docs.
 
-**Lección:** para "levantá el entorno de prueba", `docker compose` con healthchecks es la opción estándar y la más robusta. Una imagen docker de la TUI misma no aporta (necesita un TTY y no incluiría la base); el compose de las bases es lo que el usuario necesita.
-
----
-
-## L-22 — Un checkbox en un formulario de textinputs rompe el modelo de foco
-
-**Encrucijada:** agregar el toggle `Solo lectura` (SQLite) y el campo `SSL` (PostgreSQL) al formulario de conexión. El toggle no es un `textinput`, pero el `ConnScreen` trata todos los campos iguales: `applyFocus()` llamaba `.Focus()` a todos, y `Update()` pasaba la tecla al input activo.
-
-**Decisión:** extender `field` con `isToggle bool` + `checked bool`. `applyFocus()` saltea los toggles (no tienen `.Focus()`); `Update()` alterna con `Espacio`/`Enter` y no reenvía la tecla al input; `renderForm()` dibuja `[ ]`/`[x]`; `reset()` los apaga. La cantidad de campos por motor cambió (sqlite: 2, postgres: 6), así que `connect_test.go` se actualizó y agregó tests del toggle y del `sslmode`.
-
-**Lección:** cuando un componente visual no encaja en el tipo base de los campos (`textinput`), no se fuerza — se modela como una variante del campo con su propio handler. El costo real está en el foco (qué elemento "tiene" la tecla), no en el render.
+**Lesson:** never design keymaps with `Ctrl+I` if `Tab` is taken. Before writing a binding, verify it doesn't collide with another control key with the same ANSI code (`Ctrl+J`=`Enter`, `Ctrl+M`=`Enter`/CR, `Ctrl+H`=`Backspace`, `Ctrl+I`=`Tab`). This is a class of bug that only appears when testing the real TUI, not in model unit tests — which is why it's worth testing the full flow with keys.
 
 ---
 
-## L-21 — Makefile: las líneas de receta multilínea rompen si no llevan tab
+## L-11 — Test the full TUI flow by executing the `tea.Cmd`s
 
-**Encrucijada:** `make demo` fallaba con "falta un separador": el SQL multilínea dentro de la receta tenía líneas de continuación indentadas con espacios, no con tab.
+**Crossroads:** the Model tests passed messages with `m.Update(msg)` but ignored the returned `tea.Cmd`. The connection flow never connected in the tests, even though it worked at runtime.
 
-**Decisión:** cada línea de receta en un Makefile DEBE empezar con tab. Un string SQL multilínea con indentación propia rompe el parseo. Solución: SQL en una sola línea por receta.
+**Decision:** a `step()` helper in the tests executes the returned `cmd` and feeds back the message it produces (like the bubbletea program does). Without this, deferred messages (`ConnectMsg`) never reach the model in the test.
 
-**Lección:** en Makefiles, la indentación de las recetas es tab (no espacios). Para evitar el problema, mantener cada comando en una sola línea.
+**Lesson:** to test a message architecture you have to simulate the runtime: execute cmds and re-feed their messages. Also, the TUI tests need the engine's blank import (`_ "relm/internal/store/sqlite"`) or the registry never runs.
 
+---
 
+## L-12 — `tea.BatchMsg` is `[]Cmd` in bubbletea v1.x, not messages
 
+**Crossroads:** the test helper that executed cmds treated `tea.BatchMsg` as a list of messages and passed them to `Update`; the query result was never applied and `loading` stayed `true`.
+
+**Decision:** in bubbletea v1.3.x, `BatchMsg` is `[]Cmd` (commands). The program executes them one by one and delivers each resulting message to `Update`. The test helper now executes each sub-cmd and feeds back its message.
+
+**Lesson:** always verify the actual signature of `tea.Batch`/`BatchMsg` in the installed version. The API changed between v0.x and v1.x.
+
+---
+
+## L-13 — History is lost if each execution creates a new editor
+
+**Crossroads:** when the editor execution was made asynchronous, each query ran in a new `editor.Editor`. The history ended up with a single element because each new editor started empty.
+
+**Decision:** share the `History` pointer between the model's editor and the goroutine's editor (`ed.History = m.editor.History`). The goroutine only mutates the ring buffer; navigation in the UI is guarded with `!m.loading` to avoid races. Verified with `go test -race`.
+
+**Lesson:** when moving an operation to a goroutine, state that must survive between calls (history, counters) has to live in a shared object. Copying the struct doesn't share slices/pointers unless the pointer is copied explicitly.
+
+---
+
+## L-14 — `Ctrl+I`/`Tab` already documented; the pattern repeats (ambiguous control keys)
+
+**Crossroads:** `Ctrl+I` was bound to "structure" but collided with `Tab`.
+
+**Decision:** use `i`. Already documented in L-10. The lesson extends: review the full keymap before implementing to catch ANSI collisions.
+
+**Lesson:** when a SPEC keymap is technically unfeasible, the real TUI is the only way to detect it — test the full flow with simulated keys, not just rendering.
+
+---
+
+## L-15 — SQL Server doesn't support boolean expressions in SELECT
+
+**Crossroads:** mssql's column introspection query used `(c.IS_NULLABLE = 'NO')` directly in the SELECT. Error `Incorrect syntax near '='`.
+
+**Decision:** use `CASE WHEN ... THEN 1 ELSE 0 END` to derive booleans in SQL Server. Also `ISNULL()` instead of `COALESCE()` (both work, ISNULL is the T-SQL idiosyncratic one).
+
+**Lesson:** SQL Server's `information_schema` looks the same as Postgres/MySQL's but the T-SQL syntax differs. Integration tests against real docker containers are the only reliable way to validate introspection queries — and they're fast to run once docker is up.
+
+---
+
+## L-16 — Validate each engine against a real server, not just "it compiles"
+
+**Crossroads:** the engines compiled and the unit-tested dialects passed, but real syntax and introspection bugs only appeared against real servers (docker) — the mssql case above.
+
+**Decision:** per-engine integration tests triggered by env vars (`SQLISH_TEST_<MOTOR>_HOST`, etc.) that exercise the whole `Store` interface: tables, columns, constraints, indexes, count, pagination, version. They skip with `t.Skip` if there's no env var, so `go test ./...` always passes.
+
+**Lesson:** the phase-7 done criterion ("connect to each engine in docker") is what really validates the work. Docker is available in this environment: use ephemeral containers (`--rm`) with standard ports.
+
+---
+
+## L-17 — CGO limits cross-compilation; `modernc` enables it
+
+**Crossroads:** `CGO_ENABLED=1` cross-compiling to darwin from linux fails (`clang: unsupported option '-arch'`). The SPEC asked for a multi-platform build.
+
+**Decision:** I verified that `modernc.org/sqlite` (pure-Go driver, registers "sqlite") compiles to `darwin/arm64` with `CGO_ENABLED=0`. Documented in the Makefile as an escape hatch. The linux binary with the 5 drivers weighs 21MB (limit: 40MB).
+
+**Lesson:** when a dependency brings CGO, cross-compiling isn't free. Validate the pure-Go alternative concretely (actually compile it) before promising it in the docs.
+
+---
+
+## L-18 — The password `EchoMode` was applied to the wrong field
+
+**Crossroads:** in the connection form, `EchoMode = EchoPassword` was applied by index `c.fields[2]` (Port) instead of `c.fields[4]` (Password). Silent bug: the password wasn't masked and the port was.
+
+**Decision:** fix the index and add screen tests (`connect_test.go`) that verify per-engine visible fields and masking.
+
+**Lesson:** magic indexes in field slices are fragile. A screen test that validates visible behavior (how many fields, whether it's masked) catches this class of bug that compiles but works wrong.
+
+---
+
+## L-19 — Documentation commands have to be tested, not copied
+
+**Crossroads:** `USAGE.md` had `docker exec maria mysql -uroot -proot -e "CREATE DATABASE test"`. When running it: the `mariadb:11` image doesn't ship the `mysql` binary, only the `mariadb-*` ones (`mariadb`, `mariadb-admin`, ...).
+
+**Decision:** verify every USAGE command by actually running it (sqlite one-liner, 4 `docker run`s, credentials). Fix using `mariadb` and, better, remove the manual step: the `POSTGRES_DB` / `MYSQL_DATABASE` / `MARIADB_DATABASE` env vars make the official images auto-create the database on first boot.
+
+**Lesson:** a command that isn't run in the docs can be broken and nobody notices. The MariaDB container binaries are called `mariadb-*` (not `mysql-*`), and the official images create databases with env vars — use that instead of manual `exec` steps.
+
+---
+
+## L-20 — `docker compose` is the best way to provide test DBs
+
+**Crossroads:** the user asked whether a docker image or a `docker run` is better for "bringing up the database". Four loose `docker run`s are noise and error-prone.
+
+**Decision:** official `compose.yaml`: `docker compose up -d` brings up the 4 engines with fixed credentials, auto-created `test` database, and healthchecks. It was validated: all 4 end up `healthy` and the integration tests pass with those credentials. The per-container `docker run` alternative was kept (with env vars, no `exec`).
+
+**Lesson:** for "bring up the test environment", `docker compose` with healthchecks is the standard, most robust option. A docker image of the TUI itself adds nothing (it needs a TTY and wouldn't include the database); the compose of the databases is what the user needs.
+
+---
+
+## L-22 — A checkbox in a textinput form breaks the focus model
+
+**Crossroads:** adding the `Read-only` toggle (SQLite) and the `SSL` field (PostgreSQL) to the connection form. The toggle isn't a `textinput`, but `ConnScreen` treats all fields the same: `applyFocus()` called `.Focus()` on all of them, and `Update()` passed the key to the active input.
+
+**Decision:** extend `field` with `isToggle bool` + `checked bool`. `applyFocus()` skips toggles (they have no `.Focus()`); `Update()` toggles with `Space`/`Enter` and doesn't forward the key to the input; `renderForm()` draws `[ ]`/`[x]`; `reset()` turns them off. The number of fields per engine changed (sqlite: 2, postgres: 6), so `connect_test.go` was updated and toggle and `sslmode` tests were added.
+
+**Lesson:** when a visual component doesn't fit the base type of the fields (`textinput`), it isn't forced — it's modeled as a variant of the field with its own handler. The real cost is in focus (which element "owns" the key), not in rendering.
+
+---
+
+## L-21 — Makefile: multiline recipe lines break if they don't carry a tab
+
+**Crossroads:** `make demo` failed with "missing separator": the multiline SQL inside the recipe had continuation lines indented with spaces, not tabs.
+
+**Decision:** every recipe line in a Makefile MUST start with a tab. A multiline SQL string with its own indentation breaks parsing. Solution: SQL on a single line per recipe.
+
+**Lesson:** in Makefiles, recipe indentation is a tab (not spaces). To avoid the problem, keep each command on a single line.
 
 
 

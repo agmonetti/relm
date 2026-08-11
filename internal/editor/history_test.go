@@ -37,7 +37,7 @@ func TestHistory_Navigation(t *testing.T) {
 		t.Errorf("Prev() = %q, want a", got)
 	}
 	if got := h.Prev(); got != "a" {
-		t.Errorf("Prev() al inicio = %q, want a", got)
+		t.Errorf("Prev() at start = %q, want a", got)
 	}
 	if got := h.Next(); got != "b" {
 		t.Errorf("Next() = %q, want b", got)
@@ -46,7 +46,7 @@ func TestHistory_Navigation(t *testing.T) {
 		t.Errorf("Next() = %q, want c", got)
 	}
 	if got := h.Next(); got != "" {
-		t.Errorf("Next() al fin = %q, want vacío", got)
+		t.Errorf("Next() at end = %q, want empty", got)
 	}
 }
 
@@ -54,13 +54,13 @@ func TestHistory_ResetStopsNavigation(t *testing.T) {
 	h := NewHistory()
 	h.Push("a")
 	h.Push("b")
-	h.Prev() // navegando a "b"
+	h.Prev() // navigating to "b"
 	h.Reset()
 	if got := h.Next(); got != "" {
-		t.Errorf("Next() tras Reset = %q, want vacío", got)
+		t.Errorf("Next() after Reset = %q, want empty", got)
 	}
 	if got := h.Prev(); got != "b" {
-		t.Errorf("Prev() tras Reset = %q, want b", got)
+		t.Errorf("Prev() after Reset = %q, want b", got)
 	}
 }
 

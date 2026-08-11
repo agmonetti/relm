@@ -1,4 +1,4 @@
-// Package tui implementa el loop de bubbletea de relm.
+// Package tui implements the bubbletea loop for relm.
 package tui
 
 import (
@@ -17,28 +17,28 @@ import (
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
-// Screen identifica la pantalla activa.
+// Screen identifies the active screen.
 type Screen int
 
 const (
-	// ScreenConnect es la pantalla de conexión (primera al abrir).
+	// ScreenConnect is the connection screen (first on open).
 	ScreenConnect Screen = iota
-	// ScreenBrowser es la pantalla de navegación de tablas y filas.
+	// ScreenBrowser is the table and row navigation screen.
 	ScreenBrowser
-	// ScreenEditor es la pantalla del editor SQL.
+	// ScreenEditor is the SQL editor screen.
 	ScreenEditor
-	// ScreenStructure es la pantalla de estructura de tabla.
+	// ScreenStructure is the table structure screen.
 	ScreenStructure
 )
 
-// editorDoneMsg transporta el resultado de una query ejecutada en background.
+// editorDoneMsg carries the result of a query run in the background.
 type editorDoneMsg struct {
 	ed    *editor.Editor
 	err   error
 	token int
 }
 
-// Model es el modelo principal de bubbletea.
+// Model is the main bubbletea model.
 type Model struct {
 	store        store.Store
 	connect      *screens.ConnScreen
@@ -51,7 +51,7 @@ type Model struct {
 
 	spinner spinner.Model
 	loading bool
-	queryID int // token para descartar resultados de queries obsoletas
+	queryID int // token to discard results from stale queries
 
 	width       int
 	height      int
@@ -60,7 +60,7 @@ type Model struct {
 	err         string
 }
 
-// New crea el modelo inicial (pantalla de conexión).
+// New creates the initial model (connection screen).
 func New() *Model {
 	saved, _ := conn.LoadSaved()
 	return &Model{
@@ -74,12 +74,12 @@ func New() *Model {
 	}
 }
 
-// Init implementa tea.Model.
+// Init implements tea.Model.
 func (m *Model) Init() tea.Cmd {
 	return nil
 }
 
-// Update implementa tea.Model.
+// Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -120,7 +120,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case editorDoneMsg:
 		if msg.token != m.queryID {
-			return m, nil // resultado obsoleto: cambió la sesión
+			return m, nil // stale result: the session changed
 		}
 		m.loading = false
 		m.editor = msg.ed
@@ -138,7 +138,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View implementa tea.Model.
+// View implements tea.Model.
 func (m *Model) View() string {
 	if m.showHelp {
 		return m.renderHelp()
@@ -175,7 +175,7 @@ func (m *Model) render() string {
 }
 
 func (m *Model) renderHeader() string {
-	label := "sin conexión"
+	label := "no connection"
 	if m.store != nil {
 		label = m.cfgLabel
 	}
@@ -186,7 +186,7 @@ func (m *Model) renderHeader() string {
 	case ScreenEditor:
 		mode = "editor"
 	case ScreenStructure:
-		mode = "estructura"
+		mode = "structure"
 	}
 	table := "—"
 	if m.browser != nil && m.browser.ActiveTable != "" {
@@ -202,18 +202,18 @@ func (m *Model) renderFooter() string {
 	left := ""
 	switch m.screen {
 	case ScreenConnect:
-		left = "↑↓ guardadas · tab motor/campos · ←→ motor · enter conectar · ctrl+s guardar"
+		left = "↑↓ saved · tab engine/fields · ←→ engine · enter connect · ctrl+s save"
 	case ScreenBrowser:
-		left = "↑↓ navegar · tab editor · i estructura · r refrescar · ? ayuda"
+		left = "↑↓ navigate · tab editor · i structure · r refresh · ? help"
 	case ScreenEditor:
-		left = "ctrl+r correr · tab browser · ctrl+l limpiar"
+		left = "ctrl+r run · tab browser · ctrl+l clear"
 	case ScreenStructure:
-		left = "esc volver · tab editor"
+		left = "esc back · tab editor"
 	}
 
 	right := ""
 	if m.loading {
-		right = m.spinner.View() + " ejecutando query…"
+		right = m.spinner.View() + " running query…"
 	} else if m.browser != nil && m.screen == ScreenBrowser && m.browser.ActiveTable != "" && m.browser.TotalRows > 0 {
 		page := m.browser.Page + 1
 		arrow := ""
@@ -230,7 +230,7 @@ func (m *Model) renderFooter() string {
 	return styles.StyleFooter.Render(left + padSpaces(pad) + right)
 }
 
-// typing indica si el usuario está escribiendo texto (q no debe salir).
+// typing reports whether the user is typing text (q must not quit).
 func (m *Model) typing() bool {
 	switch m.screen {
 	case ScreenConnect:
@@ -241,14 +241,14 @@ func (m *Model) typing() bool {
 	return false
 }
 
-// handleConnectKeys procesa teclas de la pantalla de conexión.
+// handleConnectKeys handles keys of the connection screen.
 func (m *Model) handleConnectKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	updated, cmd := m.connect.Update(msg)
 	m.connect = updated
 	return m, cmd
 }
 
-// doConnect abre el store y carga el browser.
+// doConnect opens the store and loads the browser.
 func (m *Model) doConnect(cfg conn.ConnectionConfig) {
 	m.closeStore()
 	m.queryID++
@@ -279,7 +279,7 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) {
 	m.screen = ScreenBrowser
 }
 
-// saveConnection persiste la conexión actual.
+// saveConnection persists the current connection.
 func (m *Model) saveConnection(cfg conn.ConnectionConfig) {
 	if cfg.Name == "" {
 		cfg.Name = defaultName(cfg)
@@ -303,7 +303,7 @@ func defaultName(cfg conn.ConnectionConfig) string {
 	return fmt.Sprintf("%s/%s", cfg.Host, cfg.Database)
 }
 
-// newSession cierra la sesión y vuelve a la pantalla de conexión.
+// newSession closes the session and returns to the connection screen.
 func (m *Model) newSession() {
 	m.closeStore()
 	m.queryID++
@@ -324,7 +324,7 @@ func (m *Model) closeStore() {
 	}
 }
 
-// handleBrowserKeys procesa teclas del browser.
+// handleBrowserKeys handles browser keys.
 func (m *Model) handleBrowserKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.browser == nil {
 		return m, nil
@@ -373,7 +373,7 @@ func (m *Model) handleBrowserKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// setErr guarda o limpia el mensaje de error actual.
+// setErr stores or clears the current error message.
 func (m *Model) setErr(err error) {
 	if err != nil {
 		m.err = err.Error()
@@ -382,7 +382,7 @@ func (m *Model) setErr(err error) {
 	}
 }
 
-// handleStructureKeys procesa teclas de la pantalla de estructura.
+// handleStructureKeys handles structure screen keys.
 func (m *Model) handleStructureKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Switch):
@@ -396,7 +396,7 @@ func (m *Model) handleStructureKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleEditorKeys procesa teclas del editor.
+// handleEditorKeys handles editor keys.
 func (m *Model) handleEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Switch):
@@ -430,7 +430,7 @@ func (m *Model) handleEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// cualquier otra tecla deja de navegar el historial
+	// any other key stops navigating the history
 	m.editor.History.Reset()
 	updated, cmd := m.editorScreen.Update(msg)
 	m.editorScreen = updated
@@ -438,20 +438,20 @@ func (m *Model) handleEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// executeEditor corre el query actual en background y muestra spinner.
+// executeEditor runs the current query in the background and shows a spinner.
 func (m *Model) executeEditor() tea.Cmd {
 	if m.store == nil {
 		return nil
 	}
 	buf := m.editorScreen.Value()
-	line := m.editorScreen.Line() // statement bajo el cursor
+	line := m.editorScreen.Line() // statement under the cursor
 	st := m.store
 	token := m.queryID
 	m.loading = true
 	return tea.Batch(
 		func() tea.Msg {
-			// editor fresco para la query, pero comparte el historial
-			// acumulado con el modelo (el ring buffer persiste entre ejecuciones).
+			// fresh editor for the query, but shares the accumulated
+			// history with the model (the ring buffer persists across runs).
 			ed := editor.New()
 			ed.History = m.editor.History
 			ed.Buffer = buf
@@ -471,9 +471,9 @@ func (m *Model) renderHelp() string {
 		out += "\n"
 	}
 	return lipgloss.JoinVertical(lipgloss.Left,
-		styles.StyleHeader.Render("Ayuda"),
+		styles.StyleHeader.Render("Help"),
 		out,
-		styles.StyleHeaderDim.Render("? para cerrar"),
+		styles.StyleHeaderDim.Render("? to close"),
 	)
 }
 

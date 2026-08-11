@@ -5,12 +5,12 @@ import (
 	"strings"
 )
 
-// QuoteIdent escapa un identificador con comillas dobles, como exige SQLite.
+// QuoteIdent escapes an identifier with double quotes, as SQLite requires.
 func QuoteIdent(ident string) string {
 	return `"` + strings.ReplaceAll(ident, `"`, `""`) + `"`
 }
 
-// Limit genera la cláusula de paginación de SQLite.
+// Limit builds the SQLite pagination clause.
 func Limit(limit, offset int) string {
 	return fmt.Sprintf("LIMIT %d OFFSET %d", limit, offset)
 }

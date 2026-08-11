@@ -7,21 +7,21 @@ import (
 	"net/url"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib" // registra el driver "pgx"
+	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" driver
 
 	"github.com/agmonetti/relm/internal/conn"
 	"github.com/agmonetti/relm/internal/store"
 )
 
-// Store es la implementación PostgreSQL de store.Store.
+// Store is the PostgreSQL implementation of store.Store.
 type Store struct {
 	db *sql.DB
 }
 
-// New abre una conexión a PostgreSQL.
+// New opens a connection to PostgreSQL.
 func New(cfg conn.ConnectionConfig) (*Store, error) {
 	if cfg.Host == "" {
-		return nil, fmt.Errorf("%w: falta el host", store.ErrConnection)
+		return nil, fmt.Errorf("%w: missing host", store.ErrConnection)
 	}
 	u := url.URL{
 		Scheme: "postgres",
@@ -60,7 +60,7 @@ func init() {
 
 func (s *Store) Driver() string { return "postgres" }
 
-// Version devuelve la versión del servidor.
+// Version returns the server version.
 func (s *Store) Version() (string, error) {
 	var v string
 	if err := s.db.QueryRow("SELECT version()").Scan(&v); err != nil {
@@ -71,7 +71,7 @@ func (s *Store) Version() (string, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// Tables devuelve las tablas del schema actual (search_path).
+// Tables returns the tables of the current schema (search_path).
 func (s *Store) Tables() ([]string, error) {
 	rows, err := s.db.Query(`
 		SELECT table_name FROM information_schema.tables
@@ -93,7 +93,7 @@ func (s *Store) Tables() ([]string, error) {
 	return tables, rows.Err()
 }
 
-// Columns devuelve las columnas de una tabla del schema actual.
+// Columns returns the columns of a table in the current schema.
 func (s *Store) Columns(table string) ([]store.Column, error) {
 	rows, err := s.db.Query(`
 		SELECT c.column_name, c.data_type,
@@ -127,7 +127,7 @@ func (s *Store) Columns(table string) ([]store.Column, error) {
 	return cols, rows.Err()
 }
 
-// Indexes devuelve los índices de una tabla del schema actual.
+// Indexes returns the indexes of a table in the current schema.
 func (s *Store) Indexes(table string) ([]store.Index, error) {
 	rows, err := s.db.Query(`
 		SELECT i.relname, a.attname, ix.indisunique
@@ -170,7 +170,7 @@ func (s *Store) Indexes(table string) ([]store.Index, error) {
 	return indexes, nil
 }
 
-// Query ejecuta SQL arbitrario.
+// Query runs arbitrary SQL.
 func (s *Store) Query(sql string) (*store.Result, error) {
 	rows, err := s.db.Query(sql)
 	if err != nil {
@@ -180,7 +180,7 @@ func (s *Store) Query(sql string) (*store.Result, error) {
 	return store.ScanResult(rows)
 }
 
-// Exec ejecuta SQL sin resultado.
+// Exec runs SQL without a result.
 func (s *Store) Exec(sql string) (int64, error) {
 	res, err := s.db.Exec(sql)
 	if err != nil {
@@ -193,7 +193,7 @@ func (s *Store) Exec(sql string) (int64, error) {
 	return n, nil
 }
 
-// CountTable devuelve la cantidad de filas de una tabla.
+// CountTable returns the number of rows in a table.
 func (s *Store) CountTable(table string) (int, error) {
 	q := fmt.Sprintf("SELECT COUNT(*) FROM %s", QuoteIdent(table))
 	var n int
@@ -203,7 +203,7 @@ func (s *Store) CountTable(table string) (int, error) {
 	return n, nil
 }
 
-// SelectTablePage devuelve una página de filas de una tabla.
+// SelectTablePage returns a page of rows from a table.
 func (s *Store) SelectTablePage(table string, limit, offset int) (*store.Result, error) {
 	q := fmt.Sprintf("SELECT * FROM %s %s", QuoteIdent(table), Limit(limit, offset))
 	return s.Query(q)

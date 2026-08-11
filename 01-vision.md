@@ -1,54 +1,54 @@
-# 01 — Visión y filosofía
+# 01 — Vision and philosophy
 
-## Nombre del proyecto
+## Project name
 
-`relm` — browser de bases de datos para la terminal.
+`relm` — terminal database browser.
 
-## Frase que lo define
+## Defining phrase
 
-> La base de datos ya está ahí. No necesitás una app. Necesitás una ventana.
+> The database is already there. You don't need an app. You need a window.
 
-## Qué es
+## What it is
 
-`relm` es una herramienta de terminal (TUI) escrita en Go para explorar, consultar y editar bases de datos. Corre completamente en la terminal, sin interfaz gráfica, sin servidor, sin configuración previa.
+`relm` is a terminal tool (TUI) written in Go to explore, query and edit databases. It runs entirely in the terminal: no GUI, no server, no prior configuration.
 
-Soporta exactamente cinco motores — SQLite, PostgreSQL, MySQL, MariaDB y SQL Server. El usuario elige el motor en una pantalla de conexión, completa el formulario (o usa una conexión guardada), y puede navegar tablas, ejecutar SQL arbitrario y ver resultados — todo desde el teclado.
+It supports exactly five engines — SQLite, PostgreSQL, MySQL, MariaDB and SQL Server. The user picks the engine on a connection screen, fills in the form (or uses a saved connection), and can navigate tables, run arbitrary SQL and view results — all from the keyboard.
 
-## Qué NO es
+## What it is NOT
 
-- No es un ORM ni una librería.
-- No soporta Oracle, DB2, Snowflake, SAP HANA, MongoDB, Redis ni ningún otro motor. Solo los cinco listados, y no hay planes de agregar más.
-- No es una GUI con ventana nativa.
-- No intenta reemplazar herramientas complejas como DBeaver o TablePlus.
-- No tiene modo mouse-first. El teclado es la interfaz principal.
+- It is not an ORM or a library.
+- It does not support Oracle, DB2, Snowflake, SAP HANA, MongoDB, Redis or any other engine. Only the five listed, and there are no plans to add more.
+- It is not a GUI with a native window.
+- It does not try to replace complex tools like DBeaver or TablePlus.
+- It has no mouse-first mode. The keyboard is the primary interface.
 
-## Inspiración
+## Inspiration
 
-Inspirado en [DBee](https://github.com/murat-cileli/dbee) pero con identidad propia:
+Inspired by [DBee](https://github.com/murat-cileli/dbee) but with its own identity:
 
 | DBee | relm |
 |---|---|
-| Múltiples motores | Cinco motores exactos: SQLite, PostgreSQL, MySQL, MariaDB, SQL Server |
-| Tabs por motor en la conexión | Un formulario que cambia según el motor elegido |
-| Browser principalmente | Browser + editor SQL de primera clase |
+| Multiple engines | Exactly five engines: SQLite, PostgreSQL, MySQL, MariaDB, SQL Server |
+| Tabs per engine on connection | A form that changes according to the selected engine |
+| Browser mostly | Browser + first-class SQL editor |
 | Go + tview | Go + bubbletea + lipgloss |
 
-## Principios de diseño (no negociables)
+## Design principles (non-negotiable)
 
-1. **Cinco motores, uno solo.** SQLite, PostgreSQL, MySQL, MariaDB y SQL Server. Ninguno más. La interfaz `Store` se escribe una vez y cada motor la implementa con su propio dialecto. La UI, el browser y el editor nunca saben a qué motor están hablando.
+1. **Five engines, one binary.** SQLite, PostgreSQL, MySQL, MariaDB and SQL Server. No more. The `Store` interface is written once and each engine implements it with its own dialect. The UI, the browser and the editor never know which engine they are talking to.
 
-2. **Una conexión, una sesión.** El usuario se conecta con la pantalla de conexión y trabaja. Para cambiar de base, abre otra terminal o vuelve a conexión con `Ctrl+N`. No hay múltiples sesiones simultáneas en tabs.
+2. **One connection, one session.** The user connects through the connection screen and works. To change databases, open another terminal or return to the connection screen with `Ctrl+N`. There are no simultaneous sessions in tabs.
 
-3. **Teclado primero.** Toda acción tiene atajo de teclado. El mouse puede funcionar pero nunca es requerido.
+3. **Keyboard first.** Every action has a keyboard shortcut. The mouse may work but is never required.
 
-4. **Sin abstracción innecesaria.** El usuario ejecuta SQL real, ve resultados reales. No hay "modo visual" que oculte el query.
+4. **No unnecessary abstraction.** The user runs real SQL, sees real results. There is no "visual mode" that hides the query.
 
-5. **Liviano.** El binario compilado no debe superar ~40 MB. Sin dependencias externas en runtime. El peso de los cinco drivers es el costo aceptado de un solo binario multi-motor.
+5. **Lightweight.** The compiled binary must not exceed ~40 MB. No external runtime dependencies. The weight of the five drivers is the accepted cost of a single multi-engine binary.
 
-6. **Falla ruidosamente.** Si algo sale mal (conexión rechazada, query inválido, credenciales incorrectas, archivo corrupto), el error es visible, claro y accionable. No se silencian errores.
+6. **Fail loudly.** If something goes wrong (connection refused, invalid query, wrong credentials, corrupt file), the error is visible, clear and actionable. Errors are never silenced.
 
-7. **Código legible sobre código clever.** El agente debe priorizar claridad. Funciones cortas, nombres descriptivos, comentarios donde el "por qué" no es obvio.
+7. **Readable code over clever code.** The agent must prioritize clarity. Short functions, descriptive names, comments where the "why" is not obvious.
 
-## Usuario objetivo
+## Target user
 
-Desarrollador que ya vive en la terminal. Usa `vim`/`neovim`, `tmux`, `git` desde CLI. Conoce SQL. No quiere abrir una app gráfica para mirar una tabla de 50 filas, ni aprenderse un cliente distinto por motor.
+A developer who already lives in the terminal. Uses `vim`/`neovim`, `tmux`, `git` from the CLI. Knows SQL. Doesn't want to open a GUI app to look at a 50-row table, nor learn a different client per engine.

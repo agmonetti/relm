@@ -11,7 +11,7 @@ func envCfg(t *testing.T) conn.ConnectionConfig {
 	t.Helper()
 	host := os.Getenv("SQLISH_TEST_MSSQL_HOST")
 	if host == "" {
-		t.Skip("env SQLISH_TEST_MSSQL_HOST no seteada; salteando test de integración")
+		t.Skip("env SQLISH_TEST_MSSQL_HOST not set; skipping integration test")
 	}
 	return conn.ConnectionConfig{
 		Driver:   conn.DriverMSSQL,
@@ -23,7 +23,7 @@ func envCfg(t *testing.T) conn.ConnectionConfig {
 	}
 }
 
-// TestIntegration ejercita el motor contra SQL Server real.
+// TestIntegration exercises the engine against a real SQL Server.
 func TestIntegration(t *testing.T) {
 	cfg := envCfg(t)
 
@@ -51,7 +51,7 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("Tables: %v", err)
 	}
 	if !contains(tables, "relm_test") {
-		t.Errorf("Tables no incluye relm_test: %v", tables)
+		t.Errorf("Tables does not include relm_test: %v", tables)
 	}
 
 	cols, err := s.Columns("relm_test")

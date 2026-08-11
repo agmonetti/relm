@@ -10,10 +10,10 @@ import (
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
-// RenderBrowser renderiza el contenido principal del browser.
+// RenderBrowser renders the main browser content.
 func RenderBrowser(b *browser.Browser, width, height int, showSidebar bool) string {
 	if b == nil {
-		return styles.StyleHeaderDim.Render("sin conexión")
+		return styles.StyleHeaderDim.Render("no connection")
 	}
 
 	cols := make([]string, len(b.Columns))
@@ -23,9 +23,9 @@ func RenderBrowser(b *browser.Browser, width, height int, showSidebar bool) stri
 	content := renderDataTable(cols, b.Rows, b.Cursor, width, height)
 
 	if len(b.Tables) == 0 {
-		content = styles.StyleHeaderDim.Render("sin tablas — usá el editor para crear una")
+		content = styles.StyleHeaderDim.Render("no tables — use the editor to create one")
 	} else if len(b.Rows) == 0 && b.ActiveTable != "" {
-		content = styles.StyleHeaderDim.Render("tabla vacía")
+		content = styles.StyleHeaderDim.Render("empty table")
 	}
 
 	if showSidebar {
@@ -56,14 +56,14 @@ func renderSidebar(b *browser.Browser, width int) string {
 	return sb.String()
 }
 
-// renderDataTable renderiza columnas + filas con la fila del cursor resaltada.
+// renderDataTable renders columns + rows with the cursor row highlighted.
 func renderDataTable(cols []string, rows [][]string, cursor, width, height int) string {
 	if len(cols) == 0 {
 		return ""
 	}
 
 	widths := colWidths(cols, rows, width)
-	visible := height - 1 // deja espacio para el encabezado
+	visible := height - 1 // leaves room for the header
 	if visible > len(rows) {
 		visible = len(rows)
 	}
@@ -81,13 +81,13 @@ func renderDataTable(cols []string, rows [][]string, cursor, width, height int) 
 	return sb.String()
 }
 
-// colWidths calcula el ancho de cada columna según el contenido visible.
+// colWidths computes the width of each column based on the visible content.
 func colWidths(cols []string, rows [][]string, width int) []int {
 	widths := make([]int, len(cols))
 	for i, c := range cols {
 		widths[i] = runewidth.StringWidth(c)
 	}
-	// considerar hasta 100 filas para no pagar caro en tablas grandes
+	// consider up to 100 rows so wide tables stay cheap
 	maxRows := len(rows)
 	if maxRows > 100 {
 		maxRows = 100
@@ -103,8 +103,8 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 		}
 	}
 
-	// ajustar al ancho disponible: recortar columnas anchas primero
-	total := len(widths) - 1 // separadores
+	// adjust to the available width: shrink wide columns first
+	total := len(widths) - 1 // separators
 	for _, w := range widths {
 		total += w
 	}
@@ -114,7 +114,7 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 			if over <= 0 {
 				break
 			}
-			shrink := widths[i] - 4 // mínimo razonable
+			shrink := widths[i] - 4 // reasonable minimum
 			if shrink > over {
 				shrink = over
 			}
@@ -128,7 +128,7 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 	return widths
 }
 
-// renderRow renderiza una fila. cursor == idx resalta la fila.
+// renderRow renders a row. cursor == idx highlights the row.
 func renderRow(cells []string, widths []int, cursor int) string {
 	var sb strings.Builder
 	for i, cell := range cells {

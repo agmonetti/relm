@@ -6,7 +6,7 @@ import (
 
 	"github.com/agmonetti/relm/internal/conn"
 	"github.com/agmonetti/relm/internal/store"
-	_ "github.com/agmonetti/relm/internal/store/sqlite" // registra el motor para el test
+	_ "github.com/agmonetti/relm/internal/store/sqlite" // registers the engine for the test
 )
 
 func TestNewUnsupportedDriver(t *testing.T) {

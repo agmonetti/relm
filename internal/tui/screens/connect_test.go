@@ -13,15 +13,15 @@ func TestConnScreen_SQLiteOnlyShowsPath(t *testing.T) {
 	c := NewConnScreen(nil)
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
-	// sqlite por defecto: Archivo + toggle Solo lectura
+	// sqlite by default: File + Read-only toggle
 	if len(c.fieldsVisible()) != 2 {
-		t.Fatalf("fieldsVisible = %d, want 2 (Archivo + Solo lectura)", len(c.fieldsVisible()))
+		t.Fatalf("fieldsVisible = %d, want 2 (File + Read-only)", len(c.fieldsVisible()))
 	}
-	if c.fieldsVisible()[0].label != "Archivo" {
-		t.Errorf("campo = %q, want Archivo", c.fieldsVisible()[0].label)
+	if c.fieldsVisible()[0].label != "File" {
+		t.Errorf("field = %q, want File", c.fieldsVisible()[0].label)
 	}
-	if c.fieldsVisible()[1].label != "Solo lectura" || !c.fieldsVisible()[1].isToggle {
-		t.Errorf("segundo campo = %+v, want toggle Solo lectura", c.fieldsVisible()[1])
+	if c.fieldsVisible()[1].label != "Read-only" || !c.fieldsVisible()[1].isToggle {
+		t.Errorf("second field = %+v, want Read-only toggle", c.fieldsVisible()[1])
 	}
 }
 
@@ -31,38 +31,38 @@ func TestConnScreen_NetworkShowsAllFields(t *testing.T) {
 	c.cycleDriver(true) // sqlite -> postgres
 
 	if len(c.fieldsVisible()) != 6 {
-		t.Fatalf("fieldsVisible = %d, want 6 (Host..Base + SSL)", len(c.fieldsVisible()))
+		t.Fatalf("fieldsVisible = %d, want 6 (Host..Database + SSL)", len(c.fieldsVisible()))
 	}
-	// password enmascarada
+	// password masked
 	if c.fields[4].input.EchoMode != textinput.EchoPassword {
-		t.Error("Password debería estar enmascarada en motores de red")
+		t.Error("Password should be masked for network engines")
 	}
 }
 
-func TestConnScreen_ToggleSoloLectura(t *testing.T) {
+func TestConnScreen_ToggleReadOnly(t *testing.T) {
 	c := NewConnScreen(nil)
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	c.fields[0].input.SetValue("/data/app.db")
 
-	c.focus = 2 // toggle Solo lectura (campo 2 de sqlite)
+	c.focus = 2 // Read-only toggle (field 2 of sqlite)
 	c.Update(tea.KeyMsg{Type: tea.KeySpace})
 	if !c.cfg().ReadOnly {
-		t.Error("ReadOnly debería ser true tras alternar el toggle")
+		t.Error("ReadOnly should be true after toggling")
 	}
 	c.Update(tea.KeyMsg{Type: tea.KeySpace})
 	if c.cfg().ReadOnly {
-		t.Error("ReadOnly debería volver a false tras alternar dos veces")
+		t.Error("ReadOnly should be false after toggling twice")
 	}
 }
 
-func TestConnScreen_SSLModeEnConfig(t *testing.T) {
+func TestConnScreen_SSLModeInConfig(t *testing.T) {
 	c := NewConnScreen(nil)
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	c.cycleDriver(true) // postgres
-	// campo SSL es el último de postgres (índice 5 en fieldsVisible)
+	// SSL field is the last of postgres (index 5 in fieldsVisible)
 	vis := c.fieldsVisible()
 	if len(vis) != 6 || vis[5].label != "SSL" {
-		t.Fatalf("esperaba SSL como sexto campo, got %+v", vis)
+		t.Fatalf("expected SSL as sixth field, got %+v", vis)
 	}
 	vis[5].input.SetValue("require")
 	if cfg := c.cfg(); cfg.SSLMode != "require" {
@@ -74,11 +74,11 @@ func TestConnScreen_ValidateSSLMode(t *testing.T) {
 	c := NewConnScreen(nil)
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	c.cycleDriver(true) // postgres
-	c.fields[1].input.SetValue("localhost") // host obligatorio
+	c.fields[1].input.SetValue("localhost") // required host
 	vis := c.fieldsVisible()
 	vis[5].input.SetValue("bogus")
 	if err := c.validate(); err == nil {
-		t.Error("esperaba error por sslmode inválido")
+		t.Error("expected error for invalid sslmode")
 	}
 	vis[5].input.SetValue("verify-full")
 	if err := c.validate(); err != nil {
@@ -94,7 +94,7 @@ func TestConnScreen_DriverCyclesAll(t *testing.T) {
 		c.cycleDriver(true)
 	}
 	if len(seen) != 5 {
-		t.Errorf("drivers vistos = %d, want 5", len(seen))
+		t.Errorf("drivers seen = %d, want 5", len(seen))
 	}
 }
 
@@ -102,9 +102,9 @@ func TestConnScreen_Validate(t *testing.T) {
 	c := NewConnScreen(nil)
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
-	// sqlite sin path -> error
+	// sqlite without path -> error
 	if err := c.validate(); err == nil {
-		t.Error("esperaba error: sqlite sin path")
+		t.Error("expected error: sqlite without path")
 	}
 	c.fields[0].input.SetValue("/data/app.db")
 	if err := c.validate(); err != nil {

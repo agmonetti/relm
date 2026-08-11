@@ -2,20 +2,20 @@ package editor
 
 import "strings"
 
-// History es un ring buffer de queries ejecutados (últimos 100).
+// History is a ring buffer of executed queries (last 100).
 type History struct {
 	items []string
-	pos   int // posición de navegación; -1 = fin (escribiendo un query nuevo)
+	pos   int // navigation position; -1 = end (typing a new query)
 	max   int
 }
 
-// NewHistory crea un historial vacío con capacidad default de 100.
+// NewHistory creates an empty history with a default capacity of 100.
 func NewHistory() *History {
 	return &History{pos: -1, max: 100}
 }
 
-// Push agrega un query al historial. Ignora vacíos y duplicados consecutivos.
-// Resetea la navegación (el usuario vuelve a escribir desde el fin).
+// Push adds a query to the history. Ignores empty and consecutive duplicates.
+// Resets navigation (the user goes back to typing from the end).
 func (h *History) Push(q string) {
 	q = strings.TrimSpace(q)
 	if q == "" {
@@ -32,7 +32,7 @@ func (h *History) Push(q string) {
 	h.pos = -1
 }
 
-// Prev devuelve el query anterior del historial, o el primero si ya estamos en él.
+// Prev returns the previous query in the history, or the first one if already there.
 func (h *History) Prev() string {
 	if len(h.items) == 0 {
 		return ""
@@ -45,7 +45,7 @@ func (h *History) Prev() string {
 	return h.items[h.pos]
 }
 
-// Next devuelve el query siguiente del historial, o "" si llegamos al fin.
+// Next returns the next query in the history, or "" when reaching the end.
 func (h *History) Next() string {
 	if h.pos == -1 || len(h.items) == 0 {
 		return ""
@@ -58,11 +58,11 @@ func (h *History) Next() string {
 	return ""
 }
 
-// Reset detiene la navegación (el usuario empezó a editar el buffer).
+// Reset stops navigation (the user started editing the buffer).
 func (h *History) Reset() { h.pos = -1 }
 
-// InNavigation indica si el usuario está navegando el historial.
+// InNavigation reports whether the user is navigating the history.
 func (h *History) InNavigation() bool { return h.pos >= 0 }
 
-// Len devuelve la cantidad de queries guardados.
+// Len returns the number of stored queries.
 func (h *History) Len() int { return len(h.items) }

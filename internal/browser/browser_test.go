@@ -51,7 +51,7 @@ func TestNewLoadsTablesAndSelectsFirst(t *testing.T) {
 	if len(b.Tables) != 2 {
 		t.Fatalf("Tables = %v, want 2", b.Tables)
 	}
-	// Orden alfabético: orders < users
+	// Alphabetical order: orders < users
 	if b.ActiveTable != "orders" {
 		t.Errorf("ActiveTable = %q, want orders", b.ActiveTable)
 	}
@@ -73,7 +73,7 @@ func TestBrowser_SelectTable_LoadsColumns(t *testing.T) {
 		t.Errorf("len(Columns) = %d, want 3", len(b.Columns))
 	}
 	if b.Columns[0].PK != true {
-		t.Errorf("col 0 debería ser PK: %+v", b.Columns[0])
+		t.Errorf("col 0 should be PK: %+v", b.Columns[0])
 	}
 }
 
@@ -90,34 +90,34 @@ func TestBrowser_Pagination(t *testing.T) {
 		t.Errorf("TotalRows = %d, want 120", b.TotalRows)
 	}
 	if len(b.Rows) != 50 {
-		t.Errorf("len(Rows) página 0 = %d, want 50", len(b.Rows))
+		t.Errorf("len(Rows) page 0 = %d, want 50", len(b.Rows))
 	}
 	if !b.HasNextPage() || b.HasPrevPage() {
-		t.Error("página 0: HasNextPage=true y HasPrevPage=false esperados")
+		t.Error("page 0: HasNextPage=true and HasPrevPage=false expected")
 	}
 
 	if err := b.NextPage(st); err != nil {
 		t.Fatalf("NextPage: %v", err)
 	}
 	if len(b.Rows) != 50 || b.Page != 1 {
-		t.Errorf("página 1: rows=%d page=%d", len(b.Rows), b.Page)
+		t.Errorf("page 1: rows=%d page=%d", len(b.Rows), b.Page)
 	}
 
 	if err := b.NextPage(st); err != nil {
 		t.Fatalf("NextPage: %v", err)
 	}
 	if len(b.Rows) != 20 {
-		t.Errorf("página 2: rows=%d, want 20", len(b.Rows))
+		t.Errorf("page 2: rows=%d, want 20", len(b.Rows))
 	}
 	if b.HasNextPage() {
-		t.Error("página 2 (última) no debería tener siguiente")
+		t.Error("page 2 (last) should not have a next page")
 	}
 
 	if err := b.NextPage(st); err != nil {
-		t.Fatalf("NextPage fuera de rango: %v", err)
+		t.Fatalf("NextPage out of range: %v", err)
 	}
 	if b.Page != 2 {
-		t.Errorf("Page = %d, no debería avanzar más allá de 2", b.Page)
+		t.Errorf("Page = %d, should not advance beyond 2", b.Page)
 	}
 
 	if err := b.PrevPage(st); err != nil {
@@ -138,11 +138,11 @@ func TestBrowser_MoveCursor_Clamps(t *testing.T) {
 	}
 	b.MoveCursor(10)
 	if b.Cursor != 4 {
-		t.Errorf("Cursor = %d, want 4 (clamp al máximo)", b.Cursor)
+		t.Errorf("Cursor = %d, want 4 (clamp to max)", b.Cursor)
 	}
 	b.MoveCursor(-100)
 	if b.Cursor != 0 {
-		t.Errorf("Cursor = %d, want 0 (clamp al mínimo)", b.Cursor)
+		t.Errorf("Cursor = %d, want 0 (clamp to min)", b.Cursor)
 	}
 }
 
@@ -163,7 +163,7 @@ func TestBrowser_EmptyDatabase(t *testing.T) {
 		t.Errorf("Tables = %v, want 0", b.Tables)
 	}
 	if b.ActiveTable != "" {
-		t.Errorf("ActiveTable = %q, want vacío", b.ActiveTable)
+		t.Errorf("ActiveTable = %q, want empty", b.ActiveTable)
 	}
 }
 
@@ -177,8 +177,8 @@ func TestBrowser_ReloadPicksUpNewTableAndRows(t *testing.T) {
 		t.Fatalf("setup: ActiveTable = %q", b.ActiveTable)
 	}
 
-	// crear una tabla nueva y agregar una fila a la tabla activa (orders),
-	// como si viniera del editor
+	// create a new table and add a row to the active table (orders),
+	// as if it came from the editor
 	if _, err := st.Exec("CREATE TABLE products (id INTEGER PRIMARY KEY)"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -196,10 +196,10 @@ func TestBrowser_ReloadPicksUpNewTableAndRows(t *testing.T) {
 		t.Errorf("ActiveTable = %q, want orders (sigue activa)", b.ActiveTable)
 	}
 	if b.TotalRows != 1 {
-		t.Errorf("TotalRows = %d, want 1 (fila nueva en orders)", b.TotalRows)
+		t.Errorf("TotalRows = %d, want 1 (new row in orders)", b.TotalRows)
 	}
 
-	// Reload con base sin tabla activa: selecciona la primera
+	// Reload with an empty active table: selects the first one
 	cfg := conn.New(conn.DriverSQLite)
 	cfg.Path = ":memory:"
 	st2, err := store.New(cfg)
@@ -207,7 +207,7 @@ func TestBrowser_ReloadPicksUpNewTableAndRows(t *testing.T) {
 		t.Fatalf("store.New: %v", err)
 	}
 	defer st2.Close()
-	b2, err := New(st2) // base vacía → ActiveTable ""
+	b2, err := New(st2) // empty database → ActiveTable ""
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

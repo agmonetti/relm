@@ -2,7 +2,7 @@ package tui
 
 import "github.com/charmbracelet/bubbles/key"
 
-// KeyMap agrupa todos los keybindings de la aplicación.
+// KeyMap groups all the keybindings of the application.
 type KeyMap struct {
 	Quit          key.Binding
 	NewSession    key.Binding
@@ -26,22 +26,22 @@ type KeyMap struct {
 	Last     key.Binding
 }
 
-// DefaultKeyMap devuelve el keymap completo.
+// DefaultKeyMap returns the full keymap.
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
-		Quit:          key.NewBinding(key.WithKeys("ctrl+c", "q"), key.WithHelp("ctrl+c / q", "salir")),
-		NewSession:    key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n", "nueva conexión")),
-		SaveConn:      key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "guardar conexión")),
+		Quit:          key.NewBinding(key.WithKeys("ctrl+c", "q"), key.WithHelp("ctrl+c / q", "quit")),
+		NewSession:    key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n", "new connection")),
+		SaveConn:      key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save connection")),
 		ToggleSidebar: key.NewBinding(key.WithKeys("alt+b"), key.WithHelp("alt+b", "sidebar")),
-		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "ayuda")),
+		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Switch:        key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "browser/editor")),
-		Inspect:       key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "estructura")),
-		Refresh:       key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refrescar")),
-		Execute:       key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("ctrl+r", "ejecutar")),
-		ClearInput:    key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "limpiar")),
-		LineStart:     key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "inicio de línea")),
-		LineEnd:       key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "fin de línea")),
-		Back:          key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "volver")),
+		Inspect:       key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "structure")),
+		Refresh:       key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
+		Execute:       key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("ctrl+r", "run")),
+		ClearInput:    key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear")),
+		LineStart:     key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "line start")),
+		LineEnd:       key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "line end")),
+		Back:          key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
 
 		Up:       key.NewBinding(key.WithKeys("up", "k")),
 		Down:     key.NewBinding(key.WithKeys("down", "j")),
@@ -52,14 +52,14 @@ func DefaultKeyMap() KeyMap {
 	}
 }
 
-// ShortHelp implementa help.KeyMap.
+// ShortHelp implements help.KeyMap.
 func (k KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
 		k.Quit, k.NewSession, k.Switch, k.Inspect, k.Help,
 	}
 }
 
-// FullHelp implementa help.KeyMap.
+// FullHelp implements help.KeyMap.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Quit, k.NewSession, k.Switch, k.Inspect, k.Refresh},

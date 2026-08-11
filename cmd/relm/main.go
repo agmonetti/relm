@@ -1,4 +1,4 @@
-// Command relm es un browser de bases de datos para la terminal.
+// Command relm is a terminal database browser.
 package main
 
 import (
@@ -7,10 +7,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	_ "github.com/agmonetti/relm/internal/store/mssql"    // registra SQL Server
-	_ "github.com/agmonetti/relm/internal/store/mysql"    // registra MySQL y MariaDB
-	_ "github.com/agmonetti/relm/internal/store/postgres" // registra PostgreSQL
-	_ "github.com/agmonetti/relm/internal/store/sqlite"   // registra SQLite
+	_ "github.com/agmonetti/relm/internal/store/mssql"    // registers SQL Server
+	_ "github.com/agmonetti/relm/internal/store/mysql"    // registers MySQL and MariaDB
+	_ "github.com/agmonetti/relm/internal/store/postgres" // registers PostgreSQL
+	_ "github.com/agmonetti/relm/internal/store/sqlite"   // registers SQLite
 	"github.com/agmonetti/relm/internal/tui"
 )
 

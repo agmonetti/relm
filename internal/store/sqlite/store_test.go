@@ -41,7 +41,7 @@ func TestOpenMemoryAndIntrospect(t *testing.T) {
 		t.Fatalf("len(Columns) = %d, want 3", len(cols))
 	}
 	if !cols[0].PK || !cols[1].NotNull || cols[2].NotNull {
-		t.Errorf("constraints mal: %+v", cols)
+		t.Errorf("bad constraints: %+v", cols)
 	}
 
 	n, err := s.CountTable("users")
@@ -66,16 +66,16 @@ func TestOpenMissingFileErrors(t *testing.T) {
 	cfg.Path = filepath.Join(t.TempDir(), "missing.db")
 
 	if _, err := New(cfg); err == nil {
-		t.Fatal("esperaba error para archivo inexistente")
+		t.Fatal("expected an error for a missing file")
 	}
 }
 
 func TestReadOnlyBlocksWrites(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ro.db")
-	// relm no crea archivos: creamos el .db antes de abrirlo.
+	// relm does not create files: we create the .db before opening it.
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
-		t.Fatalf("crear archivo: %v", err)
+		t.Fatalf("create file: %v", err)
 	}
 
 	cfg := conn.New(conn.DriverSQLite)
@@ -85,7 +85,7 @@ func TestReadOnlyBlocksWrites(t *testing.T) {
 		t.Fatalf("New (crear): %v", err)
 	}
 	if _, err := s.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"); err != nil {
-		t.Fatalf("Exec crear tabla: %v", err)
+		t.Fatalf("Exec create table: %v", err)
 	}
 	s.Close()
 
@@ -97,7 +97,7 @@ func TestReadOnlyBlocksWrites(t *testing.T) {
 	defer ro.Close()
 
 	if _, err := ro.Exec("INSERT INTO users (name) VALUES ('x')"); err == nil {
-		t.Error("esperaba error de escritura en modo read-only")
+		t.Error("expected a write error in read-only mode")
 	}
 	tables, err := ro.Tables()
 	if err != nil {

@@ -1,9 +1,9 @@
-// Package styles centraliza todos los lipgloss.Style del proyecto.
+// Package styles centralizes all lipgloss.Style used across the project.
 package styles
 
 import "github.com/charmbracelet/lipgloss"
 
-// Colores adaptables al tema del terminal.
+// Colors that adapt to the terminal theme.
 var (
 	ColorPrimary = lipgloss.AdaptiveColor{Light: "#1D9E75", Dark: "#5DCAA5"} // teal
 	ColorAccent  = lipgloss.AdaptiveColor{Light: "#534AB7", Dark: "#AFA9EC"} // purple
@@ -14,83 +14,83 @@ var (
 	ColorHeader  = lipgloss.AdaptiveColor{Light: "#4A4A4A", Dark: "#DDDDDD"} // texto
 )
 
-// Estilos precalculados a nivel package. No crear estilos en cada View().
+// Precomputed package-level styles. Do not create styles in every View().
 var (
-	// StyleHeader es el texto del header.
+	// StyleHeader is the header text.
 	StyleHeader = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(ColorPrimary)
 
-	// StyleHeaderDim es la parte tenue del header.
+	// StyleHeaderDim is the dim part of the header.
 	StyleHeaderDim = lipgloss.NewStyle().
 			Foreground(ColorMuted)
 
-	// StyleSidebarActive es el cursor > de la tabla activa.
+	// StyleSidebarActive is the > cursor of the active table.
 	StyleSidebarActive = lipgloss.NewStyle().
 				Foreground(ColorAccent).
 				Bold(true)
 
-	// StyleSidebarItem es una tabla normal del sidebar.
+	// StyleSidebarItem is a regular sidebar table.
 	StyleSidebarItem = lipgloss.NewStyle().Foreground(ColorHeader)
 
-	// StyleError es el texto de error.
+	// StyleError is the error text.
 	StyleError = lipgloss.NewStyle().
 			Foreground(ColorError)
 
-	// StyleFooter es el pie de pantalla.
+	// StyleFooter is the screen footer.
 	StyleFooter = lipgloss.NewStyle().
 			Foreground(ColorMuted)
 
-	// StyleNull es el marcador de valores NULL.
+	// StyleNull is the NULL value marker.
 	StyleNull = lipgloss.NewStyle().
 			Foreground(ColorNull)
 
-	// StyleCursor es la fila seleccionada en el browser.
+	// StyleCursor is the selected row in the browser.
 	StyleCursor = lipgloss.NewStyle().
 			Background(ColorAccent).
 			Foreground(lipgloss.Color("#FFFFFF"))
 
-	// StyleColHeader es el encabezado de columna.
+	// StyleColHeader is the column header.
 	StyleColHeader = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(ColorAccent)
 
-	// StyleBorder es una línea de separación.
+	// StyleBorder is a separator line.
 	StyleBorder = lipgloss.NewStyle().Foreground(ColorBorder)
 
-	// StyleLogo es el logo ASCII de la pantalla de conexión.
+	// StyleLogo is the ASCII logo of the connection screen.
 	StyleLogo = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(ColorPrimary)
 
-	// StyleFieldLabel es el label de un campo del formulario de conexión.
+	// StyleFieldLabel is a label of a connection form field.
 	StyleFieldLabel = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(ColorHeader)
 
-	// StyleInputBox es la caja visible de un input del formulario.
+	// StyleInputBox is the visible box of a form input.
 	StyleInputBox = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(ColorBorder).
 			Padding(0, 1)
 
-	// StyleInputBoxFocus es la caja del input enfocado.
+	// StyleInputBoxFocus is the box of the focused input.
 	StyleInputBoxFocus = StyleInputBox.
 				BorderForeground(ColorAccent)
 
-	// StyleBtnPrimary es el botón principal (fondo sólido teal).
+	// StyleBtnPrimary is the primary button (solid teal background).
 	StyleBtnPrimary = lipgloss.NewStyle().
 				Background(ColorPrimary).
 				Foreground(lipgloss.Color("#000000")).
 				Bold(true).
 				Padding(0, 3)
 
-	// StyleBtnSecondary es un botón secundario (fondo gris tenue).
+	// StyleBtnSecondary is a secondary button (dim gray background).
 	StyleBtnSecondary = lipgloss.NewStyle().
 				Background(ColorMuted).
 				Foreground(lipgloss.Color("#000000")).
 				Padding(0, 2)
 )
 
-// NullCell devuelve la representación de un valor NULL.
+// NullCell returns the representation of a NULL value.
 func NullCell() string { return StyleNull.Render("∅") }

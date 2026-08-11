@@ -2,10 +2,10 @@ package conn
 
 import "fmt"
 
-// Driver identifica uno de los cinco motores soportados.
+// Driver identifies one of the five supported engines.
 type Driver string
 
-// Motores soportados. No agregar más.
+// Supported engines. Do not add more.
 const (
 	DriverSQLite   Driver = "sqlite"
 	DriverPostgres Driver = "postgres"
@@ -14,7 +14,7 @@ const (
 	DriverMSSQL    Driver = "mssql"
 )
 
-// Drivers es la lista cerrada de motores soportados.
+// Drivers is the closed list of supported engines.
 var Drivers = []Driver{
 	DriverSQLite,
 	DriverPostgres,
@@ -23,7 +23,7 @@ var Drivers = []Driver{
 	DriverMSSQL,
 }
 
-// DefaultPort devuelve el puerto por defecto de cada motor de red.
+// DefaultPort returns the default port for each networked engine.
 func DefaultPort(d Driver) int {
 	switch d {
 	case DriverPostgres:
@@ -36,7 +36,7 @@ func DefaultPort(d Driver) int {
 	return 0
 }
 
-// NeedsNetwork indica si el motor se conecta por red (no SQLite).
+// NeedsNetwork indicates whether the engine connects over the network (not SQLite).
 func NeedsNetwork(d Driver) bool {
 	switch d {
 	case DriverSQLite:
@@ -45,28 +45,28 @@ func NeedsNetwork(d Driver) bool {
 	return true
 }
 
-// ConnectionConfig describe a qué nos conectamos, sin saber cómo conectarse.
+// ConnectionConfig describes what we connect to, without knowing how to connect.
 type ConnectionConfig struct {
 	Driver Driver
-	Name   string // nombre para guardar la conexión
+	Name   string // name used to save the connection
 
 	// SQLite
 	Path string
-	// Abre SQLite en modo solo lectura (mode=ro). Evita escrituras accidentales.
+	// Opens SQLite in read-only mode (mode=ro). Prevents accidental writes.
 	ReadOnly bool
 
-	// Red (postgres, mysql, mariadb, mssql)
+	// Network (postgres, mysql, mariadb, mssql)
 	Host     string
 	Port     int
 	User     string
 	Password string
 	Database string
-	// SSLMode controla TLS en PostgreSQL (prefer | require | verify-full | disable).
-	// Vacío = default del motor.
+	// TLS mode for PostgreSQL (prefer | require | verify-full | disable).
+	// Empty means the engine default.
 	SSLMode string
 }
 
-// New crea una config por defecto para un driver.
+// New creates a default config for a driver.
 func New(d Driver) ConnectionConfig {
 	return ConnectionConfig{
 		Driver: d,
@@ -74,7 +74,7 @@ func New(d Driver) ConnectionConfig {
 	}
 }
 
-// Label devuelve una descripción corta para el header de la TUI.
+// Label returns a short description for the TUI header.
 func (c ConnectionConfig) Label() string {
 	if !NeedsNetwork(c.Driver) {
 		return fmt.Sprintf("sqlite %s", c.Path)

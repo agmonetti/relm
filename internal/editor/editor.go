@@ -1,4 +1,4 @@
-// Package editor maneja el estado del editor SQL: buffer, historial y resultados.
+// Package editor manages the SQL editor state: buffer, history and results.
 package editor
 
 import (
@@ -7,17 +7,17 @@ import (
 	"github.com/agmonetti/relm/internal/store"
 )
 
-// EditorMode es el estado operativo del editor.
+// EditorMode is the operational state of the editor.
 type EditorMode int
 
 const (
-	// EditorModeNormal: listo para editar o ejecutar.
+	// EditorModeNormal: ready to edit or run.
 	EditorModeNormal EditorMode = iota
-	// EditorModeExecuting: una query está corriendo.
+	// EditorModeExecuting: a query is running.
 	EditorModeExecuting
 )
 
-// Editor mantiene el estado del editor SQL.
+// Editor keeps the state of the SQL editor.
 type Editor struct {
 	Buffer  string
 	History *History
@@ -26,26 +26,26 @@ type Editor struct {
 	Mode    EditorMode
 }
 
-// New crea un editor con historial vacío.
+// New creates an editor with an empty history.
 func New() *Editor {
 	return &Editor{History: NewHistory(), Mode: EditorModeNormal}
 }
 
-// Execute ejecuta el primer statement del buffer (equivalente a ExecuteAt en la
-// línea 0). Se mantiene para tests y compatibilidad.
+// Execute runs the first statement of the buffer (equivalent to ExecuteAt on
+// line 0). Kept for tests and compatibility.
 func (e *Editor) Execute(st store.Store) error {
 	return e.ExecuteAt(st, 0)
 }
 
-// ExecuteAt ejecuta el statement que contiene la línea line (0-based) del buffer
-// contra el store y guarda el resultado o el error. Con un solo statement se
-// ejecuta siempre; con varios, el que está bajo el cursor. Los drivers de red no
-// tienen multiStatements, así que nunca se mandan dos a la vez. Query con
-// resultado (SELECT, WITH, PRAGMA...) usa Query(); el resto, Exec().
+// ExecuteAt runs the statement that contains line line (0-based) of the buffer
+// against the store and stores the result or the error. With a single statement
+// it always runs it; with several, the one under the cursor. Network drivers do
+// not have multiStatements, so two are never sent at once. Queries that return
+// rows (SELECT, WITH, PRAGMA...) use Query(); everything else uses Exec().
 func (e *Editor) ExecuteAt(st store.Store, line int) error {
 	stmts := splitStatements(e.Buffer)
 	if len(stmts) == 0 {
-		return nil // la UI muestra "escribe un query primero"
+		return nil // the UI shows "write a query first"
 	}
 
 	q := stmts[0].Text
@@ -80,14 +80,14 @@ func (e *Editor) ExecuteAt(st store.Store, line int) error {
 	return nil
 }
 
-// Statement es un statement del buffer con su línea de inicio.
+// Statement is a statement of the buffer with its start line.
 type Statement struct {
 	Text string
-	Line int // 0-based, línea del primer carácter no espaciado
+	Line int // 0-based, line of the first non-space character
 }
 
-// splitStatements parte el SQL en statements respetando strings (comillas
-// simples, escapes "\" y duplicación "''") y los `;` fuera de ellos.
+// splitStatements splits the SQL into statements respecting strings (single
+// quotes, "\" escapes and "''" duplication) and the `;` outside them.
 func splitStatements(sql string) []Statement {
 	var stmts []Statement
 	var b strings.Builder
@@ -119,7 +119,7 @@ func splitStatements(sql string) []Statement {
 				}
 				i++
 			} else if c == '\'' {
-				if i+1 < len(sql) && sql[i+1] == '\'' { // '' escapado
+				if i+1 < len(sql) && sql[i+1] == '\'' { // '' escaped
 					b.WriteByte(sql[i+1])
 					i++
 				} else {
@@ -147,7 +147,7 @@ func splitStatements(sql string) []Statement {
 	return stmts
 }
 
-// firstStatement devuelve el primer statement del buffer e indica si había más.
+// firstStatement returns the first statement of the buffer and whether there were more.
 func firstStatement(sql string) (stmt string, multiple bool) {
 	stmts := splitStatements(sql)
 	if len(stmts) == 0 {
@@ -156,10 +156,10 @@ func firstStatement(sql string) (stmt string, multiple bool) {
 	return stmts[0].Text, len(stmts) > 1
 }
 
-// statementAt devuelve el índice del statement que contiene la línea line:
-// si varios statements empiezan en la misma línea se elige el primero (más
-// seguro, p.ej. CREATE antes que INSERT); si el cursor está en espacios previos
-// a todo statement, cae en el primero.
+// statementAt returns the index of the statement that contains line line:
+// if several statements start on the same line, the first one is chosen (safer,
+// e.g. CREATE before INSERT); if the cursor is in whitespace before any
+// statement, it falls into the first one.
 func statementAt(stmts []Statement, line int) int {
 	best := 0
 	for i, s := range stmts {
@@ -183,7 +183,7 @@ func isSpace(c byte) bool {
 	return false
 }
 
-// Clear limpia el buffer y el resultado/error.
+// Clear resets the buffer and the result/error.
 func (e *Editor) Clear() {
 	e.Buffer = ""
 	e.Result = nil
@@ -191,8 +191,8 @@ func (e *Editor) Clear() {
 	e.History.Reset()
 }
 
-// returnsRows indica si el query probablemente devuelve filas. No es 100%
-// fiable entre motores; la UI decide cómo mostrar según el Result del store.
+// returnsRows reports whether the query probably returns rows. It is not 100%
+// reliable across engines; the UI decides how to render based on the store Result.
 func (e *Editor) returnsRows(q string) bool {
 	first := strings.ToUpper(strings.TrimSpace(q))
 	for _, kw := range []string{"SELECT", "WITH", "PRAGMA", "SHOW", "EXPLAIN", "DESCRIBE", "VALUES", "TABLE"} {

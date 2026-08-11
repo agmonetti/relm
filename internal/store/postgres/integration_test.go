@@ -7,12 +7,12 @@ import (
 	"github.com/agmonetti/relm/internal/conn"
 )
 
-// envCfg arma la config desde env vars, o saltea si no está seteada.
+// envCfg builds the config from env vars, or skips if not set.
 func envCfg(t *testing.T, prefix string) conn.ConnectionConfig {
 	t.Helper()
 	host := os.Getenv(prefix + "_HOST")
 	if host == "" {
-		t.Skipf("env %s_HOST no seteada; salteando test de integración", prefix)
+		t.Skipf("env %s_HOST not set; skipping integration test", prefix)
 	}
 	return conn.ConnectionConfig{
 		Driver:   conn.DriverPostgres,
@@ -24,7 +24,7 @@ func envCfg(t *testing.T, prefix string) conn.ConnectionConfig {
 	}
 }
 
-// TestIntegration ejercita la interfaz Store contra un servidor real.
+// TestIntegration exercises the Store interface against a real server.
 func TestIntegration(t *testing.T) {
 	cfg := envCfg(t, "SQLISH_TEST_POSTGRES")
 
@@ -52,7 +52,7 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("Tables: %v", err)
 	}
 	if !contains(tables, "relm_test") {
-		t.Errorf("Tables no incluye relm_test: %v", tables)
+		t.Errorf("Tables does not include relm_test: %v", tables)
 	}
 
 	cols, err := s.Columns("relm_test")

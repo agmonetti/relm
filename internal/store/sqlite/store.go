@@ -1,4 +1,4 @@
-// Package sqlite implementa la interfaz store.Store para SQLite.
+// Package sqlite implements the store.Store interface for SQLite.
 package sqlite
 
 import (
@@ -12,16 +12,16 @@ import (
 	"github.com/agmonetti/relm/internal/store"
 )
 
-// Store es la implementación SQLite de store.Store.
+// Store is the SQLite implementation of store.Store.
 type Store struct {
 	db     *sql.DB
 	driver conn.Driver
 }
 
-// New abre una base SQLite según la config.
+// New opens a SQLite database according to the config.
 func New(cfg conn.ConnectionConfig) (*Store, error) {
 	if cfg.Path == "" {
-		return nil, fmt.Errorf("%w: falta el path del archivo", store.ErrConnection)
+		return nil, fmt.Errorf("%w: missing file path", store.ErrConnection)
 	}
 	if _, err := os.Stat(cfg.Path); err != nil && !isMemory(cfg.Path) {
 		return nil, fmt.Errorf("%w: %s: no such file", store.ErrConnection, cfg.Path)
@@ -49,14 +49,14 @@ func init() {
 	})
 }
 
-// isMemory reporta si el path es una base en memoria de SQLite.
+// isMemory reports whether the path is an in-memory SQLite database.
 func isMemory(path string) bool {
 	return path == ":memory:" || path == "file::memory:"
 }
 
 func (s *Store) Driver() string { return string(s.driver) }
 
-// Version devuelve la versión de SQLite.
+// Version returns the SQLite version.
 func (s *Store) Version() (string, error) {
 	var v string
 	if err := s.db.QueryRow("SELECT sqlite_version()").Scan(&v); err != nil {
@@ -67,7 +67,7 @@ func (s *Store) Version() (string, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// Tables devuelve las tablas de la base, ordenadas alfabéticamente.
+// Tables returns the tables of the database, sorted alphabetically.
 func (s *Store) Tables() ([]string, error) {
 	rows, err := s.db.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
 	if err != nil {
@@ -86,7 +86,7 @@ func (s *Store) Tables() ([]string, error) {
 	return tables, rows.Err()
 }
 
-// Columns devuelve las columnas de una tabla.
+// Columns returns the columns of a table.
 func (s *Store) Columns(table string) ([]store.Column, error) {
 	rows, err := s.db.Query("PRAGMA table_info(" + QuoteIdent(table) + ")")
 	if err != nil {
@@ -104,7 +104,7 @@ func (s *Store) Columns(table string) ([]store.Column, error) {
 			def     sql.NullString
 			pk      int
 		)
-		// PRAGMA table_info devuelve: cid, name, type, notnull, dflt_value, pk
+		// PRAGMA table_info returns: cid, name, type, notnull, dflt_value, pk
 		if err := rows.Scan(&cid, &name, &typ, &notNull, &def, &pk); err != nil {
 			return nil, fmt.Errorf("store.Columns(%s): %w", table, err)
 		}
@@ -119,7 +119,7 @@ func (s *Store) Columns(table string) ([]store.Column, error) {
 	return cols, rows.Err()
 }
 
-// Indexes devuelve los índices de una tabla.
+// Indexes returns the indexes of a table.
 func (s *Store) Indexes(table string) ([]store.Index, error) {
 	rows, err := s.db.Query("PRAGMA index_list(" + QuoteIdent(table) + ")")
 	if err != nil {
@@ -186,7 +186,7 @@ func (s *Store) indexColumns(index string) ([]string, error) {
 	return cols, rows.Err()
 }
 
-// Query ejecuta SQL arbitrario y devuelve columnas y filas.
+// Query runs arbitrary SQL and returns columns and rows.
 func (s *Store) Query(sql string) (*store.Result, error) {
 	rows, err := s.db.Query(sql)
 	if err != nil {
@@ -196,7 +196,7 @@ func (s *Store) Query(sql string) (*store.Result, error) {
 	return store.ScanResult(rows)
 }
 
-// Exec ejecuta SQL sin resultado (INSERT/UPDATE/DELETE) y devuelve filas afectadas.
+// Exec runs SQL without a result (INSERT/UPDATE/DELETE) and returns affected rows.
 func (s *Store) Exec(sql string) (int64, error) {
 	res, err := s.db.Exec(sql)
 	if err != nil {
@@ -209,7 +209,7 @@ func (s *Store) Exec(sql string) (int64, error) {
 	return n, nil
 }
 
-// CountTable devuelve la cantidad de filas de una tabla.
+// CountTable returns the number of rows in a table.
 func (s *Store) CountTable(table string) (int, error) {
 	q := fmt.Sprintf("SELECT COUNT(*) FROM %s", QuoteIdent(table))
 	var n int
@@ -219,7 +219,7 @@ func (s *Store) CountTable(table string) (int, error) {
 	return n, nil
 }
 
-// SelectTablePage devuelve una página de filas de una tabla.
+// SelectTablePage returns a page of rows from a table.
 func (s *Store) SelectTablePage(table string, limit, offset int) (*store.Result, error) {
 	q := fmt.Sprintf("SELECT * FROM %s %s", QuoteIdent(table), Limit(limit, offset))
 	return s.Query(q)

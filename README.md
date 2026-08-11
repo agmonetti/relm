@@ -1,76 +1,76 @@
 # relm
 
-Browser de bases de datos para la terminal. Explora, consulta y edita bases de datos desde el teclado, sin salir de tu terminal.
+Terminal database browser. Explore, query and edit databases from the keyboard, without leaving your terminal.
 
-Soporta exactamente **cinco motores**: SQLite, PostgreSQL, MySQL, MariaDB y SQL Server — y ninguno más.
+Supports exactly **five engines**: SQLite, PostgreSQL, MySQL, MariaDB and SQL Server — and no more.
 
-> **¿Primera vez?** `relm` no levanta servidores: se conecta a bases que ya existen
-> (un archivo `.db` para SQLite, un servidor para el resto). Seguí la guía
-> paso a paso en **[USAGE.md](USAGE.md)** — cómo crear una base de prueba, conectarte
-> por primera vez y correr queries.
+> **First time?** `relm` does not start servers: it connects to databases that already
+> exist (a `.db` file for SQLite, a server for the rest). Follow the step-by-step
+> guide in **[USAGE.md](USAGE.md)** — how to create a test database, connect
+> for the first time and run queries.
 
-## Instalación
+## Installation
 
-Requiere Go 1.22+ y `gcc` (por el driver CGO de SQLite).
+Requires Go 1.22+ and `gcc` (because of the CGO SQLite driver).
 
 ```bash
 go install github.com/agmonetti/relm@latest
-# o desde el repo:
+# or from the repo:
 go build -o relm ./cmd/relm
 ```
 
-> **Sin gcc:** SQLite se puede reemplazar por el driver puro-Go `modernc.org/sqlite`
-> en `internal/store/sqlite/` — el resto del sistema no cambia.
+> **Without gcc:** SQLite can be replaced with the pure-Go `modernc.org/sqlite` driver
+> in `internal/store/sqlite/` — the rest of the system does not change.
 
-## Uso
+## Usage
 
 ```bash
 relm
 ```
 
-Se abre la **pantalla de conexión**. Elegí el motor con `←`/`→`, completá los campos y presioná `Enter` para conectar. Para SQLite solo necesitás el path del archivo.
+The **connection screen** opens. Pick the engine with `←`/`→`, fill in the fields and press `Enter` to connect. For SQLite you only need the file path.
 
-### Atajos
+### Shortcuts
 
-| Tecla | Acción |
+| Key | Action |
 |---|---|
-| `Ctrl+C` / `q` | Salir |
-| `Ctrl+N` | Nueva conexión |
-| `Ctrl+S` | Guardar conexión (en pantalla de conexión) |
-| `Tab` | Alternar browser ↔ editor |
-| `i` | Ver estructura de la tabla activa |
-| `↑↓` / `k j` | Navegar filas |
-| `PgUp` / `PgDn` | Cambiar de página |
-| `r` | Refrescar tabla |
-| `Alt+B` | Mostrar/ocultar sidebar |
-| `Ctrl+R` | Ejecutar query (en el editor) |
-| `Ctrl+L` | Limpiar input del editor |
-| `↑↓` (en editor) | Navegar historial de queries |
-| `?` | Ayuda |
+| `Ctrl+C` / `q` | Quit |
+| `Ctrl+N` | New connection |
+| `Ctrl+S` | Save connection (connection screen) |
+| `Tab` | Toggle browser ↔ editor |
+| `i` | View active table structure |
+| `↑↓` / `k j` | Navigate rows |
+| `PgUp` / `PgDn` | Change page |
+| `r` | Refresh table |
+| `Alt+B` | Show/hide sidebar |
+| `Ctrl+R` | Run query (in the editor) |
+| `Ctrl+L` | Clear editor input |
+| `↑↓` (in editor) | Navigate query history |
+| `?` | Help |
 
-## Características
+## Features
 
-- Browser de tablas con paginación (50 filas por página) y sidebar navegable.
-- Editor SQL multilínea con historial de los últimos 100 queries.
-- Estructura de tablas: columnas, constraints e índices.
-- Conexiones guardadas en `~/.config/relm/connections.json`.
-- Modo `Solo lectura` para SQLite y campo `SSL` para PostgreSQL (ver `06-seguridad.md`).
-- NULL se muestra como `∅`; valores largos se truncan con `…`.
-- Sin servidor, sin configuración previa, un solo binario.
+- Table browser with pagination (50 rows per page) and a navigable sidebar.
+- Multiline SQL editor with history of the last 100 queries.
+- Table structure: columns, constraints and indexes.
+- Saved connections in `~/.config/relm/connections.json`.
+- `Read-only` mode for SQLite and `SSL` field for PostgreSQL (see `06-security.md`).
+- NULL is shown as `∅`; long values are truncated with `…`.
+- No server, no prior configuration, a single binary.
 
-## Desarrollo
+## Development
 
 ```bash
 go test ./...        # tests
-go vet ./...         # lint estático
-go run ./cmd/relm  # correr
+go vet ./...         # static lint
+go run ./cmd/relm    # run
 ```
 
-### Tests de motores de red
+### Network engine tests
 
-Los tests de PostgreSQL/MySQL/MariaDB/SQL Server son de integración y se
-saltan salvo que se setee la env var correspondiente. Levantá los servidores
-con el compose incluido y apuntá los tests a ellos:
+The PostgreSQL/MySQL/MariaDB/SQL Server tests are integration tests and are
+skipped unless the corresponding env var is set. Start the servers
+with the included compose and point the tests at them:
 
 ```bash
 docker compose up -d
@@ -87,20 +87,20 @@ go test ./...
 Go 1.22+, bubbletea + lipgloss + bubbles (Charmbracelet), drivers:
 `mattn/go-sqlite3`, `jackc/pgx/v5`, `go-sql-driver/mysql`, `microsoft/go-mssqldb`.
 
-## Documentación del diseño
+## Design documentation
 
-La especificación vive como documentos numerados en este directorio:
+The spec lives as numbered documents in this directory:
 
-| Archivo | Contenido |
+| File | Contents |
 |---|---|
-| `00-LEEME.md` | Idea central (5 motores) y orden de lectura |
-| `01-vision.md` | Visión, principios no negociables |
-| `02-arquitectura.md` | Capas, interfaz `Store`, dialectos por motor |
-| `03-ux-pantallas.md` | Pantallas, keymaps, estilos |
-| `04-implementacion.md` | Fases de implementación |
-| `05-decisiones-tecnicas.md` | DSNs, edge cases, dialectos |
-| `06-seguridad.md` | Modelo de amenazas y decisiones de seguridad (mantenedores) |
-| `07-seguridad-usuario.md` | Seguridad para el usuario final |
-| `LESSONS.md` | Decisiones del agente durante el desarrollo |
+| `00-guide.md` | Core idea (5 engines) and reading order |
+| `01-vision.md` | Vision, non-negotiable principles |
+| `02-architecture.md` | Layers, `Store` interface, dialects per engine |
+| `03-ux-screens.md` | Screens, keymaps, styles |
+| `04-implementation.md` | Implementation phases |
+| `05-technical-decisions.md` | DSNs, edge cases, dialects |
+| `06-security.md` | Threat model and security decisions (maintainers) |
+| `07-user-security.md` | Security for the end user |
+| `LESSONS.md` | Agent decisions during development |
 
-Para la guía de uso paso a paso, ver [USAGE.md](USAGE.md).
+For the step-by-step usage guide, see [USAGE.md](USAGE.md).
