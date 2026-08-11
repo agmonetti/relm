@@ -13,12 +13,10 @@ test:
 lint:
 	go vet ./...
 
-# Creates an example SQLite database to test without docker.
-# Usage: make demo && ./bin/relm
+# Creates an example SQLite database to test without docker (no sqlite3 CLI
+# needed; works on any platform). Usage: make demo && ./bin/relm
 demo:
-	rm -f demo.db
-	sqlite3 demo.db "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT); CREATE TABLE orders (id INTEGER PRIMARY KEY, total REAL, user_id INTEGER); INSERT INTO users (name, email) VALUES ('Alice','alice@test.com'), ('Bob','bob@test.com'), ('Carol','carol@test.com'); INSERT INTO orders (total, user_id) VALUES (19.99, 1), (4.50, 2), (129.00, 1);"
-	@echo "Example database created: demo.db - open it with ./bin/relm (engine SQLite, path demo.db)"
+	go run ./cmd/demo
 
 clean:
 	rm -rf bin

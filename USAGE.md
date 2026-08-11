@@ -30,10 +30,13 @@ go build -o relm ./cmd/relm
 `relm` does not create files: if you give it a path that does not exist, it shows `no such file`.
 Create the database yourself. Two options:
 
-**With `make demo`** (creates `demo.db` with example tables and data):
+**With the built-in demo generator** (creates `demo.db` with example tables and
+data, works on any platform — no `sqlite3` CLI needed):
 
 ```bash
-make demo && ./bin/relm
+go run ./cmd/demo
+# or, with make: make demo
+./relm
 ```
 
 **By hand with the sqlite CLI:**
