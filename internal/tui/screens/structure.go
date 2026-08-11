@@ -8,7 +8,8 @@ import (
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
-// RenderStructure renders columns and indexes of the active table.
+// RenderStructure renders columns and indexes of the active table, trimmed to
+// the available height so it fits inside the main pane.
 func RenderStructure(b *browser.Browser, width, height int) string {
 	var sb strings.Builder
 
@@ -42,5 +43,10 @@ func RenderStructure(b *browser.Browser, width, height int) string {
 		line := fmt.Sprintf("  %-24s (%s)%s", ix.Name, strings.Join(ix.Columns, ", "), uniq)
 		sb.WriteString(styles.StyleSidebarItem.Render(line) + "\n")
 	}
-	return sb.String()
+
+	lines := strings.Split(sb.String(), "\n")
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	return strings.Join(lines, "\n")
 }

@@ -1,72 +1,53 @@
 package screens
 
 import (
-	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
 	"github.com/agmonetti/relm/internal/browser"
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
-// RenderBrowser renders the main browser content.
-func RenderBrowser(b *browser.Browser, width, height int, showSidebar bool) string {
-	if b == nil {
-		return styles.StyleHeaderDim.Render("no connection")
-	}
-
-	cols := make([]string, len(b.Columns))
-	for i, c := range b.Columns {
-		cols[i] = c.Name
-	}
-	content := renderDataTable(cols, b.Rows, b.Cursor, width, height)
-
-	if len(b.Tables) == 0 {
-		content = styles.StyleHeaderDim.Render("no tables — use the editor to create one")
-	} else if len(b.Rows) == 0 && b.ActiveTable != "" {
-		content = styles.StyleHeaderDim.Render("empty table")
-	}
-
-	if showSidebar {
-		return lipgloss.JoinHorizontal(
-			lipgloss.Top,
-			renderSidebar(b, width/4, height),
-			"  ",
-			content,
-		)
-	}
-	return content
-}
-
-func renderSidebar(b *browser.Browser, width, height int) string {
+// RenderSidebar renders the table list with a selection cursor and the opened
+// table marked. It scrolls vertically so the cursor stays visible.
+func RenderSidebar(b *browser.Browser, cursor, width, height int) string {
 	if width < 10 || height < 1 {
 		return ""
 	}
-	tables := b.Tables
-	truncated := len(tables) > height
-	if truncated {
-		tables = tables[:height]
+	n := len(b.Tables)
+	if n == 0 {
+		return ""
 	}
+	if cursor >= n {
+		cursor = n - 1
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	offset := 0
+	if cursor >= height {
+		offset = cursor
+	}
+
 	var sb strings.Builder
-	for _, t := range tables {
-		name := truncate(t, width-2)
-		if t == b.ActiveTable {
+	for i := offset; i < n && i < offset+height; i++ {
+		name := truncate(b.Tables[i], width-2)
+		switch {
+		case i == cursor:
 			sb.WriteString(styles.StyleSidebarActive.Render("> " + name))
-		} else {
+		case b.Tables[i] == b.ActiveTable:
+			sb.WriteString(styles.StyleSidebarActiveTable.Render("  " + name))
+		default:
 			sb.WriteString(styles.StyleSidebarItem.Render("  " + name))
 		}
 		sb.WriteString("\n")
 	}
-	if truncated {
-		sb.WriteString(styles.StyleHeaderDim.Render(fmt.Sprintf("  +%d more", len(b.Tables)-height)) + "\n")
-	}
 	return sb.String()
 }
 
-// renderDataTable renders columns + rows with the cursor row highlighted.
-func renderDataTable(cols []string, rows [][]string, cursor, width, height int) string {
+// RenderDataTable renders columns + rows with the cursor row highlighted.
+func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) string {
 	if len(cols) == 0 {
 		return ""
 	}

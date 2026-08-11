@@ -100,7 +100,7 @@ func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 	}
 
 	if len(e.Result.Columns) > 0 {
-		b.WriteString(renderDataTable(e.Result.Columns, e.Result.Rows, -1, width-2, height-inputHeight))
+		b.WriteString(RenderDataTable(e.Result.Columns, e.Result.Rows, -1, width-2, height-inputHeight))
 	} else if e.Result.Affected >= 0 {
 		b.WriteString(fmt.Sprintf("  %d rows affected", e.Result.Affected))
 	}

@@ -94,3 +94,19 @@ var (
 
 // NullCell returns the representation of a NULL value.
 func NullCell() string { return StyleNull.Render("∅") }
+
+var (
+	// StyleSidebarActiveTable marks the opened table when it is not under the
+	// sidebar selection cursor.
+	StyleSidebarActiveTable = lipgloss.NewStyle().
+				Foreground(ColorAccent)
+
+	// StylePane is the border of a non-focused workspace pane.
+	StylePane = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(ColorBorder)
+
+	// StylePaneFocus is the border of the focused workspace pane.
+	StylePaneFocus = StylePane.
+			BorderForeground(ColorAccent)
+)

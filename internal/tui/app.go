@@ -24,12 +24,8 @@ type Screen int
 const (
 	// ScreenConnect is the connection screen (first on open).
 	ScreenConnect Screen = iota
-	// ScreenBrowser is the table and row navigation screen.
-	ScreenBrowser
-	// ScreenEditor is the SQL editor screen.
-	ScreenEditor
-	// ScreenStructure is the table structure screen.
-	ScreenStructure
+	// ScreenWorkspace is the single working screen: sidebar + main + editor.
+	ScreenWorkspace
 )
 
 // editorDoneMsg carries the result of a query run in the background.
@@ -47,8 +43,13 @@ type Model struct {
 	editor       *editor.Editor
 	editorScreen *screens.EditorScreen
 	screen       Screen
+	focus        screens.WorkspaceFocus
 	keys         KeyMap
 	cfgLabel     string
+
+	// workspace state
+	structure     bool // the main pane shows the structure of the active table
+	sidebarCursor int  // table selected in the sidebar
 
 	spinner spinner.Model
 	loading bool
@@ -69,6 +70,7 @@ func New() *Model {
 		editor:       editor.New(),
 		editorScreen: screens.NewEditorScreen(),
 		screen:       ScreenConnect,
+		focus:        screens.FocusSidebar,
 		keys:         DefaultKeyMap(),
 		spinner:      spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(styles.StyleHeaderDim)),
 		showSidebar:  true,
@@ -95,7 +97,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 		case "?":
-			m.showHelp = !m.showHelp
+			if !m.typing() {
+				m.showHelp = !m.showHelp
+			}
 			return m, nil
 		case "ctrl+n":
 			m.newSession()
@@ -105,12 +109,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.screen {
 		case ScreenConnect:
 			return m.handleConnectKeys(msg)
-		case ScreenBrowser:
-			return m.handleBrowserKeys(msg)
-		case ScreenEditor:
-			return m.handleEditorKeys(msg)
-		case ScreenStructure:
-			return m.handleStructureKeys(msg)
+		case ScreenWorkspace:
+			return m.handleWorkspaceKeys(msg)
 		}
 
 	case screens.ConnectMsg:
@@ -127,6 +127,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.editor = msg.ed
 		m.setErr(msg.err)
 		m.editorScreen.Focus()
+
+		// A write query (INSERT/UPDATE/DELETE/CREATE/DROP/...) may have changed
+		// the schema or the data: refresh the table list and the open table.
+		if msg.err == nil && m.browser != nil && m.store != nil &&
+			msg.ed.Result != nil && msg.ed.Result.Affected >= 0 {
+			m.setErr(m.browser.Reload(m.store))
+			m.clampSidebar()
+		}
+		return m, nil
 
 	case spinner.TickMsg:
 		if m.loading {
@@ -159,12 +168,9 @@ func (m *Model) render() string {
 	switch m.screen {
 	case ScreenConnect:
 		content = m.connect.View(m.width, contentHeight)
-	case ScreenBrowser:
-		content = screens.RenderBrowser(m.browser, m.width, contentHeight, m.showSidebar)
-	case ScreenEditor:
-		content = m.editorScreen.View(m.editor, m.width, contentHeight)
-	case ScreenStructure:
-		content = screens.RenderStructure(m.browser, m.width, contentHeight)
+	case ScreenWorkspace:
+		content = screens.RenderWorkspace(m.browser, m.editorScreen, m.editor,
+			m.focus, m.structure, m.showSidebar, m.sidebarCursor, m.width, contentHeight)
 	}
 
 	body := content
@@ -182,12 +188,17 @@ func (m *Model) renderHeader() string {
 	}
 	mode := ""
 	switch m.screen {
-	case ScreenBrowser:
-		mode = "browser"
-	case ScreenEditor:
-		mode = "editor"
-	case ScreenStructure:
-		mode = "structure"
+	case ScreenWorkspace:
+		switch {
+		case m.focus == screens.FocusEditor:
+			mode = "editor"
+		case m.focus == screens.FocusSidebar:
+			mode = "tables"
+		case m.structure:
+			mode = "structure"
+		default:
+			mode = "browser"
+		}
 	}
 	table := "—"
 	if m.browser != nil && m.browser.ActiveTable != "" {
@@ -204,18 +215,26 @@ func (m *Model) renderFooter() string {
 	switch m.screen {
 	case ScreenConnect:
 		left = "↑↓ saved · tab engine/fields · ←→ engine · enter connect · ctrl+s save"
-	case ScreenBrowser:
-		left = "↑↓ navigate · tab editor · i structure · r refresh · ? help"
-	case ScreenEditor:
-		left = "ctrl+r run · tab browser · ctrl+l clear"
-	case ScreenStructure:
-		left = "esc back · tab editor"
+	case ScreenWorkspace:
+		switch m.focus {
+		case screens.FocusSidebar:
+			left = "↑↓ tables · enter open · tab next · ctrl+1/2/3 focus · ? help"
+		case screens.FocusMain:
+			if m.structure {
+				left = "esc back · tab next"
+			} else {
+				left = "↑↓ rows · i structure · r refresh · pgup/pgdn page · tab next"
+			}
+		case screens.FocusEditor:
+			left = "ctrl+r run · ctrl+l clear · esc back"
+		}
 	}
 
 	right := ""
 	if m.loading {
 		right = m.spinner.View() + " running query…"
-	} else if m.browser != nil && m.screen == ScreenBrowser && m.browser.ActiveTable != "" && m.browser.TotalRows > 0 {
+	} else if m.screen == ScreenWorkspace && m.focus != screens.FocusEditor &&
+		m.browser != nil && m.browser.ActiveTable != "" && m.browser.TotalRows > 0 {
 		page := m.browser.Page + 1
 		arrow := ""
 		if m.browser.HasNextPage() {
@@ -231,13 +250,13 @@ func (m *Model) renderFooter() string {
 	return styles.StyleFooter.Render(left + padSpaces(pad) + right)
 }
 
-// typing reports whether the user is typing text (q must not quit).
+// typing reports whether the user is typing text (q/? must not quit).
 func (m *Model) typing() bool {
 	switch m.screen {
 	case ScreenConnect:
 		return m.connect.FocusOnField()
-	case ScreenEditor:
-		return true
+	case ScreenWorkspace:
+		return m.focus == screens.FocusEditor
 	}
 	return false
 }
@@ -259,6 +278,9 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) {
 	m.editorScreen.SetValue("")
 	m.cfgLabel = cfg.Label()
 	m.err = ""
+	m.structure = false
+	m.sidebarCursor = 0
+	m.setFocus(screens.FocusSidebar)
 
 	st, err := store.New(cfg)
 	if err != nil {
@@ -277,7 +299,7 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) {
 		return
 	}
 	m.browser = b
-	m.screen = ScreenBrowser
+	m.screen = ScreenWorkspace
 }
 
 // saveConnection persists the current connection.
@@ -314,6 +336,9 @@ func (m *Model) newSession() {
 	m.editorScreen.SetValue("")
 	m.cfgLabel = ""
 	m.err = ""
+	m.structure = false
+	m.sidebarCursor = 0
+	m.setFocus(screens.FocusSidebar)
 	m.screen = ScreenConnect
 	m.connect.ResetForm()
 }
@@ -325,26 +350,144 @@ func (m *Model) closeStore() {
 	}
 }
 
-// handleBrowserKeys handles browser keys.
-func (m *Model) handleBrowserKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// handleWorkspaceKeys dispatches keys of the single working screen.
+func (m *Model) handleWorkspaceKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	typingEditor := m.focus == screens.FocusEditor
+
+	switch {
+	case key.Matches(msg, m.keys.ToggleSidebar):
+		m.showSidebar = !m.showSidebar
+		return m, nil
+	case key.Matches(msg, m.keys.FocusSidebar):
+		m.setFocus(screens.FocusSidebar)
+		return m, nil
+	case key.Matches(msg, m.keys.FocusMain):
+		m.setFocus(screens.FocusMain)
+		return m, nil
+	case key.Matches(msg, m.keys.FocusEditor):
+		m.setFocus(screens.FocusEditor)
+		return m, nil
+	case key.Matches(msg, m.keys.Switch):
+		m.cycleFocus()
+		return m, nil
+	case !typingEditor && key.Matches(msg, m.keys.Inspect):
+		m.structure = true
+		m.setFocus(screens.FocusMain)
+		return m, nil
+	case !typingEditor && key.Matches(msg, m.keys.Refresh) && m.browser != nil:
+		m.setErr(m.browser.Reload(m.store))
+		m.clampSidebar()
+		return m, nil
+	}
+
+	switch m.focus {
+	case screens.FocusSidebar:
+		return m.handleSidebarKeys(msg)
+	case screens.FocusMain:
+		return m.handleMainKeys(msg)
+	case screens.FocusEditor:
+		return m.handleEditorKeys(msg)
+	}
+	return m, nil
+}
+
+// cycleFocus moves the focus to the next workspace pane.
+func (m *Model) cycleFocus() {
+	var next screens.WorkspaceFocus
+	switch m.focus {
+	case screens.FocusSidebar:
+		next = screens.FocusMain
+	case screens.FocusMain:
+		next = screens.FocusEditor
+	case screens.FocusEditor:
+		next = screens.FocusSidebar
+	}
+	m.setFocus(next)
+}
+
+// setFocus moves the focus to a pane, keeping the editor's textarea state in
+// sync.
+func (m *Model) setFocus(f screens.WorkspaceFocus) {
+	if f == screens.FocusEditor {
+		m.editorScreen.Focus()
+	} else {
+		m.editorScreen.Blur()
+	}
+	m.focus = f
+}
+
+// handleSidebarKeys handles keys when the sidebar has the focus.
+func (m *Model) handleSidebarKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.browser == nil {
 		return m, nil
 	}
 	b := m.browser
-
 	switch {
-	case key.Matches(msg, m.keys.Switch):
-		m.editorScreen.Focus()
-		m.screen = ScreenEditor
+	case key.Matches(msg, m.keys.Up):
+		if m.sidebarCursor > 0 {
+			m.sidebarCursor--
+		}
 		return m, nil
-	case key.Matches(msg, m.keys.Inspect):
-		m.screen = ScreenStructure
+	case key.Matches(msg, m.keys.Down):
+		if m.sidebarCursor < len(b.Tables)-1 {
+			m.sidebarCursor++
+		}
 		return m, nil
-	case key.Matches(msg, m.keys.Refresh):
-		m.setErr(b.Reload(m.store))
+	case key.Matches(msg, m.keys.PageUp):
+		m.sidebarCursor -= 10
+		m.clampSidebar()
 		return m, nil
-	case key.Matches(msg, m.keys.ToggleSidebar):
-		m.showSidebar = !m.showSidebar
+	case key.Matches(msg, m.keys.PageDown):
+		m.sidebarCursor += 10
+		m.clampSidebar()
+		return m, nil
+	case msg.Type == tea.KeyEnter:
+		m.selectTable(m.sidebarCursor)
+		return m, nil
+	case msg.Type == tea.KeyRunes && !msg.Alt && len(msg.Runes) == 1 &&
+		msg.Runes[0] >= '1' && msg.Runes[0] <= '9':
+		idx := int(msg.Runes[0] - '1')
+		m.selectTable(idx)
+		return m, nil
+	}
+	return m, nil
+}
+
+// selectTable opens the table at index idx in the sidebar.
+func (m *Model) selectTable(idx int) {
+	if m.browser == nil || idx < 0 || idx >= len(m.browser.Tables) {
+		return
+	}
+	m.sidebarCursor = idx
+	m.structure = false
+	m.setErr(m.browser.SelectTable(m.browser.Tables[idx], m.store))
+}
+
+// clampSidebar keeps the sidebar cursor inside the table list.
+func (m *Model) clampSidebar() {
+	if m.browser == nil {
+		return
+	}
+	if n := len(m.browser.Tables); n == 0 {
+		m.sidebarCursor = 0
+	} else if m.sidebarCursor >= n {
+		m.sidebarCursor = n - 1
+	} else if m.sidebarCursor < 0 {
+		m.sidebarCursor = 0
+	}
+}
+
+// handleMainKeys handles keys when the main pane has the focus.
+func (m *Model) handleMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.browser == nil {
+		return m, nil
+	}
+	b := m.browser
+	switch {
+	case key.Matches(msg, m.keys.Back):
+		if m.structure {
+			m.structure = false
+		}
 		return m, nil
 	case key.Matches(msg, m.keys.Up):
 		b.MoveCursor(-1)
@@ -364,49 +507,15 @@ func (m *Model) handleBrowserKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Last):
 		b.MoveCursor(len(b.Rows))
 		return m, nil
-	case msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] >= '1' && msg.Runes[0] <= '9':
-		idx := int(msg.Runes[0] - '1')
-		if idx < len(b.Tables) {
-			m.setErr(b.SelectTable(b.Tables[idx], m.store))
-		}
-		return m, nil
 	}
 	return m, nil
 }
 
-// setErr stores or clears the current error message.
-func (m *Model) setErr(err error) {
-	if err != nil {
-		m.err = err.Error()
-	} else {
-		m.err = ""
-	}
-}
-
-// handleStructureKeys handles structure screen keys.
-func (m *Model) handleStructureKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, m.keys.Switch):
-		m.editorScreen.Focus()
-		m.screen = ScreenEditor
-		return m, nil
-	case key.Matches(msg, m.keys.Back):
-		m.screen = ScreenBrowser
-		return m, nil
-	}
-	return m, nil
-}
-
-// handleEditorKeys handles editor keys.
+// handleEditorKeys handles keys when the editor has the focus.
 func (m *Model) handleEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, m.keys.Switch):
-		m.editorScreen.Blur()
-		m.screen = ScreenBrowser
-		return m, nil
 	case key.Matches(msg, m.keys.Back):
-		m.editorScreen.Blur()
-		m.screen = ScreenBrowser
+		m.setFocus(screens.FocusMain)
 		return m, nil
 	case key.Matches(msg, m.keys.Execute):
 		if m.loading {
@@ -466,6 +575,15 @@ func (m *Model) executeEditor() tea.Cmd {
 		},
 		m.spinner.Tick,
 	)
+}
+
+// setErr stores or clears the current error message.
+func (m *Model) setErr(err error) {
+	if err != nil {
+		m.err = err.Error()
+	} else {
+		m.err = ""
+	}
 }
 
 func (m *Model) renderHelp() string {

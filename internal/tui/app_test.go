@@ -14,6 +14,7 @@ import (
 	_ "github.com/agmonetti/relm/internal/store/mysql" // registers the engines for the tests
 	_ "github.com/agmonetti/relm/internal/store/postgres"
 	_ "github.com/agmonetti/relm/internal/store/sqlite"
+	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
 // createTestDB creates a temporary sqlite with users and orders tables.
@@ -57,6 +58,21 @@ func newModel(t *testing.T) *Model {
 	return m
 }
 
+// connect creates a model connected to a fresh SQLite test database.
+func connect(t *testing.T) *Model {
+	t.Helper()
+	db := createTestDB(t)
+	m := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	pressKey(t, m, "tab") // focus the File field
+	press(t, m, db)
+	pressKey(t, m, "enter") // connect
+	if m.screen != ScreenWorkspace {
+		t.Fatalf("screen = %d, want ScreenWorkspace", m.screen)
+	}
+	return m
+}
+
 var namedKeys = map[string]tea.KeyType{
 	"tab":    tea.KeyTab,
 	"enter":  tea.KeyEnter,
@@ -85,6 +101,12 @@ func pressKey(t *testing.T, m *Model, key string) {
 		t.Fatalf("key %q not mapped in the test", key)
 	}
 	step(t, m, tea.KeyMsg{Type: kt})
+}
+
+// pressAlt sends an alt+digit key (used to jump between workspace panes).
+func pressAlt(t *testing.T, m *Model, digit string) {
+	t.Helper()
+	step(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(digit), Alt: true})
 }
 
 // step applies a message to the model and runs the returned cmd, feeding back
@@ -127,24 +149,16 @@ func TestModel_StartsOnConnect(t *testing.T) {
 	}
 }
 
-func TestModel_ConnectToSQLiteShowsBrowser(t *testing.T) {
-	db := createTestDB(t)
-
-	m := newModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-
-	// Tab: focus the File field
-	pressKey(t, m, "tab")
-	// escribir el path
-	press(t, m, db)
-	// Enter: connect
-	pressKey(t, m, "enter")
-
-	if m.screen != ScreenBrowser {
-		t.Fatalf("screen = %d, want ScreenBrowser", m.screen)
+func TestModel_ConnectShowsWorkspace(t *testing.T) {
+	m := connect(t)
+	if m.screen != ScreenWorkspace {
+		t.Fatalf("screen = %d, want ScreenWorkspace", m.screen)
 	}
 	if m.browser == nil {
 		t.Fatal("browser nil after connecting")
+	}
+	if m.focus != screens.FocusSidebar {
+		t.Errorf("focus = %v, want sidebar", m.focus)
 	}
 	if m.browser.ActiveTable != "orders" {
 		t.Errorf("ActiveTable = %q, want orders", m.browser.ActiveTable)
@@ -160,7 +174,7 @@ func TestModel_ConnectErrorStaysOnConnect(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
 	pressKey(t, m, "tab")
-	press(t, m, "/tmp/opencode/definitely-missing.db")
+	press(t, m, filepath.Join(t.TempDir(), "definitely-missing.db"))
 	pressKey(t, m, "enter")
 
 	if m.screen != ScreenConnect {
@@ -171,51 +185,86 @@ func TestModel_ConnectErrorStaysOnConnect(t *testing.T) {
 	}
 }
 
-func TestModel_TabSwitchesToEditor(t *testing.T) {
-	db := createTestDB(t)
-
-	m := newModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+func TestModel_TabCyclesFocus(t *testing.T) {
+	m := connect(t)
+	if m.focus != screens.FocusSidebar {
+		t.Fatalf("setup: focus = %v, want sidebar", m.focus)
+	}
 	pressKey(t, m, "tab")
-	press(t, m, db)
-	pressKey(t, m, "enter")
-
+	if m.focus != screens.FocusMain {
+		t.Errorf("focus = %v, want main", m.focus)
+	}
 	pressKey(t, m, "tab")
-	if m.screen != ScreenEditor {
-		t.Fatalf("screen = %d, want ScreenEditor", m.screen)
+	if m.focus != screens.FocusEditor {
+		t.Errorf("focus = %v, want editor", m.focus)
+	}
+	pressKey(t, m, "tab")
+	if m.focus != screens.FocusSidebar {
+		t.Errorf("focus = %v, want sidebar (cycle)", m.focus)
+	}
+}
+
+func TestModel_AltDigitsJumpFocus(t *testing.T) {
+	m := connect(t)
+	pressAlt(t, m, "3")
+	if m.focus != screens.FocusEditor {
+		t.Errorf("alt+3: focus = %v, want editor", m.focus)
+	}
+	pressAlt(t, m, "1")
+	if m.focus != screens.FocusSidebar {
+		t.Errorf("alt+1: focus = %v, want sidebar", m.focus)
+	}
+	pressAlt(t, m, "2")
+	if m.focus != screens.FocusMain {
+		t.Errorf("alt+2: focus = %v, want main", m.focus)
 	}
 }
 
 func TestModel_NewSessionReturnsToConnect(t *testing.T) {
-	db := createTestDB(t)
-
-	m := newModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	pressKey(t, m, "tab")
-	press(t, m, db)
-	pressKey(t, m, "enter")
-	if m.screen != ScreenBrowser {
-		t.Fatalf("setup: screen = %d", m.screen)
-	}
-
+	m := connect(t)
 	pressKey(t, m, "ctrl+n")
 	if m.screen != ScreenConnect {
 		t.Fatalf("screen = %d, want ScreenConnect", m.screen)
 	}
 }
 
-func TestModel_EditorExecutesQuery(t *testing.T) {
-	db := createTestDB(t)
-
-	m := newModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	pressKey(t, m, "tab")
-	press(t, m, db)
+func TestModel_SidebarEnterOpensTable(t *testing.T) {
+	m := connect(t)
+	if m.browser.ActiveTable != "orders" {
+		t.Fatalf("setup: ActiveTable = %q, want orders", m.browser.ActiveTable)
+	}
+	pressKey(t, m, "down") // sidebar cursor -> users
+	if m.sidebarCursor != 1 {
+		t.Fatalf("sidebarCursor = %d, want 1", m.sidebarCursor)
+	}
 	pressKey(t, m, "enter")
+	if m.browser.ActiveTable != "users" {
+		t.Errorf("ActiveTable = %q, want users", m.browser.ActiveTable)
+	}
+}
 
-	pressKey(t, m, "tab") // al editor
-	if m.screen != ScreenEditor {
-		t.Fatalf("setup: screen = %d, want ScreenEditor", m.screen)
+func TestModel_StructureMode(t *testing.T) {
+	m := connect(t)
+	pressAlt(t, m, "2") // main
+	press(t, m, "i")
+	if !m.structure {
+		t.Fatal("structure should be on after i")
+	}
+	v := m.View()
+	if !strings.Contains(v, "Columns") {
+		t.Errorf("structure not shown in the main pane: %q", v)
+	}
+	pressKey(t, m, "esc")
+	if m.structure {
+		t.Fatal("structure should be off after esc")
+	}
+}
+
+func TestModel_EditorExecutesQuery(t *testing.T) {
+	m := connect(t)
+	pressAlt(t, m, "3") // editor
+	if m.focus != screens.FocusEditor {
+		t.Fatalf("setup: focus = %v, want editor", m.focus)
 	}
 
 	press(t, m, "SELECT * FROM users")
@@ -237,15 +286,8 @@ func TestModel_EditorExecutesQuery(t *testing.T) {
 }
 
 func TestModel_EditorEmptyBufferShowsNotice(t *testing.T) {
-	db := createTestDB(t)
-
-	m := newModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	pressKey(t, m, "tab")
-	press(t, m, db)
-	pressKey(t, m, "enter")
-	pressKey(t, m, "tab") // to the editor
-
+	m := connect(t)
+	pressAlt(t, m, "3")
 	pressKey(t, m, "ctrl+r") // empty buffer
 
 	if m.loading {
@@ -257,15 +299,8 @@ func TestModel_EditorEmptyBufferShowsNotice(t *testing.T) {
 }
 
 func TestModel_EditorShowsError(t *testing.T) {
-	db := createTestDB(t)
-
-	m := newModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	pressKey(t, m, "tab")
-	press(t, m, db)
-	pressKey(t, m, "enter")
-	pressKey(t, m, "tab")
-
+	m := connect(t)
+	pressAlt(t, m, "3")
 	press(t, m, "SELEC broken")
 	pressKey(t, m, "ctrl+r")
 
@@ -278,14 +313,8 @@ func TestModel_EditorShowsError(t *testing.T) {
 }
 
 func TestModel_EditorHistoryNavigation(t *testing.T) {
-	db := createTestDB(t)
-
-	m := newModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	pressKey(t, m, "tab")
-	press(t, m, db)
-	pressKey(t, m, "enter")
-	pressKey(t, m, "tab")
+	m := connect(t)
+	pressAlt(t, m, "3")
 
 	press(t, m, "SELECT 1")
 	pressKey(t, m, "ctrl+r")
@@ -304,44 +333,29 @@ func TestModel_EditorHistoryNavigation(t *testing.T) {
 	}
 }
 
-// TestModel_ConnectToPostgres valida el stack completo (store → browser → TUI)
-// contra PostgreSQL real. Se salta sin env var.
-func TestModel_RefreshShowsInsertedRow(t *testing.T) {
-	db := createTestDB(t)
+func TestModel_AutoRefreshAfterInsert(t *testing.T) {
+	m := connect(t)
 
-	m := newModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	pressKey(t, m, "tab")
-	press(t, m, db)
-	pressKey(t, m, "enter")
-	if m.screen != ScreenBrowser {
-		t.Fatalf("setup: screen = %d", m.screen)
-	}
-
-	// select users (second alphabetically, key "2")
+	// sidebar focus default: quick-select users (second alphabetically)
 	press(t, m, "2")
 	if m.browser.ActiveTable != "users" {
 		t.Fatalf("setup: ActiveTable = %q, want users", m.browser.ActiveTable)
 	}
 
-	// insert a row from the editor
-	pressKey(t, m, "tab")
+	pressAlt(t, m, "3") // editor
 	press(t, m, "INSERT INTO users (name, email) VALUES ('Carol','c@t.com')")
 	pressKey(t, m, "ctrl+r")
 	if m.editor == nil || m.editor.Result == nil || m.editor.Result.Affected != 1 {
 		t.Fatalf("insert did not run: %+v", m.editor)
 	}
 
-	// go back to the browser and refresh with "r"
-	pressKey(t, m, "tab")
-	press(t, m, "r")
-
+	// a write query auto-refreshes the open table without pressing r
 	if m.browser.TotalRows != 3 {
-		t.Errorf("TotalRows = %d, want 3 tras refresh", m.browser.TotalRows)
+		t.Errorf("TotalRows = %d, want 3 after auto-refresh", m.browser.TotalRows)
 	}
 	v := m.View()
 	if !strings.Contains(v, "Carol") {
-		t.Errorf("View does not show the Carol row after refresh: %q", v)
+		t.Errorf("View does not show the Carol row: %q", v)
 	}
 }
 
@@ -367,12 +381,11 @@ func TestModel_ConnectToPostgres(t *testing.T) {
 	press(t, m, os.Getenv("SQLISH_TEST_POSTGRES_DATABASE"))
 	pressKey(t, m, "enter")
 
-	if m.screen != ScreenBrowser {
-		t.Fatalf("screen = %d, want ScreenBrowser. connectErr=%q", m.screen, m.connect.Error())
+	if m.screen != ScreenWorkspace {
+		t.Fatalf("screen = %d, want ScreenWorkspace. connectErr=%q", m.screen, m.connect.Error())
 	}
 	if m.browser == nil || len(m.browser.Tables) == 0 {
 		t.Fatalf("browser without tables")
 	}
 	_ = m.View()
 }
-
