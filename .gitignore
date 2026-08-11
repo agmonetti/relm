@@ -3,6 +3,7 @@
 /relm.exe
 /bin/
 /sqlish
+*.exe~
 
 # Bases de ejemplo
 /demo.db
