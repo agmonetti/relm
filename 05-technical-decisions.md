@@ -258,8 +258,8 @@ require (
     github.com/charmbracelet/lipgloss v1.0.0
     github.com/go-sql-driver/mysql v1.8.1
     github.com/jackc/pgx/v5 v5.7.1
-    github.com/mattn/go-sqlite3 v1.14.24
     github.com/microsoft/go-mssqldb v1.7.2
+    modernc.org/sqlite v1.56.0
 )
 ```
 

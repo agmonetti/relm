@@ -36,6 +36,8 @@ This file documents crossroads and decisions the agent makes during development,
 
 ## L-04 — Dependencies with CGO complicate the build, have a plan B
 
+> **Superseded by L-23:** SQLite now uses `modernc.org/sqlite` (pure Go). Kept as history.
+
 **Crossroads:** `mattn/go-sqlite3` requires gcc. There is gcc on this machine, but cross-compiling will fail.
 
 **Decision:** use `mattn` for now (the SPEC asks for it). Leave the `modernc.org/sqlite` alternative documented for CGO-less builds.
@@ -169,6 +171,8 @@ This file documents crossroads and decisions the agent makes during development,
 ---
 
 ## L-17 — CGO limits cross-compilation; `modernc` enables it
+
+> **Superseded by L-23:** the migration is done; `make release` uses `CGO_ENABLED=0`. Kept as history.
 
 **Crossroads:** `CGO_ENABLED=1` cross-compiling to darwin from linux fails (`clang: unsupported option '-arch'`). The SPEC asked for a multi-platform build.
 

@@ -278,14 +278,12 @@ main.go
 | `github.com/charmbracelet/bubbletea` | TUI framework (Elm architecture) | Core |
 | `github.com/charmbracelet/lipgloss` | Terminal styles and layout | Core |
 | `github.com/charmbracelet/bubbles` | Components: table, textarea, viewport, textinput | Core |
-| `github.com/mattn/go-sqlite3` | SQLite driver with CGO | SQLite |
+| `modernc.org/sqlite` | SQLite driver (pure Go, no CGO) | SQLite |
 | `github.com/jackc/pgx/v5` | PostgreSQL driver (wrapping `database/sql`) | PostgreSQL |
 | `github.com/go-sql-driver/mysql` | MySQL / MariaDB driver | MySQL, MariaDB |
 | `github.com/microsoft/go-mssqldb` | SQL Server driver | SQL Server |
 
-### CGO-free alternative (SQLite)
-
-If the build environment has no gcc, use `modernc.org/sqlite` as a drop-in replacement only in `internal/store/sqlite/`. The rest of the system does not change.
+`modernc.org/sqlite` is pure Go: it builds and runs with `CGO_ENABLED=0` on all platforms (no gcc).
 
 ## Design decisions that do NOT change
 

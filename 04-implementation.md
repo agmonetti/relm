@@ -20,7 +20,7 @@ The agent must implement in this exact order. Each phase has verifiable "done" c
    go get github.com/charmbracelet/bubbletea
    go get github.com/charmbracelet/lipgloss
    go get github.com/charmbracelet/bubbles
-   go get github.com/mattn/go-sqlite3
+   go get modernc.org/sqlite
    ```
 3. Create the full directory structure (see `02-architecture.md`).
 4. Implement `internal/conn/conn.go`:
@@ -32,7 +32,7 @@ The agent must implement in this exact order. Each phase has verifiable "done" c
 6. Implement `internal/store/errors.go`: `ErrUnsupportedDriver`, `ErrConnection`.
 7. Implement `internal/store/scan.go`: `ScanResult(rows)` + `Stringify(v)` — convert `database/sql.Rows` to `*Result` (NULL → "", `[]byte`/`time.Time`/numerics → string). Used by all engines.
 8. Implement `internal/store/sqlite/`:
-   - `store.go`: `New(cfg)` builds the DSN, opens with mattn, implements `Tables()`, `Columns()`, `Indexes()`, `Query()`, `Exec()`, `Version()`, `CountTable()`, `SelectTablePage()`, `Close()`.
+   - `store.go`: `New(cfg)` builds the DSN, opens with modernc (driver `"sqlite"`), implements `Tables()`, `Columns()`, `Indexes()`, `Query()`, `Exec()`, `Version()`, `CountTable()`, `SelectTablePage()`, `Close()`.
    - `dialect.go`: `QuoteIdent` (double quotes), `Limit` (`LIMIT n OFFSET m`), introspection via `sqlite_master` + `PRAGMA`.
 9. Implement the engine registry in `internal/store/store.go`:
    - `Register(driver, constructor)` + `New(cfg)` that looks it up in the registry.
