@@ -117,6 +117,35 @@ func TestConnScreen_FieldHelper(t *testing.T) {
 	}
 }
 
+func TestConnScreen_DeleteSavedConnection(t *testing.T) {
+	c := NewConnScreen([]conn.SavedConnection{
+		{Name: "local", Driver: conn.DriverSQLite, Path: "/data/app.db"},
+	})
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// sqlite: engine(0) + File(1) + Read-only(2) -> saved list(3)
+	for i := 0; i < 3; i++ {
+		c.nextFocus()
+	}
+	if c.focus != c.savedFocus() {
+		t.Fatalf("focus = %d, want saved %d", c.focus, c.savedFocus())
+	}
+
+	updated, cmd := c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	c = updated
+	if cmd == nil {
+		t.Fatal("expected a DeleteConnectionMsg cmd")
+	}
+	msg := cmd()
+	if msg == nil {
+		t.Fatal("expected a DeleteConnectionMsg")
+	}
+	dm, ok := msg.(DeleteConnectionMsg)
+	if !ok || dm.Name != "local" {
+		t.Errorf("msg = %#v, want DeleteConnectionMsg{Name: local}", msg)
+	}
+}
+
 func TestConnScreen_Validate(t *testing.T) {
 	c := NewConnScreen(nil)
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})

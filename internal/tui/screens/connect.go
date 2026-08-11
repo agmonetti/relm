@@ -24,6 +24,11 @@ type SaveConnectionMsg struct {
 	Cfg conn.ConnectionConfig
 }
 
+// DeleteConnectionMsg is emitted when the user deletes a saved connection.
+type DeleteConnectionMsg struct {
+	Name string
+}
+
 // logoASCII is the connect screen logo (figlet "relm", blocks font).
 const logoASCII = `  _____  ______  _      __  __ 
  |  __ \|  ____|| |    |  \/  |
@@ -294,6 +299,13 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 			cfg := c.cfg()
 			cmds = append(cmds, func() tea.Msg { return SaveConnectionMsg{Cfg: cfg} })
 			handled = true
+		case "d":
+			if c.focus == c.savedFocus() && len(c.saved) > 0 {
+				cmds = append(cmds, func() tea.Msg {
+					return DeleteConnectionMsg{Name: c.saved[c.savedIdx].Name}
+				})
+				handled = true
+			}
 		case "r":
 			if c.focus == 0 {
 				c.reset()

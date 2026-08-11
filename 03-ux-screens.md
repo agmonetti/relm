@@ -179,6 +179,7 @@ appear below, separated by a line.
 | `←` / `→` | Switch engine (on the engine selector) |
 | `Enter` | Connect |
 | `Ctrl+S` | Save connection |
+| `d` | Delete the selected saved connection (on the saved list) |
 | `r` | Reset form to blank |
 
 ### Sidebar

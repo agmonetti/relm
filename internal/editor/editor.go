@@ -24,6 +24,9 @@ type Editor struct {
 	Result  *store.Result
 	Error   string
 	Mode    EditorMode
+	// LastQuery is the exact statement that was executed (used by the UI to
+	// push it into the persistent history without crossing goroutines).
+	LastQuery string
 }
 
 // New creates an editor with an empty history.
@@ -77,6 +80,7 @@ func (e *Editor) ExecuteAt(st store.Store, line int) error {
 	}
 
 	e.History.Push(q)
+	e.LastQuery = q
 	return nil
 }
 

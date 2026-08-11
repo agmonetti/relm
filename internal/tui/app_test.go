@@ -14,6 +14,7 @@ import (
 	_ "github.com/agmonetti/relm/internal/store/mysql" // registers the engines for the tests
 	_ "github.com/agmonetti/relm/internal/store/postgres"
 	_ "github.com/agmonetti/relm/internal/store/sqlite"
+	"github.com/agmonetti/relm/internal/conn"
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
@@ -356,6 +357,63 @@ func TestModel_AutoRefreshAfterInsert(t *testing.T) {
 	v := m.View()
 	if !strings.Contains(v, "Carol") {
 		t.Errorf("View does not show the Carol row: %q", v)
+	}
+}
+
+func TestModel_ToggleSidebar(t *testing.T) {
+	m := connect(t)
+	press(t, m, "2") // open users (has rows)
+	if m.browser.ActiveTable != "users" {
+		t.Fatalf("setup: ActiveTable = %q, want users", m.browser.ActiveTable)
+	}
+	if !m.showSidebar {
+		t.Fatal("setup: showSidebar should be true")
+	}
+
+	pressAlt(t, m, "b")
+	if m.showSidebar {
+		t.Error("showSidebar should be false after alt+b")
+	}
+	v := m.View()
+	if !strings.Contains(v, "Alice") {
+		t.Errorf("main pane should still render with the sidebar hidden: %q", v)
+	}
+
+	pressAlt(t, m, "b")
+	if !m.showSidebar {
+		t.Error("showSidebar should be true after the second alt+b")
+	}
+}
+
+func TestModel_SaveAndDeleteSavedConnection(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+
+	m := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	pressKey(t, m, "tab") // File field
+	press(t, m, "/data/app.db")
+	pressKey(t, m, "ctrl+s") // save
+
+	saved, err := conn.LoadSaved()
+	if err != nil {
+		t.Fatalf("LoadSaved: %v", err)
+	}
+	if len(saved) != 1 || saved[0].Path != "/data/app.db" {
+		t.Fatalf("saved = %+v, want one /data/app.db", saved)
+	}
+
+	// sqlite: File(1), Read-only(2) -> saved list(3); "d" deletes it
+	pressKey(t, m, "tab")
+	pressKey(t, m, "tab")
+	press(t, m, "d")
+
+	saved, err = conn.LoadSaved()
+	if err != nil {
+		t.Fatalf("LoadSaved after delete: %v", err)
+	}
+	if len(saved) != 0 {
+		t.Errorf("saved = %+v, want 0 after delete", saved)
 	}
 }
 

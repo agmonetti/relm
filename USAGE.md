@@ -230,6 +230,11 @@ With the connection screen ready, `Ctrl+S` saves it in
 `~/.config/relm/connections.json`. Next time it appears in the
 `Saved` section (below the form) and you connect with `Enter` on it.
 
+To delete a saved connection: focus the `Saved` list with `Tab`, select it
+with `↑↓` and press `d`.
+
+> The config directory can be overridden with the `RELM_CONFIG_DIR` env var.
+
 ---
 
 ## 3. Common first-use problems

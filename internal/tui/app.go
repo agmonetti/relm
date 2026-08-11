@@ -119,14 +119,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.SaveConnectionMsg:
 		m.saveConnection(msg.Cfg)
 
+	case screens.DeleteConnectionMsg:
+		m.deleteConnection(msg.Name)
+
 	case editorDoneMsg:
 		if msg.token != m.queryID {
 			return m, nil // stale result: the session changed
 		}
 		m.loading = false
+		// the goroutine ran against a throwaway history; keep the persistent
+		// ring buffer and push the executed statement here, on the UI goroutine
+		hist := m.editor.History
 		m.editor = msg.ed
+		m.editor.History = hist
 		m.setErr(msg.err)
 		m.editorScreen.Focus()
+
+		if msg.err == nil && msg.ed.LastQuery != "" {
+			hist.Push(msg.ed.LastQuery)
+		}
 
 		// A write query (INSERT/UPDATE/DELETE/CREATE/DROP/...) may have changed
 		// the schema or the data: refresh the table list and the open table.
@@ -214,7 +225,7 @@ func (m *Model) renderFooter() string {
 	left := ""
 	switch m.screen {
 	case ScreenConnect:
-		left = "↑↓ saved · tab engine/fields · ←→ engine · enter connect · ctrl+s save"
+		left = "↑↓ saved · tab engine/fields · ←→ engine · enter connect · ctrl+s save · d delete"
 	case ScreenWorkspace:
 		switch m.focus {
 		case screens.FocusSidebar:
@@ -235,12 +246,16 @@ func (m *Model) renderFooter() string {
 		right = m.spinner.View() + " running query…"
 	} else if m.screen == ScreenWorkspace && m.focus != screens.FocusEditor &&
 		m.browser != nil && m.browser.ActiveTable != "" && m.browser.TotalRows > 0 {
-		page := m.browser.Page + 1
+		first := m.browser.Page*m.browser.PageSize + 1
+		last := (m.browser.Page + 1) * m.browser.PageSize
+		if last > m.browser.TotalRows {
+			last = m.browser.TotalRows
+		}
 		arrow := ""
 		if m.browser.HasNextPage() {
 			arrow = " ▼"
 		}
-		right = fmt.Sprintf("%d/%d%s", page, m.browser.TotalRows, arrow)
+		right = fmt.Sprintf("%d-%d/%d%s", first, last, m.browser.TotalRows, arrow)
 	}
 
 	pad := m.width - lipgloss.Width(left) - lipgloss.Width(right)
@@ -324,6 +339,29 @@ func defaultName(cfg conn.ConnectionConfig) string {
 		return cfg.Path
 	}
 	return fmt.Sprintf("%s/%s", cfg.Host, cfg.Database)
+}
+
+// deleteConnection removes a saved connection by name.
+func (m *Model) deleteConnection(name string) {
+	if name == "" {
+		return
+	}
+	saved, err := conn.LoadSaved()
+	if err != nil {
+		m.connect.SetError(err.Error())
+		return
+	}
+	filtered := saved[:0]
+	for _, s := range saved {
+		if s.Name != name {
+			filtered = append(filtered, s)
+		}
+	}
+	if err := conn.SaveSaved(filtered); err != nil {
+		m.connect.SetError(err.Error())
+		return
+	}
+	m.connect.SetSaved(filtered)
 }
 
 // newSession closes the session and returns to the connection screen.
@@ -565,10 +603,10 @@ func (m *Model) executeEditor() tea.Cmd {
 	m.loading = true
 	return tea.Batch(
 		func() tea.Msg {
-			// fresh editor for the query, but shares the accumulated
-			// history with the model (the ring buffer persists across runs).
+			// The query runs on a fresh editor with a throwaway history: the
+			// persistent ring buffer is only touched from the UI goroutine (in
+			// editorDoneMsg), so the two never race.
 			ed := editor.New()
-			ed.History = m.editor.History
 			ed.Buffer = buf
 			err := ed.ExecuteAt(st, line)
 			return editorDoneMsg{ed: ed, err: err, token: token}
