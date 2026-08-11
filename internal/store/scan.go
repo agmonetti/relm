@@ -2,9 +2,11 @@ package store
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"time"
+	"unicode/utf8"
 )
 
 // ScanResult reads all rows from a Rows and converts them to a Result.
@@ -48,7 +50,11 @@ func Stringify(v any) string {
 	case string:
 		return t
 	case []byte:
-		return string(t)
+		if utf8.Valid(t) {
+			return string(t)
+		}
+		// binary value: show as 0x… instead of raw bytes
+		return "0x" + hex.EncodeToString(t)
 	case time.Time:
 		return t.Format("2006-01-02 15:04:05")
 	case bool:
