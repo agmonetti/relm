@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/agmonetti/relm/internal/browser"
 	"github.com/agmonetti/relm/internal/editor"
@@ -77,16 +78,12 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		return paneW - 4
 	}
 
-	// main pane: a title line with the table name + count, then the content
+	// main pane: the title (table name + count) lives inside the top border
 	mainTitle := ""
-	mainHasTitle := b != nil && b.ActiveTable != ""
-	if mainHasTitle {
+	if b != nil && b.ActiveTable != "" {
 		mainTitle = fmt.Sprintf("%s · %d rows", b.ActiveTable, b.TotalRows)
 	}
 	mainBodyH := mainH - 2
-	if mainHasTitle {
-		mainBodyH--
-	}
 	var mainContent string
 	if b == nil {
 		mainContent = styles.StyleHeaderDim.Render("no connection")
@@ -103,38 +100,29 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		}
 		mainContent = RenderDataTable(cols, b.Rows, b.Cursor, contentW(rightW), mainBodyH)
 	}
-	mainContent = titled(mainTitle, mainContent)
 
 	// editor pane: title + editor
-	editorContent := titled("SQL EDITOR", es.View(e, contentW(rightW), editorH-2-1))
+	editorContent := es.View(e, contentW(rightW), editorH-2)
 
-	mainPane := boxed(mainContent, rightW, mainH, focus == FocusMain)
-	editorPane := boxed(editorContent, rightW, editorH, focus == FocusEditor)
+	mainPane := boxed(mainContent, mainTitle, rightW, mainH, focus == FocusMain)
+	editorPane := boxed(editorContent, "SQL EDITOR", rightW, editorH, focus == FocusEditor)
 	right := lipgloss.JoinVertical(lipgloss.Top, mainPane, " ", editorPane)
 
 	if !showSidebar {
 		return right
 	}
 
-	sidebarContent := titled("TABLES", RenderSidebar(b, sidebarCursor, contentW(sidebarW), height-2-1))
-	sidebarPane := boxed(sidebarContent, sidebarW, height, focus == FocusSidebar)
+	sidebarContent := RenderSidebar(b, sidebarCursor, contentW(sidebarW), height-2)
+	sidebarPane := boxed(sidebarContent, "TABLES", sidebarW, height, focus == FocusSidebar)
 	return lipgloss.JoinHorizontal(lipgloss.Top, sidebarPane, gap, right)
 }
 
-// titled prepends a pane title line to the body, if any.
-func titled(title, body string) string {
-	if title == "" {
-		return body
-	}
-	return styles.StylePaneTitle.Render(title) + "\n" + body
-}
-
-// boxed wraps content in a bordered pane of exactly the given size, with an
-// accent border when focused. lipgloss Width/Height apply to the content
-// (Width already includes the horizontal padding) and the border adds one
-// line/column per side, so the content area is width-4 × height-2; overflow
-// lines are trimmed.
-func boxed(content string, width, height int, focused bool) string {
+// boxed wraps content in a bordered pane of exactly the given size, with the
+// title drawn inside the top border and an accent border when focused.
+// lipgloss Width/Height apply to the content (Width already includes the
+// horizontal padding) and the border adds one line/column per side, so the
+// content area is width-4 × height-2; overflow lines are trimmed.
+func boxed(content, title string, width, height int, focused bool) string {
 	innerW := width - 2 // width of content + horizontal padding
 	innerH := height - 2
 	if innerW < 0 {
@@ -149,5 +137,33 @@ func boxed(content string, width, height int, focused bool) string {
 	if focused {
 		style = styles.StylePaneFocus
 	}
-	return style.Width(innerW).Height(innerH).Padding(0, 1).Render(content)
+	box := style.Width(innerW).Height(innerH).Padding(0, 1).Render(content)
+	if title == "" {
+		return box
+	}
+	lines := strings.Split(box, "\n")
+	lines[0] = topBorder(title, width, focused)
+	return strings.Join(lines, "\n")
+}
+
+// topBorder rebuilds the top border line of a pane with the title embedded:
+// ╭─ TABLES ──────────╮. The border runes keep the pane's border color and
+// the title keeps the pane title style.
+func topBorder(title string, width int, focused bool) string {
+	border := styles.StyleBorderLine
+	if focused {
+		border = styles.StyleBorderLineFocus
+	}
+	left := "╭─ "
+	maxTitle := width - 6
+	if maxTitle < 0 {
+		maxTitle = 0
+	}
+	title = truncate(title, maxTitle)
+	fill := width - runewidth.StringWidth(left) - runewidth.StringWidth(title) - 2
+	if fill < 1 {
+		fill = 1
+	}
+	return border.Render(left) + styles.StylePaneTitle.Render(title) +
+		border.Render(" "+strings.Repeat("─", fill)+"╮")
 }

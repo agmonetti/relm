@@ -205,7 +205,9 @@ func (m *Model) render() string {
 
 	header := m.renderHeader()
 	footer := m.renderFooter()
-	contentHeight := m.height - 2
+	// the layout is wrapped in a 1-char margin on all four sides: a blank
+	// line above the header and below the footer, plus the lateral padding
+	contentHeight := m.height - 4
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -226,9 +228,11 @@ func (m *Model) render() string {
 	body = styles.StyleOuterMargin.Render(body)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
+		" ",
 		" "+header+" ",
 		body,
-		" "+footer+" ")
+		" "+footer+" ",
+		" ")
 }
 
 func (m *Model) renderHeader() string {

@@ -110,10 +110,18 @@ var (
 	StylePaneFocus = StylePane.
 			BorderForeground(ColorAccent)
 
-	// StylePaneTitle is the title line at the top of a workspace pane.
+	// StylePaneTitle is the title shown inside the top border of a workspace pane.
 	StylePaneTitle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(ColorAccent)
+
+	// StyleBorderLine is the border rune line of a non-focused pane top border.
+	StyleBorderLine = lipgloss.NewStyle().
+			Foreground(ColorBorder)
+
+	// StyleBorderLineFocus is the border rune line of the focused pane top border.
+	StyleBorderLineFocus = lipgloss.NewStyle().
+				Foreground(ColorAccent)
 
 	// StyleOuterMargin insets the whole layout 1 char from the terminal edges.
 	StyleOuterMargin = lipgloss.NewStyle().Margin(0, 1)

@@ -75,8 +75,8 @@ func TestRenderWorkspace_HasPanelGapsAndPadding(t *testing.T) {
 	foundTitle := false
 	for _, l := range lines {
 		if s := ansi.Strip(l); strings.Contains(s, "TABLES") {
-			if !strings.HasPrefix(s, "│ TABLES") {
-				t.Errorf("sidebar content must be padded: %q", s)
+			if !strings.HasPrefix(s, "╭─ TABLES") {
+				t.Errorf("sidebar title must live in the top border: %q", s)
 			}
 			foundTitle = true
 		}
