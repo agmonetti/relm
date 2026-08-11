@@ -3,6 +3,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -409,6 +410,11 @@ func (m *Model) handleEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.Execute):
 		if m.loading {
+			return m, nil
+		}
+		if strings.TrimSpace(m.editorScreen.Value()) == "" {
+			m.editor.Result = nil
+			m.editor.Error = "write a query first"
 			return m, nil
 		}
 		return m, m.executeEditor()

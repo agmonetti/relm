@@ -236,6 +236,26 @@ func TestModel_EditorExecutesQuery(t *testing.T) {
 	}
 }
 
+func TestModel_EditorEmptyBufferShowsNotice(t *testing.T) {
+	db := createTestDB(t)
+
+	m := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	pressKey(t, m, "tab")
+	press(t, m, db)
+	pressKey(t, m, "enter")
+	pressKey(t, m, "tab") // to the editor
+
+	pressKey(t, m, "ctrl+r") // empty buffer
+
+	if m.loading {
+		t.Fatal("an empty buffer must not run a query")
+	}
+	if m.editor == nil || m.editor.Error != "write a query first" {
+		t.Fatalf("expected 'write a query first', got %+v", m.editor)
+	}
+}
+
 func TestModel_EditorShowsError(t *testing.T) {
 	db := createTestDB(t)
 
