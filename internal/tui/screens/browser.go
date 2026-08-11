@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -31,7 +32,7 @@ func RenderBrowser(b *browser.Browser, width, height int, showSidebar bool) stri
 	if showSidebar {
 		return lipgloss.JoinHorizontal(
 			lipgloss.Top,
-			renderSidebar(b, width/4),
+			renderSidebar(b, width/4, height),
 			"  ",
 			content,
 		)
@@ -39,12 +40,17 @@ func RenderBrowser(b *browser.Browser, width, height int, showSidebar bool) stri
 	return content
 }
 
-func renderSidebar(b *browser.Browser, width int) string {
-	if width < 10 {
+func renderSidebar(b *browser.Browser, width, height int) string {
+	if width < 10 || height < 1 {
 		return ""
 	}
+	tables := b.Tables
+	truncated := len(tables) > height
+	if truncated {
+		tables = tables[:height]
+	}
 	var sb strings.Builder
-	for _, t := range b.Tables {
+	for _, t := range tables {
 		name := truncate(t, width-2)
 		if t == b.ActiveTable {
 			sb.WriteString(styles.StyleSidebarActive.Render("> " + name))
@@ -52,6 +58,9 @@ func renderSidebar(b *browser.Browser, width int) string {
 			sb.WriteString(styles.StyleSidebarItem.Render("  " + name))
 		}
 		sb.WriteString("\n")
+	}
+	if truncated {
+		sb.WriteString(styles.StyleHeaderDim.Render(fmt.Sprintf("  +%d more", len(b.Tables)-height)) + "\n")
 	}
 	return sb.String()
 }

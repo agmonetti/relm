@@ -1,11 +1,14 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+
+	"github.com/agmonetti/relm/internal/browser"
 )
 
 func init() {
@@ -43,5 +46,21 @@ func TestRenderDataTable_NoSelectionHighlightsNothing(t *testing.T) {
 		if strings.Contains(line, "\x1b[") {
 			t.Errorf("line %d must not be highlighted with cursor=-1: %q", i, line)
 		}
+	}
+}
+
+func TestRenderSidebar_CapsToHeight(t *testing.T) {
+	b := &browser.Browser{ActiveTable: "table_000"}
+	for i := 0; i < 200; i++ {
+		b.Tables = append(b.Tables, fmt.Sprintf("table_%03d", i))
+	}
+
+	out := renderSidebar(b, 20, 5)
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) > 6 { // 5 visible entries + the "+N more" indicator
+		t.Errorf("sidebar lines = %d, want <= 6 (layout must not overflow)", len(lines))
+	}
+	if !strings.Contains(out, "+195 more") {
+		t.Errorf("expected '+195 more' indicator, got %q", out)
 	}
 }
