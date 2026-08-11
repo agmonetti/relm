@@ -42,7 +42,12 @@ func TestRenderDataTable_NoSelectionHighlightsNothing(t *testing.T) {
 	rows := [][]string{{"1", "2", "3"}, {"4", "5", "6"}}
 
 	out := RenderDataTable(cols, rows, -1, 40, 10)
+	// lines[0] is the column header (styled by design); the data rows must not
+	// be highlighted
 	for i, line := range strings.Split(out, "\n") {
+		if i == 0 {
+			continue
+		}
 		if strings.Contains(line, "\x1b[") {
 			t.Errorf("line %d must not be highlighted with cursor=-1: %q", i, line)
 		}

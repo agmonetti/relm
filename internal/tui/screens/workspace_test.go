@@ -1,0 +1,75 @@
+package screens
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/agmonetti/relm/internal/browser"
+	"github.com/agmonetti/relm/internal/editor"
+	"github.com/agmonetti/relm/internal/store"
+)
+
+func TestRenderWorkspace_ShowsPaneTitles(t *testing.T) {
+	out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
+		FocusSidebar, false, true, 0, 100, 24)
+
+	if !strings.Contains(out, "TABLES") {
+		t.Error("workspace must show the TABLES sidebar title")
+	}
+	if !strings.Contains(out, "SQL EDITOR") {
+		t.Error("workspace must show the SQL EDITOR title")
+	}
+	if !strings.Contains(out, "users · 2 rows") {
+		t.Errorf("main pane title missing: %q", out)
+	}
+	// the column header is rendered and styled (ANSI)
+	lines := strings.Split(out, "\n")
+	found := false
+	for _, l := range lines {
+		if strings.Contains(l, "id") && strings.Contains(l, "name") && strings.Contains(l, "email") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("column header missing: %q", out)
+	}
+}
+
+func TestRenderWorkspace_ExactHeight(t *testing.T) {
+	for _, h := range []int{12, 20, 30} {
+		out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
+			FocusSidebar, false, true, 0, 100, h)
+		if n := len(strings.Split(out, "\n")); n != h {
+			t.Errorf("height=%d: got %d lines", h, n)
+		}
+	}
+}
+
+func TestRenderWorkspace_WithoutSidebarSpansWidth(t *testing.T) {
+	// with the sidebar hidden the output must not contain the sidebar tables
+	out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
+		FocusSidebar, false, false, 0, 100, 20)
+	if strings.Contains(out, "TABLES") {
+		t.Error("sidebar must be hidden")
+	}
+}
+
+func sampleTestBrowser() *browser.Browser {
+	return &browser.Browser{
+		Tables:      []string{"orders", "users"},
+		ActiveTable: "users",
+		Columns: []store.Column{
+			{Name: "id", Type: "INTEGER", PK: true},
+			{Name: "name", Type: "TEXT"},
+			{Name: "email", Type: "TEXT"},
+		},
+		Rows:      [][]string{{"1", "Alice", "alice@test.com"}, {"2", "Bob", "bob@test.com"}},
+		TotalRows: 2,
+		PageSize:  50,
+	}
+}
+
+func sampleTestEditor() *editor.Editor {
+	return &editor.Editor{Buffer: "SELECT * FROM users", History: editor.NewHistory()}
+}

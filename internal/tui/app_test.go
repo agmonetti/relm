@@ -2,6 +2,7 @@ package tui
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -414,6 +415,37 @@ func TestModel_SaveAndDeleteSavedConnection(t *testing.T) {
 	}
 	if len(saved) != 0 {
 		t.Errorf("saved = %+v, want 0 after delete", saved)
+	}
+}
+
+func TestCorrectSize_GuardsAgainstHugeReportedSizes(t *testing.T) {
+	old := termGetSize
+	termGetSize = func(uintptr) (int, int, error) { return 120, 30, nil }
+	t.Cleanup(func() { termGetSize = old })
+
+	cases := []struct{ inW, inH, wantW, wantH int }{
+		{120, 30, 120, 30},   // normal size passes through
+		{120, 9001, 120, 30}, // conhost buffer height -> real viewport
+		{9001, 120, 120, 30}, // conhost buffer width -> real viewport
+		{0, 0, 120, 30},      // bogus -> re-query
+	}
+	for _, tc := range cases {
+		w, h := correctSize(tc.inW, tc.inH)
+		if w != tc.wantW || h != tc.wantH {
+			t.Errorf("correctSize(%d,%d) = (%d,%d), want (%d,%d)",
+				tc.inW, tc.inH, w, h, tc.wantW, tc.wantH)
+		}
+	}
+}
+
+func TestCorrectSize_ClampsWhenRequeryFails(t *testing.T) {
+	old := termGetSize
+	termGetSize = func(uintptr) (int, int, error) { return 0, 0, errors.New("no tty") }
+	t.Cleanup(func() { termGetSize = old })
+
+	w, h := correctSize(0, 0)
+	if w < 10 || h < 3 {
+		t.Errorf("correctSize(0,0) = (%d,%d), want sane minimums", w, h)
 	}
 }
 
