@@ -198,6 +198,11 @@ func (m *Model) View() string {
 }
 
 func (m *Model) render() string {
+	innerW := m.width - 2 // 1 char outer margin on each side
+	if innerW < 1 {
+		innerW = 1
+	}
+
 	header := m.renderHeader()
 	footer := m.renderFooter()
 	contentHeight := m.height - 2
@@ -208,18 +213,22 @@ func (m *Model) render() string {
 	var content string
 	switch m.screen {
 	case ScreenConnect:
-		content = m.connect.View(m.width, contentHeight)
+		content = m.connect.View(innerW, contentHeight)
 	case ScreenWorkspace:
 		content = screens.RenderWorkspace(m.browser, m.editorScreen, m.editor,
-			m.focus, m.structure, m.showSidebar, m.sidebarCursor, m.width, contentHeight)
+			m.focus, m.structure, m.showSidebar, m.sidebarCursor, innerW, contentHeight)
 	}
 
 	body := content
 	if m.err != "" {
 		body = content + "\n" + styles.StyleError.Render(m.err)
 	}
+	body = styles.StyleOuterMargin.Render(body)
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	return lipgloss.JoinVertical(lipgloss.Left,
+		" "+header+" ",
+		body,
+		" "+footer+" ")
 }
 
 func (m *Model) renderHeader() string {
@@ -288,7 +297,7 @@ func (m *Model) renderFooter() string {
 		right = fmt.Sprintf("%d-%d/%d%s", first, last, m.browser.TotalRows, arrow)
 	}
 
-	pad := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+	pad := (m.width - 2) - lipgloss.Width(left) - lipgloss.Width(right)
 	if pad < 1 {
 		pad = 1
 	}

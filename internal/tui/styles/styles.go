@@ -114,4 +114,7 @@ var (
 	StylePaneTitle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(ColorAccent)
+
+	// StyleOuterMargin insets the whole layout 1 char from the terminal edges.
+	StyleOuterMargin = lipgloss.NewStyle().Margin(0, 1)
 )

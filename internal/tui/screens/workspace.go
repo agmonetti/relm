@@ -52,19 +52,29 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 	if editorH < 2 {
 		editorH = 2
 	}
-	mainH := height - editorH
+	// one line of air between the main pane and the editor
+	mainH := height - editorH - 1
 	if mainH < 2 {
 		mainH = 2
 	}
 
-	// the right column spans the full width when the sidebar is hidden
-	gap := "  "
+	// the right column spans the full width when the sidebar is hidden; a
+	// one-char gap separates it from the sidebar
+	gap := " "
 	rightW := width
 	if showSidebar {
-		rightW = width - sidebarW - lipgloss.Width(gap)
+		rightW = width - sidebarW - 1
 	}
 	if rightW < 20 {
 		rightW = 20
+	}
+
+	// content width inside a pane: border (1 col/side) + padding (1 col/side)
+	contentW := func(paneW int) int {
+		if w := paneW - 4; w < 1 {
+			return 1
+		}
+		return paneW - 4
 	}
 
 	// main pane: a title line with the table name + count, then the content
@@ -81,7 +91,7 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 	if b == nil {
 		mainContent = styles.StyleHeaderDim.Render("no connection")
 	} else if structure {
-		mainContent = RenderStructure(b, rightW-2, mainBodyH)
+		mainContent = RenderStructure(b, contentW(rightW), mainBodyH)
 	} else if len(b.Tables) == 0 {
 		mainContent = styles.StyleHeaderDim.Render("no tables — use the editor to create one")
 	} else if b.ActiveTable != "" && len(b.Rows) == 0 {
@@ -91,22 +101,22 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		for i, c := range b.Columns {
 			cols[i] = c.Name
 		}
-		mainContent = RenderDataTable(cols, b.Rows, b.Cursor, rightW-2, mainBodyH)
+		mainContent = RenderDataTable(cols, b.Rows, b.Cursor, contentW(rightW), mainBodyH)
 	}
 	mainContent = titled(mainTitle, mainContent)
 
 	// editor pane: title + editor
-	editorContent := titled("SQL EDITOR", es.View(e, rightW-2, editorH-2-1))
+	editorContent := titled("SQL EDITOR", es.View(e, contentW(rightW), editorH-2-1))
 
 	mainPane := boxed(mainContent, rightW, mainH, focus == FocusMain)
 	editorPane := boxed(editorContent, rightW, editorH, focus == FocusEditor)
-	right := lipgloss.JoinVertical(lipgloss.Top, mainPane, editorPane)
+	right := lipgloss.JoinVertical(lipgloss.Top, mainPane, " ", editorPane)
 
 	if !showSidebar {
 		return right
 	}
 
-	sidebarContent := titled("TABLES", RenderSidebar(b, sidebarCursor, sidebarW-2, height-2-1))
+	sidebarContent := titled("TABLES", RenderSidebar(b, sidebarCursor, contentW(sidebarW), height-2-1))
 	sidebarPane := boxed(sidebarContent, sidebarW, height, focus == FocusSidebar)
 	return lipgloss.JoinHorizontal(lipgloss.Top, sidebarPane, gap, right)
 }
@@ -120,11 +130,12 @@ func titled(title, body string) string {
 }
 
 // boxed wraps content in a bordered pane of exactly the given size, with an
-// accent border when focused. lipgloss Width/Height apply to the content, and
-// the border adds one line/column per side, so the content is sized to
-// width-2 × height-2 and overflow lines are trimmed.
+// accent border when focused. lipgloss Width/Height apply to the content
+// (Width already includes the horizontal padding) and the border adds one
+// line/column per side, so the content area is width-4 × height-2; overflow
+// lines are trimmed.
 func boxed(content string, width, height int, focused bool) string {
-	innerW := width - 2
+	innerW := width - 2 // width of content + horizontal padding
 	innerH := height - 2
 	if innerW < 0 {
 		innerW = 0
@@ -138,5 +149,5 @@ func boxed(content string, width, height int, focused bool) string {
 	if focused {
 		style = styles.StylePaneFocus
 	}
-	return style.Width(innerW).Height(innerH).Render(content)
+	return style.Width(innerW).Height(innerH).Padding(0, 1).Render(content)
 }
