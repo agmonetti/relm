@@ -59,120 +59,98 @@ When choosing another engine, the form changes:
 
 ## General layout (work screens)
 
-The terminal is divided into three fixed zones:
+The terminal is divided into fixed zones:
 
 ```
 ┌─────────────────────────────────────────────┐
 │ HEADER (1 line)                             │
 │ relm · postgres@localhost:5432/mydb · users · browser │
-├───────────────┬─────────────────────────────┤
-│               │                             │
-│  SIDEBAR      │   MAIN CONTENT              │
-│  (tables)     │   (browser or editor)       │
-│  ~22 cols     │                             │
-│               │                             │
-├───────────────┴─────────────────────────────┤
+├──────────────┬──────────────────────────────┤
+│              │ MAIN PANE (browser/structure)│
+│  SIDEBAR     │                              │
+│  (tables)    ├──────────────────────────────┤
+│  ~1/4 width  │ SQL EDITOR (input + results) │
+│              │ ~1/3 height                  │
+├──────────────┴──────────────────────────────┤
 │ FOOTER (1 line)                             │
-│ [contextual shortcuts]          [row X/N]   │
+│ [contextual shortcuts]          [page X/Y]  │
 └─────────────────────────────────────────────┘
 ```
+
+After connecting there is a **single window**: the sidebar, the main pane and
+the SQL editor are always visible, each inside its own border. `Tab` moves the
+keyboard focus between panes (sidebar → main → editor); the focused pane has an
+accent border. There is no screen switching.
 
 - The header is always visible. Format: `relm · <engine> <identification> · <active table> · <mode>`.
   - Network: `relm · postgres@localhost:5432/mydb · users · browser`
   - SQLite: `relm · sqlite /data/app.db · users · browser`
-- The sidebar lists the database tables. It can be hidden with `Alt+B`.
-- The footer shows the most relevant shortcuts for the current screen.
-- The main content changes according to the active mode.
+- The sidebar lists the database tables (scrolled when there are many). It can be hidden with `Alt+B` and is hidden automatically below 60 columns.
+- The main pane shows the active table (browser) or its structure.
+- The editor pane is the SQL editor with its results.
+- The footer shows the most relevant shortcuts for the focused pane.
 
-## Screen 1: Browser
-
-Default mode after connecting.
+## Pane 1: Sidebar (tables)
 
 ```
-┌─────────────────────────────────────────────┐
-│ relm · postgres@localhost:5432/mydb · users · browser │
-├──────────────┬──────────────────────────────┤
-│ > users      │ id  name        email        │
-│   orders     │ ─── ─────────── ──────────── │
-│   products   │  1  Alice       a@test.com   │
-│   sessions   │  2  Bob         b@test.com   │
-│              │  3  Carol       c@test.com   │
-│              │ ...                          │
-├──────────────┴──────────────────────────────┤
-│ ↑↓ navigate  Tab editor  ? help  50/1240 ▼  │
-└─────────────────────────────────────────────┘
+│ > users      │
+│   orders     │
+│   products   │
+│   sessions   │
 ```
 
-**Behavior:**
-- On connecting, it loads the first table alphabetically.
-- Shows 50 rows per page (configurable in the future).
-- The ID column (if it exists) is always the first one.
+- `↑↓` / `j k` move a selection cursor over the table list (it scrolls).
+- `Enter` opens the selected table in the main pane. `>` marks the cursor;
+  the opened table is highlighted in accent.
+- `1..9` quick selection by index.
+- `PgUp` / `PgDn` move the cursor in steps of 10.
+
+## Pane 2: Main (browser or structure)
+
+**Browser** (default). Shows 50 rows per page (configurable in the future);
+the ID column (if it exists) is always the first one.
+
+```
+│ id  name        email        │
+│ ─── ─────────── ──────────── │
+│  1  Alice       a@test.com   │
+│  2  Bob         b@test.com   │
+│  3  Carol       c@test.com   │
+```
+
 - Column widths are calculated automatically to the maximum of the visible content, without exceeding the available space.
 - `NULL` values are shown as `∅` in dim gray.
 - Very long values are truncated with `…` to the column width.
+- `↑↓` / `j k` navigate rows; `PgUp`/`PgDn` (or `Ctrl+U`/`Ctrl+D`) change page; `g`/`G` go to the first/last row.
+- `r` reloads the table (after a write query it reloads automatically).
+- `i` switches the main pane to the structure; `Esc` returns to the browser.
 
-**Sidebar:**
-- `↑↓` navigates the table list.
-- `Enter` selects the table and loads the browser.
-- `1..9` quick selection by index.
-- The active table name is shown with a `>` cursor.
-
-## Screen 2: SQL Editor
-
-Activated with `Tab` from the browser, or `Ctrl+E`.
+**Structure**: columns with type and constraints (PK, NN, DEF) and indexes
+(name, columns, UNIQUE).
 
 ```
-┌─────────────────────────────────────────────┐
-│ relm · postgres@localhost:5432/mydb · — · editor │
-├──────────────┬──────────────────────────────┤
-│ > users      │ SELECT * FROM users          │
-│   orders     │ WHERE created_at > '2024-01' │
-│   products   │ LIMIT 10;                    │
-│   sessions   │ ─────────────────────────── │
-│              │ id  name    email            │
-│              │  4  Dave    d@test.com       │
-│              │  7  Eve     e@test.com       │
-│              │                             │
-├──────────────┴──────────────────────────────┤
-│ Ctrl+R run  ↑↓ history  Tab browser         │
-└─────────────────────────────────────────────┘
+│ Columns                      │
+│ ─────────────────────────── │
+│ id       INTEGER  PK  NN     │
+│ name     TEXT         NN     │
+│ email    TEXT         NN     │
+│                             │
+│ Indexes                     │
+│ idx_email  (email)  UNIQUE   │
 ```
 
-**Behavior:**
-- The input area occupies the upper half of the content.
-- The results appear below, separated by a line.
-- `Ctrl+R` runs the current query.
-- If the query is a `SELECT`, it shows the results in a table.
-- If it is `INSERT/UPDATE/DELETE`, it shows "N rows affected".
-- If there is an SQL error, it shows the engine's literal message in red, without crashing.
-- `↑↓` in the input navigates the history (last 100 queries, ring buffer).
+## Pane 3: SQL editor
+
+Always visible. The input area occupies the upper part of the pane, the results
+appear below, separated by a line.
+
+- `Ctrl+R` runs the query under the cursor.
+- If the query returns rows, it shows the results in a table; `INSERT/UPDATE/DELETE` shows "N rows affected"; an SQL error shows the engine's literal message in red, without crashing.
+- `↑↓` on the first/last line of an empty input navigates the history (last 100 queries, ring buffer).
 - The input supports multiple lines with `Enter`. `Ctrl+R` always runs the entire buffer.
+- `Ctrl+L` clears the input. `Esc` returns the focus to the main pane.
+- After a write query (INSERT/UPDATE/DELETE/CREATE/...), the sidebar and the open table auto-refresh.
 
-## Screen 3: Table structure
-
-Activated with `i` from the browser (info/inspect).
-
-> **Note:** the original SPEC used `Ctrl+I`, but in the terminal `Ctrl+I` and `Tab` are the same byte (0x09) and indistinguishable. `i` is used to inspect the structure.
-
-```
-┌─────────────────────────────────────────────┐
-│ relm · postgres@localhost:5432/mydb · users · structure │
-├──────────────┬──────────────────────────────┤
-│ > users      │ Columns                      │
-│   orders     │ ─────────────────────────── │
-│              │ id       INTEGER  PK  NN     │
-│              │ name     TEXT         NN     │
-│              │ email    TEXT         NN     │
-│              │ created  TIMESTAMP           │
-│              │                             │
-│              │ Indexes                     │
-│              │ ─────────────────────────── │
-│              │ idx_email  (email)  UNIQUE   │
-│              │                             │
-├──────────────┴──────────────────────────────┤
-│ Esc back  Tab editor                        │
-└─────────────────────────────────────────────┘
-```
 
 ## Full keymap
 
@@ -185,8 +163,12 @@ Activated with `i` from the browser (info/inspect).
 | `Ctrl+S` | Save current connection (on the connection screen) |
 | `Alt+B` | Toggle sidebar |
 | `?` | Toggle help panel |
-| `Tab` | Toggle between browser and editor |
-| `i` | View active table structure |
+| `Tab` | Move focus to the next pane (sidebar → main → editor) |
+| `Alt+1` / `Alt+2` / `Alt+3` | Jump to sidebar / main / editor |
+
+> `Alt+1..3` work on every terminal. `Ctrl+1..3` are also bound for terminals
+> with CSI-u support (kitty, wezterm), but `Ctrl+<digit>` is not distinguishable
+> from `<digit>` in classic terminals, so `Alt` is the reliable choice.
 
 ### Connection screen
 
@@ -194,11 +176,22 @@ Activated with `i` from the browser (info/inspect).
 |---|---|
 | `↑` / `↓` | Navigate list of saved connections (left panel) |
 | `Tab` | Switch between form fields |
+| `←` / `→` | Switch engine (on the engine selector) |
 | `Enter` | Connect |
 | `Ctrl+S` | Save connection |
 | `r` | Reset form to blank |
 
-### Browser
+### Sidebar
+
+| Key | Action |
+|---|---|
+| `↑` / `k` | Previous table |
+| `↓` / `j` | Next table |
+| `PgUp` / `PgDn` | Move 10 tables |
+| `Enter` | Open the selected table in the main pane |
+| `1..9` | Select table by index |
+
+### Main pane (browser)
 
 | Key | Action |
 |---|---|
@@ -208,8 +201,9 @@ Activated with `i` from the browser (info/inspect).
 | `PgDn` / `Ctrl+D` | Next page |
 | `g` / `Home` | First row |
 | `G` / `End` | Last row |
-| `r` | Refresh (reloads table) |
-| `1..9` | Select table by index in sidebar |
+| `r` | Refresh (reloads table; auto after a write query) |
+| `i` | Show structure |
+| `Esc` | Back to browser (from structure) |
 
 ### Editor
 
@@ -221,7 +215,7 @@ Activated with `i` from the browser (info/inspect).
 | `Ctrl+L` | Clear input |
 | `Ctrl+A` | Go to start of line |
 | `Ctrl+E` | Go to end of line |
-| `Esc` | Cancel / return to browser |
+| `Esc` | Back to the main pane |
 
 ## Styles and colors
 

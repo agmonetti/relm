@@ -244,15 +244,19 @@ type Model struct {
     connect *screens.ConnScreen // connection form
     browser *browser.Browser
     editor  *editor.Editor
-    screen  Screen            // ScreenConnect | ScreenBrowser | ScreenEditor | ScreenStructure
+    screen  Screen              // ScreenConnect | ScreenWorkspace
+    focus   screens.WorkspaceFocus // FocusSidebar | FocusMain | FocusEditor
+    structure bool              // the main pane shows the table structure
+    sidebarCursor int           // table selected in the sidebar
     width   int
     height  int
     keys    KeyMap
 }
 ```
 
-`Update()` dispatches messages to the active screen.
-`View()` renders the active screen using lipgloss.
+The workspace is a **single window** with three panes (sidebar, main, editor).
+`Update()` dispatches keys to the focused pane; `View()` renders the panes via
+`screens.RenderWorkspace`.
 
 **Rule:** all business logic lives in `browser`, `editor`, or `conn`. The TUI only translates keys into actions and calls methods.
 
@@ -263,9 +267,11 @@ main.go
   └─ creates tui.Model (without store)
        └─ bubbletea.Program.Run()
             ├─ ScreenConnect: user fills in the form → connectMsg
-            │    └─ Update() → store.New(cfg) → browser.New(store)
-            ├─ KeyMsg → Update() → browser.NextPage() → store.SelectTablePage()
-            ├─ KeyMsg → Update() → editor.Execute() → store.Query()
+            │    └─ Update() → store.New(cfg) → browser.New(store) → ScreenWorkspace
+            ├─ KeyMsg (sidebar) → browser.SelectTable(table) → store.Columns/Indexes/Page
+            ├─ KeyMsg (main)    → browser.NextPage() → store.SelectTablePage()
+            ├─ KeyMsg (editor)  → goroutine → editor.ExecuteAt() → store.Query()/Exec()
+            │    └─ editorDoneMsg → update editor; if write query → browser.Reload(store)
             └─ WindowSizeMsg → adjusts width/height
 ```
 

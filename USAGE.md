@@ -81,30 +81,46 @@ INSERT INTO users (name, email) VALUES ('Alice','alice@test.com'), ('Bob','bob@t
 
 2. With `Tab` move to the `File` field, type `test.db` (or the full path) and press `Enter`.
 
-3. You are now in the **browser**. The sidebar lists the tables and the first alphabetically (`orders`) is selected — it is empty in the example database:
+3. You are now in the **workspace**: a single window with the sidebar (tables),
+   the main pane (the open table) and the SQL editor at the bottom. The sidebar
+   has the focus. The first table alphabetically (`orders`) is open — it is
+   empty in the example database:
 
 ```
-│ > orders    │ empty table
-│   users     │
+┌──────────────────────────────────────┐
+│ > orders    │ empty table            │
+│   users     │                        │
+│             ├────────────────────────┤
+│             │  ctrl+r to run         │
+└──────────────────────────────────────┘
 ```
 
-Press `↓` to go down to `users` and `Enter` to select it:
+Press `↓` to move the sidebar cursor to `users` and `Enter` to open it in the
+main pane:
 
 ```
-│   orders    │ id  name        email          │
-│ > users     │ 1   Alice       alice@test.com │
-│             │ 2   Bob         bob@test.com   │
+┌──────────────────────────────────────┐
+│   orders    │ id  name        email  │
+│ > users     │ 1   Alice       alice  │
+│             │ 2   Bob         bob    │
+│             ├────────────────────────┤
+│             │  ctrl+r to run         │
+└──────────────────────────────────────┘
 ```
 
-- `↑↓` / `j k` navigate the rows, `PgUp/PgDn` change the page.
+- In the sidebar: `↑↓` / `j k` move between tables, `Enter` opens the selected
+  table. In the main pane: `↑↓` / `j k` navigate the rows, `PgUp/PgDn` change
+  the page.
+- `Tab` moves the focus to the next pane (sidebar → main → editor);
+  `Alt+1/2/3` jump directly to a pane.
 - `i` shows the active table structure (columns, constraints, indexes).
 - `r` reloads the table.
 
 ### 1c. Run queries
 
-1. Press `Tab` to go to the **SQL editor**.
+1. Press `Tab` twice (or `Alt+3`) to focus the **SQL editor** at the bottom.
 2. Type a query, e.g. `SELECT * FROM users WHERE id > 1;` and press `Ctrl+R`.
-3. The result appears below, with the columns as header:
+3. The result appears below the editor input, with the columns as header:
 
 ```
 │ SELECT * FROM users WHERE id > 1          │
@@ -117,7 +133,9 @@ Press `↓` to go down to `users` and `Enter` to select it:
 - If the query has an SQL error, the message is shown in red, without crashing.
 - `↑`/`↓` with an empty input browse the history of the last 100 queries.
 - `Ctrl+L` clears the input.
-- `Tab` returns to the browser.
+- After a write query (INSERT/UPDATE/DELETE/CREATE/...), the sidebar and the
+  open table **auto-refresh**: no need to press `r`.
+- `Esc` returns the focus to the main pane.
 
 ---
 
@@ -234,9 +252,11 @@ With the connection screen ready, `Ctrl+S` saves it in
 | `Ctrl+C` / `q` | Quit |
 | `Ctrl+N` | New connection |
 | `Ctrl+S` | Save connection |
-| `Tab` | Browser ↔ Editor |
+| `Tab` | Next pane (sidebar → main → editor) |
+| `Alt+1` / `Alt+2` / `Alt+3` | Jump to sidebar / main / editor |
 | `i` | Active table structure |
-| `↑↓` / `j k` | Navigate rows |
+| `Enter` (sidebar) | Open the selected table |
+| `↑↓` / `j k` | Navigate rows (main) or tables (sidebar) |
 | `PgUp` / `PgDn` | Change page |
 | `r` | Refresh |
 | `Ctrl+R` | Run query (editor) |

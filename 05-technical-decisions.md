@@ -8,7 +8,7 @@
 - Exported structs with descriptive names: `SQLiteStore`, `PGStore`, `MySQLStore`, `MSSQLStore`, `Browser`, `Editor`.
 - Interfaces suffixed by behavior, not implementation: `Store` (not `IStore`, not `StoreInterface`).
 - Errors prefixed with `Err`: `ErrUnsupportedDriver`, `ErrConnection`, `ErrTableNotFound`, `ErrInvalidQuery`.
-- Screen constants as their own type: `type Screen int` with `const (ScreenConnect Screen = iota; ScreenBrowser; ScreenEditor; ScreenStructure)`.
+- Screen constants as their own type: `type Screen int` with `const (ScreenConnect Screen = iota; ScreenWorkspace)`. Pane focus is `screens.WorkspaceFocus` (`FocusSidebar`, `FocusMain`, `FocusEditor`).
 - Engine constructors by driver name: `sqlite.New`, `postgres.New`, `mysql.NewMySQL`, `mysql.NewMariaDB`, `mssql.New`.
 
 ### Function structure

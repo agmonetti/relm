@@ -35,9 +35,11 @@ The **connection screen** opens. Pick the engine with `←`/`→`, fill in the f
 | `Ctrl+C` / `q` | Quit |
 | `Ctrl+N` | New connection |
 | `Ctrl+S` | Save connection (connection screen) |
-| `Tab` | Toggle browser ↔ editor |
-| `i` | View active table structure |
-| `↑↓` / `k j` | Navigate rows |
+| `Tab` | Move focus to the next pane (sidebar → main → editor) |
+| `Alt+1` / `Alt+2` / `Alt+3` | Jump to sidebar / main / editor |
+| `i` | View the active table structure (main pane) |
+| `Enter` (sidebar) | Open the selected table in the main pane |
+| `↑↓` / `k j` | Navigate rows (main) or tables (sidebar) |
 | `PgUp` / `PgDn` | Change page |
 | `r` | Refresh table |
 | `Alt+B` | Show/hide sidebar |
@@ -48,6 +50,10 @@ The **connection screen** opens. Pick the engine with `←`/`→`, fill in the f
 
 ## Features
 
+- Single-window TUI: sidebar, browser/main and SQL editor are always visible
+  in separate panes with visible borders; `Tab` / `Alt+1..3` move the focus.
+- Auto-refresh: after a write query (INSERT/UPDATE/DELETE/CREATE/...) the
+  sidebar and the open table are reloaded automatically.
 - Table browser with pagination (50 rows per page) and a navigable sidebar.
 - Multiline SQL editor with history of the last 100 queries.
 - Table structure: columns, constraints and indexes.
