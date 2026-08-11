@@ -226,6 +226,16 @@ This file documents crossroads and decisions the agent makes during development,
 
 **Lesson:** in Makefiles, recipe indentation is a tab (not spaces). To avoid the problem, keep each command on a single line.
 
+---
+
+## L-23 — SQLite switched to `modernc.org/sqlite` (pure Go, no CGO)
+
+**Crossroads:** `mattn/go-sqlite3` requires gcc/CGO. On a machine without a C toolchain the binary **builds** (mattn ships a stub) but SQLite fails at runtime with "go-sqlite3 requires cgo", and every SQLite-dependent test fails. L-04/L-17 documented `modernc.org/sqlite` as an escape hatch, but it was never wired in.
+
+**Decision:** migrate SQLite to `modernc.org/sqlite` (registers driver `"sqlite"`). The DSN changes from mattn params to pragma syntax: `?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)` (read-only: `?mode=ro`). Direct `sql.Open("sqlite3", ...)` callers in tests switch to `"sqlite"`. Remove the gcc requirement from the docs; `make release` now uses `CGO_ENABLED=0`.
+
+**Lesson:** a CGO driver that "builds without CGO" via a stub is a silent failure — the binary compiles but the engine is broken at runtime. Prefer a pure-Go driver when the tool must be a single portable binary. Bonus: on Windows, tests that open a SQLite file must close the store, or `TempDir` cleanup fails because the file stays locked. It was the same with mattn; the stub hid it before.
+
 
 
 

@@ -8,7 +8,7 @@ This directory contains everything you need to implement `relm` without asking a
 
 | Engine | Go package |
 |---|---|
-| **SQLite** | `github.com/mattn/go-sqlite3` |
+| **SQLite** | `modernc.org/sqlite` |
 | **PostgreSQL** | `github.com/jackc/pgx/v5` |
 | **MySQL** | `github.com/go-sql-driver/mysql` |
 | **MariaDB** | `github.com/go-sql-driver/mysql` |

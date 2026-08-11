@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 
 	_ "github.com/agmonetti/relm/internal/store/mssql"
 	_ "github.com/agmonetti/relm/internal/store/mysql" // registers the engines for the tests
@@ -20,7 +20,7 @@ import (
 func createTestDB(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "test.db")
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -42,6 +42,19 @@ func createTestDB(t *testing.T) string {
 func press(t *testing.T, m *Model, text string) {
 	t.Helper()
 	step(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text)})
+}
+
+// newModel creates a Model and closes its store at the end of the test, so the
+// SQLite file is not left locked (Windows fails to delete a TempDir in use).
+func newModel(t *testing.T) *Model {
+	t.Helper()
+	m := New()
+	t.Cleanup(func() {
+		if m.store != nil {
+			m.store.Close()
+		}
+	})
+	return m
 }
 
 var namedKeys = map[string]tea.KeyType{
@@ -103,7 +116,7 @@ func step(t *testing.T, m *Model, msg tea.Msg) {
 }
 
 func TestModel_StartsOnConnect(t *testing.T) {
-	m := New()
+	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	if m.screen != ScreenConnect {
 		t.Fatalf("screen = %d, want ScreenConnect", m.screen)
@@ -117,7 +130,7 @@ func TestModel_StartsOnConnect(t *testing.T) {
 func TestModel_ConnectToSQLiteShowsBrowser(t *testing.T) {
 	db := createTestDB(t)
 
-	m := New()
+	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
 	// Tab: focus the File field
@@ -143,7 +156,7 @@ func TestModel_ConnectToSQLiteShowsBrowser(t *testing.T) {
 }
 
 func TestModel_ConnectErrorStaysOnConnect(t *testing.T) {
-	m := New()
+	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
 	pressKey(t, m, "tab")
@@ -161,7 +174,7 @@ func TestModel_ConnectErrorStaysOnConnect(t *testing.T) {
 func TestModel_TabSwitchesToEditor(t *testing.T) {
 	db := createTestDB(t)
 
-	m := New()
+	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	pressKey(t, m, "tab")
 	press(t, m, db)
@@ -176,7 +189,7 @@ func TestModel_TabSwitchesToEditor(t *testing.T) {
 func TestModel_NewSessionReturnsToConnect(t *testing.T) {
 	db := createTestDB(t)
 
-	m := New()
+	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	pressKey(t, m, "tab")
 	press(t, m, db)
@@ -194,7 +207,7 @@ func TestModel_NewSessionReturnsToConnect(t *testing.T) {
 func TestModel_EditorExecutesQuery(t *testing.T) {
 	db := createTestDB(t)
 
-	m := New()
+	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	pressKey(t, m, "tab")
 	press(t, m, db)
@@ -226,7 +239,7 @@ func TestModel_EditorExecutesQuery(t *testing.T) {
 func TestModel_EditorShowsError(t *testing.T) {
 	db := createTestDB(t)
 
-	m := New()
+	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	pressKey(t, m, "tab")
 	press(t, m, db)
@@ -247,7 +260,7 @@ func TestModel_EditorShowsError(t *testing.T) {
 func TestModel_EditorHistoryNavigation(t *testing.T) {
 	db := createTestDB(t)
 
-	m := New()
+	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	pressKey(t, m, "tab")
 	press(t, m, db)
@@ -276,7 +289,7 @@ func TestModel_EditorHistoryNavigation(t *testing.T) {
 func TestModel_RefreshShowsInsertedRow(t *testing.T) {
 	db := createTestDB(t)
 
-	m := New()
+	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	pressKey(t, m, "tab")
 	press(t, m, db)
@@ -321,7 +334,7 @@ func TestModel_ConnectToPostgres(t *testing.T) {
 	db := t.TempDir() + "/none.db" // placeholder no usado
 	_ = db
 
-	m := New()
+	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
 	// Connect through the full form: postgres engine, host, user, pass, database

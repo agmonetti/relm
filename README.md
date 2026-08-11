@@ -11,16 +11,14 @@ Supports exactly **five engines**: SQLite, PostgreSQL, MySQL, MariaDB and SQL Se
 
 ## Installation
 
-Requires Go 1.22+ and `gcc` (because of the CGO SQLite driver).
+Requires Go 1.22+. No CGO or gcc needed: the SQLite driver is the pure-Go
+`modernc.org/sqlite`.
 
 ```bash
 go install github.com/agmonetti/relm@latest
 # or from the repo:
 go build -o relm ./cmd/relm
 ```
-
-> **Without gcc:** SQLite can be replaced with the pure-Go `modernc.org/sqlite` driver
-> in `internal/store/sqlite/` — the rest of the system does not change.
 
 ## Usage
 
@@ -85,7 +83,7 @@ go test ./...
 ## Stack
 
 Go 1.22+, bubbletea + lipgloss + bubbles (Charmbracelet), drivers:
-`mattn/go-sqlite3`, `jackc/pgx/v5`, `go-sql-driver/mysql`, `microsoft/go-mssqldb`.
+`modernc.org/sqlite`, `jackc/pgx/v5`, `go-sql-driver/mysql`, `microsoft/go-mssqldb`.
 
 ## Design documentation
 

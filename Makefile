@@ -25,11 +25,10 @@ clean:
 
 # Multi-platform build.
 #
-# SQLite uses CGO (mattn/go-sqlite3), so cross-compiling to darwin requires
-# osxcross (or CI on macOS). CGO-free alternative: swap the import of
-# `mattn/go-sqlite3` for `modernc.org/sqlite` in internal/store/sqlite/
-# (verified: builds to darwin/arm64 with CGO_ENABLED=0).
+# The SQLite driver is modernc.org/sqlite (pure Go), so cross-compiling works
+# with CGO_ENABLED=0 on all platforms, no gcc required.
 release:
-	GOOS=linux   GOARCH=amd64 CGO_ENABLED=1 go build -o bin/$(BINARY)-linux-amd64   $(PKG)
-	GOOS=darwin  GOARCH=amd64 CGO_ENABLED=1 go build -o bin/$(BINARY)-darwin-amd64  $(PKG)
-	GOOS=darwin  GOARCH=arm64 CGO_ENABLED=1 go build -o bin/$(BINARY)-darwin-arm64  $(PKG)
+	GOOS=linux    GOARCH=amd64 CGO_ENABLED=0 go build -o bin/$(BINARY)-linux-amd64   $(PKG)
+	GOOS=darwin   GOARCH=amd64 CGO_ENABLED=0 go build -o bin/$(BINARY)-darwin-amd64  $(PKG)
+	GOOS=darwin   GOARCH=arm64 CGO_ENABLED=0 go build -o bin/$(BINARY)-darwin-arm64  $(PKG)
+	GOOS=windows  GOARCH=amd64 CGO_ENABLED=0 go build -o bin/$(BINARY)-windows-amd64.exe $(PKG)

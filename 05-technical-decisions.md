@@ -62,20 +62,24 @@ func (s *SQLiteStore) Tables() ([]string, error) {
 
 ## Connection and DSN per engine
 
-### SQLite (mattn/go-sqlite3)
+### SQLite (modernc.org/sqlite)
+
+Pure-Go driver (no CGO/gcc). It registers the `"sqlite"` driver; pragmas go
+through `_pragma=` query parameters:
 
 ```go
 // Read/write mode (default)
-dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000", path)
+dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)", path)
 
 // Read-only mode ("Read only" toggle in the form, cfg.ReadOnly)
-dsn := fmt.Sprintf("file:%s?mode=ro&_foreign_keys=on", path)
+dsn := fmt.Sprintf("file:%s?mode=ro&_pragma=foreign_keys(1)", path)
 ```
 
-- `_journal_mode=WAL`: better performance for concurrent reads. Not applicable in read-only.
-- `_foreign_keys=on`: SQLite doesn't enable them by default. Always enable.
-- `_busy_timeout=5000`: wait up to 5 seconds before returning `SQLITE_BUSY`.
+- `_pragma=journal_mode(WAL)`: better performance for concurrent reads. Not applicable in read-only.
+- `_pragma=foreign_keys(1)`: SQLite doesn't enable them by default. Always enable.
+- `_pragma=busy_timeout(5000)`: wait up to 5 seconds before returning `SQLITE_BUSY`.
 - `ReadOnly` is also persisted in saved connections (`connections.json`, field `read_only`).
+- The pure-Go driver removes the gcc requirement and enables cross-compilation with `CGO_ENABLED=0`.
 
 ### PostgreSQL (jackc/pgx/v5)
 

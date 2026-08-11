@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite" // pure-Go driver, no CGO required
 
 	"github.com/agmonetti/relm/internal/conn"
 	"github.com/agmonetti/relm/internal/store"
@@ -28,11 +28,11 @@ func New(cfg conn.ConnectionConfig) (*Store, error) {
 	}
 	dsn := "file:" + cfg.Path
 	if cfg.ReadOnly {
-		dsn += "?mode=ro&_foreign_keys=on"
+		dsn += "?mode=ro&_pragma=foreign_keys(1)"
 	} else {
-		dsn += "?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000"
+		dsn += "?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
 	}
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", store.ErrConnection, err)
 	}
