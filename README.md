@@ -70,6 +70,10 @@ go vet ./...         # static lint
 go run ./cmd/relm    # run
 ```
 
+`relm --print-layout` prints the connect screen and a sample workspace as plain
+text (with the terminal size the app detects) — useful to report layout bugs
+from any terminal.
+
 ### Network engine tests
 
 The PostgreSQL/MySQL/MariaDB/SQL Server tests are integration tests and are

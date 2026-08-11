@@ -2,6 +2,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -15,6 +16,12 @@ import (
 )
 
 func main() {
+	printLayout := flag.Bool("print-layout", false, "print the layout as text and exit (debug)")
+	flag.Parse()
+	if *printLayout {
+		os.Exit(tui.PrintLayout())
+	}
+
 	p := tea.NewProgram(tui.New(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "relm: %v\n", err)
