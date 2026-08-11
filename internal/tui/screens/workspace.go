@@ -53,8 +53,12 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		mainH = 2
 	}
 
+	// the right column spans the full width when the sidebar is hidden
 	gap := "  "
-	rightW := width - sidebarW - lipgloss.Width(gap)
+	rightW := width
+	if showSidebar {
+		rightW = width - sidebarW - lipgloss.Width(gap)
+	}
 	if rightW < 20 {
 		rightW = 20
 	}
