@@ -16,7 +16,7 @@ func TestQuoteIdent(t *testing.T) {
 }
 
 func TestLimit(t *testing.T) {
-	if got := Limit(50, 100); got != "LIMIT 50 OFFSET 100" {
+	if got := Limit(50, 100); got != "ORDER BY 1 LIMIT 50 OFFSET 100" {
 		t.Errorf("Limit = %q", got)
 	}
 }

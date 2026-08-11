@@ -157,9 +157,12 @@ type Dialect struct {
 }
 ```
 
-- **SQLite and PostgreSQL:** `"ident"`, `LIMIT n OFFSET m`.
-- **MySQL and MariaDB:** `` `ident` ``, `LIMIT n OFFSET m`.
-- **SQL Server:** `[ident]`, `OFFSET m ROWS FETCH NEXT n ROWS ONLY`.
+- **SQLite and PostgreSQL:** `"ident"`, `ORDER BY 1 LIMIT n OFFSET m`.
+- **MySQL and MariaDB:** `` `ident` ``, `ORDER BY 1 LIMIT n OFFSET m`.
+- **SQL Server:** `[ident]`, `ORDER BY 1 OFFSET m ROWS FETCH NEXT n ROWS ONLY`.
+
+The `ORDER BY 1` (first column) makes the browser pagination stable; it is the
+same heuristic SQL Server already required for `OFFSET/FETCH`.
 
 Introspection (tables, columns, indexes, version) also lives in the engine's dialect:
 

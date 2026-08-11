@@ -50,12 +50,13 @@ func (s *SQLiteStore) Tables() ([]string, error) {
 
 | Engine | QuoteIdent | Pagination | Schema source |
 |---|---|---|---|
-| SQLite | `"name"` | `LIMIT n OFFSET m` | `sqlite_master` + `PRAGMA` |
-| PostgreSQL | `"name"` | `LIMIT n OFFSET m` | `information_schema` + `pg_indexes` |
-| MySQL | `` `name` `` | `LIMIT n OFFSET m` | `information_schema` |
-| MariaDB | `` `name` `` | `LIMIT n OFFSET m` | `information_schema` |
-| SQL Server | `[name]` | `OFFSET m ROWS FETCH NEXT n ROWS ONLY` | `INFORMATION_SCHEMA` + `sys.indexes` |
+| SQLite | `"name"` | `ORDER BY 1 LIMIT n OFFSET m` | `sqlite_master` + `PRAGMA` |
+| PostgreSQL | `"name"` | `ORDER BY 1 LIMIT n OFFSET m` | `information_schema` + `pg_indexes` |
+| MySQL | `` `name` `` | `ORDER BY 1 LIMIT n OFFSET m` | `information_schema` |
+| MariaDB | `` `name` `` | `ORDER BY 1 LIMIT n OFFSET m` | `information_schema` |
+| SQL Server | `[name]` | `ORDER BY 1 OFFSET m ROWS FETCH NEXT n ROWS ONLY` | `INFORMATION_SCHEMA` + `sys.indexes` |
 
+- `ORDER BY 1` (first column) keeps the pagination stable when rows change between refreshes; it is the same heuristic SQL Server already required.
 - `LIMIT n OFFSET m` uses integers (page, pageSize), safe for direct interpolation.
 - Identifiers (table/column names) are ALWAYS escaped with `QuoteIdent`, including the browser's active table: `SELECT * FROM "my table"`.
 - `Result.Rows` is `[][]string` in all engines. The engine store converts each native type to string (including `[]byte`, `time.Time`, `decimal`) and `NULL` to `""` (the UI renders it as `∅`).
