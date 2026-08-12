@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"os"
@@ -16,6 +17,7 @@ import (
 	_ "github.com/agmonetti/relm/internal/store/postgres"
 	_ "github.com/agmonetti/relm/internal/store/sqlite"
 	"github.com/agmonetti/relm/internal/conn"
+	"github.com/agmonetti/relm/internal/prefs"
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
@@ -91,6 +93,7 @@ var namedKeys = map[string]tea.KeyType{
 	"ctrl+i": tea.KeyCtrlI,
 	"ctrl+l": tea.KeyCtrlL,
 	"ctrl+n": tea.KeyCtrlN,
+	"ctrl+p": tea.KeyCtrlP,
 	"ctrl+r": tea.KeyCtrlR,
 	"ctrl+s": tea.KeyCtrlS,
 }
@@ -242,6 +245,85 @@ func TestModel_SidebarEnterOpensTable(t *testing.T) {
 	pressKey(t, m, "enter")
 	if m.browser.ActiveTable != "users" {
 		t.Errorf("ActiveTable = %q, want users", m.browser.ActiveTable)
+	}
+}
+
+func TestModel_SidebarFirstLast(t *testing.T) {
+	m := connect(t)
+	// tables: orders, users (alphabetical); cursor starts at 0
+	pressKey(t, m, "end") // last table
+	if m.sidebarCursor != 1 {
+		t.Fatalf("end: sidebarCursor = %d, want 1", m.sidebarCursor)
+	}
+	press(t, m, "g") // first table
+	if m.sidebarCursor != 0 {
+		t.Errorf("g: sidebarCursor = %d, want 0", m.sidebarCursor)
+	}
+}
+
+func TestModel_OpenSettingsAndSave(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+
+	pressKey(t, m, "ctrl+p")
+	if m.screen != ScreenSettings {
+		t.Fatalf("screen = %d, want ScreenSettings", m.screen)
+	}
+	if v := m.View(); !strings.Contains(v, "Settings") {
+		t.Errorf("settings screen does not render: %q", v)
+	}
+	// prefill the value as if the user typed it, then save
+	m.settings.SetValue("90")
+	pressKey(t, m, "enter")
+
+	if m.screen != ScreenWorkspace {
+		t.Fatalf("after save screen = %d, want back to workspace", m.screen)
+	}
+	if m.prefs.QueryTimeoutSeconds != 90 {
+		t.Errorf("prefs.QueryTimeoutSeconds = %d, want 90", m.prefs.QueryTimeoutSeconds)
+	}
+	p, err := prefs.Load()
+	if err != nil {
+		t.Fatalf("prefs.Load: %v", err)
+	}
+	if p.QueryTimeoutSeconds != 90 {
+		t.Errorf("persisted QueryTimeoutSeconds = %d, want 90", p.QueryTimeoutSeconds)
+	}
+}
+
+func TestModel_SettingsEscBack(t *testing.T) {
+	m := connect(t)
+	pressKey(t, m, "ctrl+p")
+	if m.screen != ScreenSettings {
+		t.Fatalf("screen = %d, want ScreenSettings", m.screen)
+	}
+	pressKey(t, m, "esc")
+	if m.screen != ScreenWorkspace {
+		t.Errorf("after esc screen = %d, want workspace", m.screen)
+	}
+}
+
+func TestModel_SettingsKeepsContext(t *testing.T) {
+	m := newModel(t) // starts on the connect screen
+	pressKey(t, m, "ctrl+p")
+	if m.screen != ScreenSettings {
+		t.Fatalf("screen = %d, want ScreenSettings", m.screen)
+	}
+	pressKey(t, m, "esc")
+	if m.screen != ScreenConnect {
+		t.Errorf("after esc screen = %d, want connect", m.screen)
+	}
+}
+
+func TestFriendlyErr(t *testing.T) {
+	if got := friendlyErr(context.DeadlineExceeded).Error(); got != "query timed out" {
+		t.Errorf("DeadlineExceeded -> %q", got)
+	}
+	if got := friendlyErr(context.Canceled).Error(); got != "query cancelled" {
+		t.Errorf("Canceled -> %q", got)
+	}
+	if got := friendlyErr(errors.New("boom")); got.Error() != "boom" {
+		t.Errorf("other error -> %q", got)
 	}
 }
 

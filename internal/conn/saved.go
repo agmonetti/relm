@@ -56,16 +56,20 @@ func FromConfig(cfg ConnectionConfig) SavedConnection {
 	}
 }
 
+// ConfigDir returns the relm config directory. RELM_CONFIG_DIR overrides the
+// OS config dir (also used by the tests).
+func ConfigDir() (string, error) {
+	if dir := os.Getenv("RELM_CONFIG_DIR"); dir != "" {
+		return dir, nil
+	}
+	return os.UserConfigDir()
+}
+
 // savedPath returns the path of the saved connections file.
-// RELM_CONFIG_DIR overrides the config directory (also used by the tests).
 func savedPath() (string, error) {
-	dir := os.Getenv("RELM_CONFIG_DIR")
-	if dir == "" {
-		var err error
-		dir, err = os.UserConfigDir()
-		if err != nil {
-			return "", err
-		}
+	dir, err := ConfigDir()
+	if err != nil {
+		return "", err
 	}
 	return filepath.Join(dir, "relm", "connections.json"), nil
 }

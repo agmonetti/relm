@@ -3,9 +3,11 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -16,6 +18,7 @@ import (
 	"github.com/agmonetti/relm/internal/browser"
 	"github.com/agmonetti/relm/internal/conn"
 	"github.com/agmonetti/relm/internal/editor"
+	"github.com/agmonetti/relm/internal/prefs"
 	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/screens"
 	"github.com/agmonetti/relm/internal/tui/styles"
@@ -57,6 +60,8 @@ const (
 	ScreenConnect Screen = iota
 	// ScreenWorkspace is the single working screen: sidebar + main + editor.
 	ScreenWorkspace
+	// ScreenSettings is the preferences screen.
+	ScreenSettings
 )
 
 // editorDoneMsg carries the result of a query run in the background.
@@ -70,13 +75,16 @@ type editorDoneMsg struct {
 type Model struct {
 	store        store.Store
 	connect      *screens.ConnScreen
+	settings     *screens.SettingsScreen
 	browser      *browser.Browser
 	editor       *editor.Editor
 	editorScreen *screens.EditorScreen
 	screen       Screen
+	prevScreen   Screen // screen to return to from ScreenSettings
 	focus        screens.WorkspaceFocus
 	keys         KeyMap
 	cfgLabel     string
+	prefs        prefs.Prefs
 
 	// workspace state
 	structure     bool // the main pane shows the structure of the active table
@@ -84,7 +92,8 @@ type Model struct {
 
 	spinner spinner.Model
 	loading bool
-	queryID int // token to discard results from stale queries
+	queryID int    // token to discard results from stale queries
+	cancel  context.CancelFunc // cancels the running query
 
 	width       int
 	height      int
@@ -96,15 +105,19 @@ type Model struct {
 // New creates the initial model (connection screen).
 func New() *Model {
 	saved, _ := conn.LoadSaved()
+	p, _ := prefs.Load()
 	return &Model{
 		connect:      screens.NewConnScreen(saved),
+		settings:     screens.NewSettingsScreen(),
 		editor:       editor.New(),
 		editorScreen: screens.NewEditorScreen(),
 		screen:       ScreenConnect,
+		prevScreen:   ScreenConnect,
 		focus:        screens.FocusSidebar,
 		keys:         DefaultKeyMap(),
 		spinner:      spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(styles.StyleHeaderDim)),
 		showSidebar:  true,
+		prefs:        p,
 	}
 }
 
@@ -133,13 +146,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "ctrl+n":
-			m.newSession()
+			if m.screen != ScreenSettings {
+				m.newSession()
+			}
+			return m, nil
+		case "ctrl+p":
+			if m.screen != ScreenSettings {
+				m.openSettings()
+			}
+			return m, nil
+		}
+
+		// while a query runs, Esc cancels it instead of the pane default
+		if m.loading && msg.Type == tea.KeyEsc {
+			m.cancelQuery()
 			return m, nil
 		}
 
 		switch m.screen {
 		case ScreenConnect:
 			return m.handleConnectKeys(msg)
+		case ScreenSettings:
+			return m.handleSettingsKeys(msg)
 		case ScreenWorkspace:
 			return m.handleWorkspaceKeys(msg)
 		}
@@ -153,7 +181,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.DeleteConnectionMsg:
 		m.deleteConnection(msg.Name)
 
+	case screens.SettingsMsg:
+		m.prefs.QueryTimeoutSeconds = msg.QueryTimeoutSeconds
+		if err := m.prefs.Save(); err != nil {
+			m.settings.SetError(err.Error())
+			return m, nil
+		}
+		m.leaveSettings()
+
+	case screens.SettingsBackMsg:
+		m.leaveSettings()
+
 	case editorDoneMsg:
+		m.cancelQuery()
 		if msg.token != m.queryID {
 			return m, nil // stale result: the session changed
 		}
@@ -163,7 +203,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		hist := m.editor.History
 		m.editor = msg.ed
 		m.editor.History = hist
-		m.setErr(msg.err)
+		m.setErr(friendlyErr(msg.err))
 		m.editorScreen.Focus()
 
 		if msg.err == nil && msg.ed.LastQuery != "" {
@@ -217,6 +257,8 @@ func (m *Model) render() string {
 	switch m.screen {
 	case ScreenConnect:
 		content = m.connect.View(innerW, contentHeight)
+	case ScreenSettings:
+		content = m.settings.View(innerW, contentHeight)
 	case ScreenWorkspace:
 		content = screens.RenderWorkspace(m.browser, m.editorScreen, m.editor,
 			m.focus, m.structure, m.showSidebar, m.sidebarCursor, innerW, contentHeight)
@@ -243,6 +285,8 @@ func (m *Model) renderHeader() string {
 	}
 	mode := ""
 	switch m.screen {
+	case ScreenSettings:
+		mode = "settings"
 	case ScreenWorkspace:
 		switch {
 		case m.focus == screens.FocusEditor:
@@ -269,11 +313,13 @@ func (m *Model) renderFooter() string {
 	left := ""
 	switch m.screen {
 	case ScreenConnect:
-		left = "↑↓ saved · tab engine/fields · ←→ engine · enter connect · ctrl+s save · d delete"
+		left = "↑↓ saved · tab engine/fields · ←→ engine · enter connect · ctrl+s save · d delete · ctrl+p settings"
+	case ScreenSettings:
+		left = "enter save · esc back"
 	case ScreenWorkspace:
 		switch m.focus {
 		case screens.FocusSidebar:
-			left = "↑↓ tables · enter open · tab next · ? help"
+			left = "↑↓ tables · enter open · tab next · ? help · ctrl+p settings"
 		case screens.FocusMain:
 			if m.structure {
 				left = "esc back · tab next"
@@ -314,6 +360,8 @@ func (m *Model) typing() bool {
 	switch m.screen {
 	case ScreenConnect:
 		return m.connect.FocusOnField()
+	case ScreenSettings:
+		return m.settings.FocusOnField()
 	case ScreenWorkspace:
 		return m.focus == screens.FocusEditor
 	}
@@ -327,8 +375,50 @@ func (m *Model) handleConnectKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// handleSettingsKeys handles keys of the settings screen.
+func (m *Model) handleSettingsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	updated, cmd := m.settings.Update(msg)
+	m.settings = updated
+	return m, cmd
+}
+
+// openSettings opens the preferences screen, remembering where to return.
+func (m *Model) openSettings() {
+	m.prevScreen = m.screen
+	m.screen = ScreenSettings
+	m.settings.SetValue(fmt.Sprintf("%d", m.prefs.QueryTimeout()))
+	m.settings.SetError("")
+	m.settings.Focus()
+}
+
+// leaveSettings returns to the screen the user was on before settings.
+func (m *Model) leaveSettings() {
+	m.screen = m.prevScreen
+	m.settings.Blur()
+}
+
+// cancelQuery cancels a running query, if any.
+func (m *Model) cancelQuery() {
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
+	}
+}
+
+// friendlyErr maps context cancellation to the message shown to the user.
+func friendlyErr(err error) error {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return errors.New("query timed out")
+	case errors.Is(err, context.Canceled):
+		return errors.New("query cancelled")
+	}
+	return err
+}
+
 // doConnect opens the store and loads the browser.
 func (m *Model) doConnect(cfg conn.ConnectionConfig) {
+	m.cancelQuery()
 	m.closeStore()
 	m.queryID++
 	m.loading = false
@@ -410,6 +500,7 @@ func (m *Model) deleteConnection(name string) {
 
 // newSession closes the session and returns to the connection screen.
 func (m *Model) newSession() {
+	m.cancelQuery()
 	m.closeStore()
 	m.queryID++
 	m.loading = false
@@ -522,6 +613,14 @@ func (m *Model) handleSidebarKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.PageDown):
 		m.sidebarCursor += 10
 		m.clampSidebar()
+		return m, nil
+	case key.Matches(msg, m.keys.First):
+		m.sidebarCursor = 0
+		return m, nil
+	case key.Matches(msg, m.keys.Last):
+		if len(b.Tables) > 0 {
+			m.sidebarCursor = len(b.Tables) - 1
+		}
 		return m, nil
 	case msg.Type == tea.KeyEnter:
 		m.selectTable(m.sidebarCursor)
@@ -636,6 +735,7 @@ func (m *Model) handleEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // executeEditor runs the current query in the background and shows a spinner.
+// The query is bounded by the configured timeout and can be cancelled with Esc.
 func (m *Model) executeEditor() tea.Cmd {
 	if m.store == nil {
 		return nil
@@ -644,6 +744,10 @@ func (m *Model) executeEditor() tea.Cmd {
 	line := m.editorScreen.Line() // statement under the cursor
 	st := m.store
 	token := m.queryID
+	timeout := time.Duration(m.prefs.QueryTimeout()) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	m.cancelQuery() // release a previous cancel, if any
+	m.cancel = cancel
 	m.loading = true
 	return tea.Batch(
 		func() tea.Msg {
@@ -652,7 +756,10 @@ func (m *Model) executeEditor() tea.Cmd {
 			// editorDoneMsg), so the two never race.
 			ed := editor.New()
 			ed.Buffer = buf
-			err := ed.ExecuteAt(context.Background(), st, line)
+			err := ed.ExecuteAt(ctx, st, line)
+			if err != nil {
+				ed.Error = friendlyErr(err).Error()
+			}
 			return editorDoneMsg{ed: ed, err: err, token: token}
 		},
 		m.spinner.Tick,

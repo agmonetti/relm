@@ -7,6 +7,7 @@ type KeyMap struct {
 	Quit          key.Binding
 	NewSession    key.Binding
 	SaveConn      key.Binding
+	Settings      key.Binding
 	ToggleSidebar key.Binding
 	Help          key.Binding
 	Switch        key.Binding
@@ -36,6 +37,7 @@ func DefaultKeyMap() KeyMap {
 		Quit:          key.NewBinding(key.WithKeys("ctrl+c", "q"), key.WithHelp("ctrl+c / q", "quit")),
 		NewSession:    key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n", "new connection")),
 		SaveConn:      key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save connection")),
+		Settings:      key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "settings")),
 		ToggleSidebar: key.NewBinding(key.WithKeys("alt+b"), key.WithHelp("alt+b", "sidebar")),
 		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Switch:        key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next pane")),
@@ -72,7 +74,7 @@ func (k KeyMap) ShortHelp() []key.Binding {
 // FullHelp implements help.KeyMap.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Quit, k.NewSession, k.Switch, k.FocusSidebar, k.FocusMain, k.FocusEditor},
+		{k.Quit, k.NewSession, k.Switch, k.Settings, k.FocusSidebar, k.FocusMain, k.FocusEditor},
 		{k.ToggleSidebar, k.Help, k.Back, k.Inspect, k.Refresh, k.Execute, k.ClearInput},
 	}
 }
