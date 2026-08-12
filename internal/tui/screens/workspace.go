@@ -66,8 +66,8 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 	if showSidebar {
 		rightW = width - sidebarW - 1
 	}
-	if rightW < 20 {
-		rightW = 20
+	if rightW < 4 {
+		rightW = 4
 	}
 
 	// content width inside a pane: border (1 col/side) + padding (1 col/side)

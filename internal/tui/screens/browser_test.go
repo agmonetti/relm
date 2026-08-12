@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 
 	"github.com/agmonetti/relm/internal/browser"
@@ -106,4 +107,85 @@ func TestRenderSidebar_MarksOpenedTable(t *testing.T) {
 	if strings.Contains(lines[2], ">") {
 		t.Errorf("opened table line must not have '>': %q", lines[2])
 	}
+}
+
+func TestRenderDataTable_CursorStaysVisible(t *testing.T) {
+	cols := []string{"id"}
+	rows := make([][]string, 0, 10)
+	for i := 0; i < 10; i++ {
+		rows = append(rows, []string{string(rune('a' + i))})
+	}
+
+	// height=6 -> 5 visible rows. Cursor 0: rows 0..4.
+	out := RenderDataTable(cols, rows, 0, 20, 6)
+	data := dataLines(out, 6)
+	if len(data) != 5 {
+		t.Fatalf("data rows = %d, want 5", len(data))
+	}
+	if data[0] != "a" || data[4] != "e" {
+		t.Errorf("cursor 0 should show rows a-e only: %v", data)
+	}
+
+	// Cursor 7: window must scroll so row 7 (h) is visible (rows d-h).
+	out = RenderDataTable(cols, rows, 7, 20, 6)
+	data = dataLines(out, 6)
+	if len(data) != 5 {
+		t.Fatalf("data rows = %d, want 5", len(data))
+	}
+	if data[0] != "d" || data[4] != "h" {
+		t.Errorf("cursor 7 should show rows d-h: %v", data)
+	}
+}
+
+func TestColWidths_ShrinksToFitManyColumns(t *testing.T) {
+	cols := make([]string, 0, 12)
+	for i := 0; i < 12; i++ {
+		cols = append(cols, "col012345") // 9 wide
+	}
+	rows := [][]string{cols} // each cell as wide as its header
+
+	widths := colWidths(cols, rows, 70)
+	total := len(widths) - 1
+	for _, w := range widths {
+		total += w
+	}
+	if total > 70 {
+		t.Errorf("widths %v sum to %d, want <= 70", widths, total)
+	}
+	for _, w := range widths {
+		if w < 4 {
+			t.Errorf("width %d below the 4-char floor", w)
+		}
+	}
+
+	// with a tiny width every column reaches the floor
+	widths = colWidths(cols, rows, 40)
+	for i, w := range widths {
+		if w != 4 {
+			t.Errorf("width[%d] = %d, want 4 (floor)", i, w)
+		}
+	}
+}
+
+func dataLines(out string, height int) []string {
+	lines := ansiStripLines(strings.TrimSuffix(out, "\n"))
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	data := make([]string, 0, len(lines))
+	for i, l := range lines {
+		if i == 0 {
+			continue // header
+		}
+		data = append(data, strings.TrimSpace(l))
+	}
+	return data
+}
+
+func ansiStripLines(s string) []string {
+	var out []string
+	for _, l := range strings.Split(s, "\n") {
+		out = append(out, ansi.Strip(l))
+	}
+	return out
 }

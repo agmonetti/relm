@@ -46,7 +46,8 @@ func RenderSidebar(b *browser.Browser, cursor, width, height int) string {
 	return sb.String()
 }
 
-// RenderDataTable renders columns + rows with the cursor row highlighted.
+// RenderDataTable renders columns + rows with the cursor row highlighted. The
+// rows scroll vertically so the cursor row always stays visible.
 func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) string {
 	if len(cols) == 0 {
 		return ""
@@ -61,12 +62,23 @@ func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) 
 		visible = 0
 	}
 
+	// scroll so the cursor row is never off-screen: when the cursor passes
+	// the bottom edge it becomes the last visible row
+	start := 0
+	if cursor >= visible {
+		start = cursor - visible + 1
+	}
+
 	var sb strings.Builder
 	// header
 	sb.WriteString(renderHeader(cols, widths) + "\n")
 
 	for i := 0; i < visible; i++ {
-		sb.WriteString(renderRow(rows[i], widths, i == cursor) + "\n")
+		row := start + i
+		if row >= len(rows) {
+			break
+		}
+		sb.WriteString(renderRow(rows[row], widths, row == cursor) + "\n")
 	}
 	return sb.String()
 }
@@ -108,26 +120,36 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 		}
 	}
 
-	// adjust to the available width: shrink wide columns first
+	// adjust to the available width: shrink wide columns first, iterating until
+	// the row fits or no column can give up more space
 	total := len(widths) - 1 // separators
 	for _, w := range widths {
 		total += w
 	}
 	if total > width {
-		for i := range widths {
-			over := total - width
-			if over <= 0 {
+		over := total - width
+		for over > 0 {
+			progress := false
+			for i := range widths {
+				if over <= 0 {
+					break
+				}
+				shrink := widths[i] - 4 // reasonable minimum
+				if shrink > over {
+					shrink = over
+				}
+				if shrink < 0 {
+					shrink = 0
+				}
+				if shrink > 0 {
+					widths[i] -= shrink
+					over -= shrink
+					progress = true
+				}
+			}
+			if !progress {
 				break
 			}
-			shrink := widths[i] - 4 // reasonable minimum
-			if shrink > over {
-				shrink = over
-			}
-			if shrink < 0 {
-				shrink = 0
-			}
-			widths[i] -= shrink
-			total -= shrink
 		}
 	}
 	return widths
