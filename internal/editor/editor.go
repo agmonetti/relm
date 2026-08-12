@@ -91,11 +91,12 @@ type Statement struct {
 }
 
 // splitStatements splits the SQL into statements respecting strings (single
-// quotes, "\" escapes and "''" duplication) and the `;` outside them.
+// quotes, "\" escapes and "''" duplication), comments (`--`, `/* */` and
+// MySQL's `#`) and the `;` outside them. Comments are replaced by a space so
+// adjacent tokens are not glued together.
 func splitStatements(sql string) []Statement {
 	var stmts []Statement
 	var b strings.Builder
-	inQuote := false
 	line := 0
 	startLine := 0
 	started := false
@@ -108,13 +109,15 @@ func splitStatements(sql string) []Statement {
 		started = false
 	}
 
+	// 0 = code, 1 = single-quoted string, 2 = line comment, 3 = block comment
+	mode := 0
 	for i := 0; i < len(sql); i++ {
 		c := sql[i]
 		if c == '\n' {
 			line++
 		}
-		switch {
-		case inQuote:
+		switch mode {
+		case 1: // inside a string literal
 			b.WriteByte(c)
 			if c == '\\' && i+1 < len(sql) {
 				b.WriteByte(sql[i+1])
@@ -127,28 +130,65 @@ func splitStatements(sql string) []Statement {
 					b.WriteByte(sql[i+1])
 					i++
 				} else {
-					inQuote = false
+					mode = 0
 				}
 			}
-		case c == '\'':
-			inQuote = true
-			if !started {
-				startLine = line
-				started = true
+		case 2: // line comment: skipped until the end of the line
+			if c == '\n' {
+				// the newline separates tokens, keep it
+				b.WriteByte(c)
+				mode = 0
 			}
-			b.WriteByte(c)
-		case c == ';':
-			flush()
-		default:
-			if !started && !isSpace(c) {
-				startLine = line
-				started = true
+		case 3: // block comment: skipped until "*/"
+			if c == '*' && i+1 < len(sql) && sql[i+1] == '/' {
+				i++
+				mode = 0
 			}
-			b.WriteByte(c)
+		default: // code
+			switch {
+			case c == '\'':
+				mode = 1
+				if !started {
+					startLine = line
+					started = true
+				}
+				b.WriteByte(c)
+			case c == '-' && i+1 < len(sql) && sql[i+1] == '-':
+				mode = 2
+				i++
+			case c == '#' && (i+1 >= len(sql) || !isIdentChar(sql[i+1])):
+				// MySQL comment; not a comment when it prefixes a temp table
+				// identifier such as SQL Server's "#temp".
+				mode = 2
+			case c == '/' && i+1 < len(sql) && sql[i+1] == '*':
+				mode = 3
+				i++
+				b.WriteByte(' ')
+			case c == ';':
+				flush()
+			default:
+				if !started && !isSpace(c) {
+					startLine = line
+					started = true
+				}
+				b.WriteByte(c)
+			}
 		}
 	}
 	flush()
 	return stmts
+}
+
+// isIdentChar reports whether c can be part of an identifier (letters, digits,
+// underscore, dollar) or the SQL Server temp-table "#" prefix.
+func isIdentChar(c byte) bool {
+	switch {
+	case c >= 'A' && c <= 'Z', c >= 'a' && c <= 'z', c >= '0' && c <= '9':
+		return true
+	case c == '_', c == '$':
+		return true
+	}
+	return false
 }
 
 // firstStatement returns the first statement of the buffer and whether there were more.
@@ -198,11 +238,50 @@ func (e *Editor) Clear() {
 // returnsRows reports whether the query probably returns rows. It is not 100%
 // reliable across engines; the UI decides how to render based on the store Result.
 func (e *Editor) returnsRows(q string) bool {
-	first := strings.ToUpper(strings.TrimSpace(q))
-	for _, kw := range []string{"SELECT", "WITH", "PRAGMA", "SHOW", "EXPLAIN", "DESCRIBE", "VALUES", "TABLE"} {
-		if strings.HasPrefix(first, kw+" ") || first == kw {
-			return true
-		}
+	switch firstKeyword(q) {
+	case "SELECT", "WITH", "PRAGMA", "SHOW", "EXPLAIN", "DESCRIBE", "VALUES", "TABLE":
+		return true
+	case "INSERT", "UPDATE", "DELETE", "MERGE":
+		// e.g. PostgreSQL's INSERT ... RETURNING produces rows
+		return strings.Contains(strings.ToUpper(q), "RETURNING")
 	}
 	return false
+}
+
+// firstKeyword returns the first keyword of the SQL, skipping leading
+// whitespace and comments, so a leading "-- note" or a bare "SELECT;" are
+// recognized.
+func firstKeyword(q string) string {
+	s := strings.ToUpper(q)
+	i := 0
+	for i < len(s) {
+		c := s[i]
+		switch {
+		case c == ' ' || c == '\t' || c == '\r' || c == '\n':
+			i++
+		case c == '-' && i+1 < len(s) && s[i+1] == '-':
+			i += 2
+			for i < len(s) && s[i] != '\n' {
+				i++
+			}
+		case c == '#' && (i+1 >= len(s) || !isIdentChar(s[i+1])):
+			i++
+			for i < len(s) && s[i] != '\n' {
+				i++
+			}
+		case c == '/' && i+1 < len(s) && s[i+1] == '*':
+			i += 2
+			for i+1 < len(s) && !(s[i] == '*' && s[i+1] == '/') {
+				i++
+			}
+			i += 2
+		default:
+			j := i
+			for j < len(s) && isIdentChar(s[j]) {
+				j++
+			}
+			return s[i:j]
+		}
+	}
+	return ""
 }

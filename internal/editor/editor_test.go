@@ -212,3 +212,80 @@ func TestEditor_FirstStatementRespectsStrings(t *testing.T) {
 		t.Errorf("stmt = %q", stmt)
 	}
 }
+
+func TestEditor_FirstStatementIgnoresSemicolonsInComments(t *testing.T) {
+	cases := []struct{ sql, want string }{
+		{"SELECT 1; -- note with ; inside\nSELECT 2", "SELECT 1"},
+		{"SELECT 1 /* block ; with ; */; SELECT 2", "SELECT 1"},
+		{"-- c ; d\nSELECT 1; SELECT 2", "SELECT 1"},
+		{"/* c ; d */\nSELECT 1; SELECT 2", "SELECT 1"},
+		{"SELECT * FROM t -- ; done\n", "SELECT * FROM t"},
+		{"SELECT 1 # mysql ; comment\n; SELECT 2", "SELECT 1"},
+		// SQL Server temp tables: #temp is not a comment
+		{"CREATE TABLE #temp (x INT); SELECT * FROM #temp", "CREATE TABLE #temp (x INT)"},
+	}
+	for _, tc := range cases {
+		stmt, _ := firstStatement(tc.sql)
+		if stmt != tc.want {
+			t.Errorf("firstStatement(%q) = %q, want %q", tc.sql, stmt, tc.want)
+		}
+	}
+}
+
+func TestEditor_CommentsDoNotGlueTokens(t *testing.T) {
+	// a block comment acts as whitespace: tokens must not merge
+	stmts := splitStatements("SELECT a/*x*/b")
+	if len(stmts) != 1 || stmts[0].Text != "SELECT a b" {
+		t.Errorf("splitStatements = %+v, want one statement 'SELECT a b'", stmts)
+	}
+}
+
+func TestEditor_ExecuteSelectWithLeadingComment(t *testing.T) {
+	st := newTestStore(t)
+	e := New()
+	e.Buffer = "-- load users\nSELECT * FROM users"
+	if err := e.Execute(st); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if e.Result == nil || len(e.Result.Rows) != 0 {
+		t.Errorf("Result = %+v, want a select result", e.Result)
+	}
+}
+
+func TestEditor_ExecuteInsertReturning(t *testing.T) {
+	st := newTestStore(t)
+	e := New()
+	// INSERT ... RETURNING must go through Query, not Exec
+	e.Buffer = "INSERT INTO users (name) VALUES ('X') RETURNING id"
+	if err := e.Execute(st); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	// SQLite supports RETURNING; the result must carry columns
+	if e.Result == nil || len(e.Result.Columns) == 0 {
+		t.Errorf("Result = %+v, want columns from RETURNING", e.Result)
+	}
+}
+
+func TestEditor_ReturnsRows(t *testing.T) {
+	e := New()
+	cases := []struct {
+		sql  string
+		want bool
+	}{
+		{"SELECT 1", true},
+		{"SELECT;", true},
+		{"-- c\nSELECT 1", true},
+		{"/* c */ SELECT 1", true},
+		{"WITH x AS (SELECT 1) SELECT * FROM x", true},
+		{"INSERT INTO t VALUES (1) RETURNING id", true},
+		{"INSERT INTO t VALUES (1)", false},
+		{"UPDATE t SET x = 1", false},
+		{"DELETE FROM t", false},
+		{"SELECT * FROM #temp", true},
+	}
+	for _, tc := range cases {
+		if got := e.returnsRows(tc.sql); got != tc.want {
+			t.Errorf("returnsRows(%q) = %v, want %v", tc.sql, got, tc.want)
+		}
+	}
+}
