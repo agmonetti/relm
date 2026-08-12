@@ -68,11 +68,11 @@ func (s *Store) Version() (string, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// Tables returns the tables of the current database.
+// Tables returns the tables of the user's default schema in the current database.
 func (s *Store) Tables() ([]string, error) {
 	rows, err := s.db.Query(`
 		SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
-		WHERE TABLE_TYPE = 'BASE TABLE'
+		WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_SCHEMA = SCHEMA_NAME()
 		ORDER BY TABLE_NAME`)
 	if err != nil {
 		return nil, fmt.Errorf("store.Tables: %w", err)
@@ -104,8 +104,9 @@ func (s *Store) Columns(table string) ([]store.Column, error) {
 			JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE ku
 			  ON tc.CONSTRAINT_NAME = ku.CONSTRAINT_NAME
 			WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+			  AND tc.CONSTRAINT_SCHEMA = SCHEMA_NAME()
 		) pk ON c.TABLE_NAME = pk.TABLE_NAME AND c.COLUMN_NAME = pk.COLUMN_NAME
-		WHERE c.TABLE_NAME = @p1
+		WHERE c.TABLE_SCHEMA = SCHEMA_NAME() AND c.TABLE_NAME = @p1
 		ORDER BY c.ORDINAL_POSITION`, table)
 	if err != nil {
 		return nil, fmt.Errorf("store.Columns(%s): %w", table, err)
@@ -138,7 +139,8 @@ func (s *Store) Indexes(table string) ([]store.Index, error) {
 		JOIN sys.columns col
 		  ON ic.object_id = col.object_id AND ic.column_id = col.column_id
 		JOIN sys.tables t ON i.object_id = t.object_id
-		WHERE t.name = @p1 AND i.name IS NOT NULL
+		JOIN sys.schemas sch ON t.schema_id = sch.schema_id
+		WHERE sch.name = SCHEMA_NAME() AND t.name = @p1 AND i.name IS NOT NULL
 		ORDER BY i.name, ic.key_ordinal`, table)
 	if err != nil {
 		return nil, fmt.Errorf("store.Indexes(%s): %w", table, err)
