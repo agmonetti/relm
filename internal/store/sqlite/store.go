@@ -2,9 +2,12 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 
 	_ "modernc.org/sqlite" // pure-Go driver, no CGO required
 
@@ -26,7 +29,7 @@ func New(cfg conn.ConnectionConfig) (*Store, error) {
 	if _, err := os.Stat(cfg.Path); err != nil && !isMemory(cfg.Path) {
 		return nil, fmt.Errorf("%w: %s: no such file", store.ErrConnection, cfg.Path)
 	}
-	dsn := "file:" + cfg.Path
+	dsn := "file:" + dsnPath(cfg.Path)
 	if cfg.ReadOnly {
 		dsn += "?mode=ro&_pragma=foreign_keys(1)"
 	} else {
@@ -52,6 +55,26 @@ func init() {
 // isMemory reports whether the path is an in-memory SQLite database.
 func isMemory(path string) bool {
 	return path == ":memory:" || path == "file::memory:"
+}
+
+// dsnPath percent-encodes the characters that the DSN parser would read as
+// part of the query or a URI escape (?, #, %), plus spaces, so a file named
+// "a?b.db" or "a b.db" connects correctly. Memory paths need no escaping.
+func dsnPath(path string) string {
+	if isMemory(path) {
+		return path
+	}
+	var b strings.Builder
+	for i := 0; i < len(path); i++ {
+		c := path[i]
+		switch c {
+		case '?', '#', '%', ' ':
+			b.WriteString(url.PathEscape(string(c)))
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }
 
 func (s *Store) Driver() string { return string(s.driver) }
@@ -188,7 +211,13 @@ func (s *Store) indexColumns(index string) ([]string, error) {
 
 // Query runs arbitrary SQL and returns columns and rows.
 func (s *Store) Query(sql string) (*store.Result, error) {
-	rows, err := s.db.Query(sql)
+	return s.QueryContext(context.Background(), sql)
+}
+
+// QueryContext runs arbitrary SQL with a context, so it can be cancelled or
+// bounded by a timeout.
+func (s *Store) QueryContext(ctx context.Context, sql string) (*store.Result, error) {
+	rows, err := s.db.QueryContext(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +227,12 @@ func (s *Store) Query(sql string) (*store.Result, error) {
 
 // Exec runs SQL without a result (INSERT/UPDATE/DELETE) and returns affected rows.
 func (s *Store) Exec(sql string) (int64, error) {
-	res, err := s.db.Exec(sql)
+	return s.ExecContext(context.Background(), sql)
+}
+
+// ExecContext runs SQL without a result with a context.
+func (s *Store) ExecContext(ctx context.Context, sql string) (int64, error) {
+	res, err := s.db.ExecContext(ctx, sql)
 	if err != nil {
 		return 0, err
 	}
@@ -223,4 +257,28 @@ func (s *Store) CountTable(table string) (int, error) {
 func (s *Store) SelectTablePage(table string, limit, offset int) (*store.Result, error) {
 	q := fmt.Sprintf("SELECT * FROM %s %s", QuoteIdent(table), Limit(limit, offset))
 	return s.Query(q)
+}
+
+// SelectTableKeysetPage returns the page after cursor ordered by the key.
+func (s *Store) SelectTableKeysetPage(table, key string, limit int, cursor string) (*store.Result, error) {
+	q := fmt.Sprintf("SELECT * FROM %s", QuoteIdent(table))
+	if cursor != "" {
+		q += fmt.Sprintf(" WHERE %s > ?", QuoteIdent(key))
+	}
+	q += fmt.Sprintf(" ORDER BY %s LIMIT %d", QuoteIdent(key), limit)
+	rows, err := s.db.Query(q, queryArgs(cursor)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return store.ScanResult(rows)
+}
+
+// queryArgs returns nil for an empty cursor (first page) and a single-value
+// slice otherwise, so the WHERE clause placeholder always matches the args.
+func queryArgs(cursor string) []any {
+	if cursor == "" {
+		return nil
+	}
+	return []any{cursor}
 }

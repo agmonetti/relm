@@ -2,6 +2,7 @@
 package editor
 
 import (
+	"context"
 	"strings"
 
 	"github.com/agmonetti/relm/internal/store"
@@ -37,15 +38,16 @@ func New() *Editor {
 // Execute runs the first statement of the buffer (equivalent to ExecuteAt on
 // line 0). Kept for tests and compatibility.
 func (e *Editor) Execute(st store.Store) error {
-	return e.ExecuteAt(st, 0)
+	return e.ExecuteAt(context.Background(), st, 0)
 }
 
 // ExecuteAt runs the statement that contains line line (0-based) of the buffer
 // against the store and stores the result or the error. With a single statement
 // it always runs it; with several, the one under the cursor. Network drivers do
 // not have multiStatements, so two are never sent at once. Queries that return
-// rows (SELECT, WITH, PRAGMA...) use Query(); everything else uses Exec().
-func (e *Editor) ExecuteAt(st store.Store, line int) error {
+// rows (SELECT, WITH, PRAGMA...) use Query(); everything else uses Exec(). The
+// context can cancel the query or bound it with a timeout.
+func (e *Editor) ExecuteAt(ctx context.Context, st store.Store, line int) error {
 	stmts := splitStatements(e.Buffer)
 	if len(stmts) == 0 {
 		return nil // the UI shows "write a query first"
@@ -60,7 +62,7 @@ func (e *Editor) ExecuteAt(st store.Store, line int) error {
 	defer func() { e.Mode = EditorModeNormal }()
 
 	if e.returnsRows(q) {
-		res, err := st.Query(q)
+		res, err := st.QueryContext(ctx, q)
 		if err != nil {
 			e.Result = nil
 			e.Error = err.Error()
@@ -69,7 +71,7 @@ func (e *Editor) ExecuteAt(st store.Store, line int) error {
 		e.Result = res
 		e.Error = ""
 	} else {
-		n, err := st.Exec(q)
+		n, err := st.ExecContext(ctx, q)
 		if err != nil {
 			e.Result = nil
 			e.Error = err.Error()

@@ -2,6 +2,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -651,7 +652,7 @@ func (m *Model) executeEditor() tea.Cmd {
 			// editorDoneMsg), so the two never race.
 			ed := editor.New()
 			ed.Buffer = buf
-			err := ed.ExecuteAt(st, line)
+			err := ed.ExecuteAt(context.Background(), st, line)
 			return editorDoneMsg{ed: ed, err: err, token: token}
 		},
 		m.spinner.Tick,

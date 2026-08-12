@@ -81,6 +81,23 @@ func TestIntegration(t *testing.T) {
 		t.Errorf("page.Rows = %v", page.Rows)
 	}
 
+	// keyset pagination over the primary key
+	first, err := s.SelectTableKeysetPage("relm_test", "id", 10, "")
+	if err != nil {
+		t.Fatalf("SelectTableKeysetPage first: %v", err)
+	}
+	if len(first.Rows) != 2 || first.Rows[0][1] != "Alice" {
+		t.Errorf("first keyset page = %v", first.Rows)
+	}
+	last := first.Rows[len(first.Rows)-1][0]
+	second, err := s.SelectTableKeysetPage("relm_test", "id", 10, last)
+	if err != nil {
+		t.Fatalf("SelectTableKeysetPage second: %v", err)
+	}
+	if len(second.Rows) != 0 {
+		t.Errorf("second keyset page = %v, want empty", second.Rows)
+	}
+
 	if v, err := s.Version(); err != nil || v == "" {
 		t.Errorf("Version = %q, err=%v", v, err)
 	}

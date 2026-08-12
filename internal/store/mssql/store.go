@@ -173,7 +173,13 @@ func (s *Store) Indexes(table string) ([]store.Index, error) {
 
 // Query runs arbitrary SQL.
 func (s *Store) Query(sql string) (*store.Result, error) {
-	rows, err := s.db.Query(sql)
+	return s.QueryContext(context.Background(), sql)
+}
+
+// QueryContext runs arbitrary SQL with a context, so it can be cancelled or
+// bounded by a timeout.
+func (s *Store) QueryContext(ctx context.Context, sql string) (*store.Result, error) {
+	rows, err := s.db.QueryContext(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +189,12 @@ func (s *Store) Query(sql string) (*store.Result, error) {
 
 // Exec runs SQL without a result.
 func (s *Store) Exec(sql string) (int64, error) {
-	res, err := s.db.Exec(sql)
+	return s.ExecContext(context.Background(), sql)
+}
+
+// ExecContext runs SQL without a result with a context.
+func (s *Store) ExecContext(ctx context.Context, sql string) (int64, error) {
+	res, err := s.db.ExecContext(ctx, sql)
 	if err != nil {
 		return 0, err
 	}
@@ -208,4 +219,28 @@ func (s *Store) CountTable(table string) (int, error) {
 func (s *Store) SelectTablePage(table string, limit, offset int) (*store.Result, error) {
 	q := fmt.Sprintf("SELECT * FROM %s %s", QuoteIdent(table), Limit(limit, offset))
 	return s.Query(q)
+}
+
+// SelectTableKeysetPage returns the page after cursor ordered by the key.
+func (s *Store) SelectTableKeysetPage(table, key string, limit int, cursor string) (*store.Result, error) {
+	q := fmt.Sprintf("SELECT * FROM %s", QuoteIdent(table))
+	if cursor != "" {
+		q += fmt.Sprintf(" WHERE %s > @p1", QuoteIdent(key))
+	}
+	q += fmt.Sprintf(" ORDER BY %s OFFSET 0 ROWS FETCH NEXT %d ROWS ONLY", QuoteIdent(key), limit)
+	rows, err := s.db.Query(q, queryArgs(cursor)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return store.ScanResult(rows)
+}
+
+// queryArgs returns nil for an empty cursor (first page) and a single-value
+// slice otherwise, so the WHERE clause placeholder always matches the args.
+func queryArgs(cursor string) []any {
+	if cursor == "" {
+		return nil
+	}
+	return []any{cursor}
 }

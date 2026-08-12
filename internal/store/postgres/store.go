@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" driver
@@ -15,7 +16,8 @@ import (
 
 // Store is the PostgreSQL implementation of store.Store.
 type Store struct {
-	db *sql.DB
+	db       *sql.DB
+	keyTypes sync.Map // table+"\x00"+column -> information_schema data_type
 }
 
 // New opens a connection to PostgreSQL.
@@ -172,7 +174,13 @@ func (s *Store) Indexes(table string) ([]store.Index, error) {
 
 // Query runs arbitrary SQL.
 func (s *Store) Query(sql string) (*store.Result, error) {
-	rows, err := s.db.Query(sql)
+	return s.QueryContext(context.Background(), sql)
+}
+
+// QueryContext runs arbitrary SQL with a context, so it can be cancelled or
+// bounded by a timeout.
+func (s *Store) QueryContext(ctx context.Context, sql string) (*store.Result, error) {
+	rows, err := s.db.QueryContext(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +190,12 @@ func (s *Store) Query(sql string) (*store.Result, error) {
 
 // Exec runs SQL without a result.
 func (s *Store) Exec(sql string) (int64, error) {
-	res, err := s.db.Exec(sql)
+	return s.ExecContext(context.Background(), sql)
+}
+
+// ExecContext runs SQL without a result with a context.
+func (s *Store) ExecContext(ctx context.Context, sql string) (int64, error) {
+	res, err := s.db.ExecContext(ctx, sql)
 	if err != nil {
 		return 0, err
 	}
@@ -207,4 +220,53 @@ func (s *Store) CountTable(table string) (int, error) {
 func (s *Store) SelectTablePage(table string, limit, offset int) (*store.Result, error) {
 	q := fmt.Sprintf("SELECT * FROM %s %s", QuoteIdent(table), Limit(limit, offset))
 	return s.Query(q)
+}
+
+// SelectTableKeysetPage returns the page after cursor ordered by the key. The
+// cursor is compared with an explicit cast ($1::<type>) so the primary key
+// index is still usable regardless of the column type.
+func (s *Store) SelectTableKeysetPage(table, key string, limit int, cursor string) (*store.Result, error) {
+	typ, err := s.keyType(table, key)
+	if err != nil {
+		return nil, err
+	}
+	q := fmt.Sprintf("SELECT * FROM %s", QuoteIdent(table))
+	if cursor != "" {
+		q += fmt.Sprintf(" WHERE %s > $1::%s", QuoteIdent(key), typ)
+	}
+	q += fmt.Sprintf(" ORDER BY %s LIMIT %d", QuoteIdent(key), limit)
+	rows, err := s.db.Query(q, queryArgs(cursor)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return store.ScanResult(rows)
+}
+
+// keyType returns the information_schema data_type of a column (e.g.
+// "integer", "uuid", "character varying"), which doubles as a valid PostgreSQL
+// cast target. The result is cached per table+column.
+func (s *Store) keyType(table, key string) (string, error) {
+	cacheKey := table + "\x00" + key
+	if v, ok := s.keyTypes.Load(cacheKey); ok {
+		return v.(string), nil
+	}
+	var dt string
+	if err := s.db.QueryRow(`
+		SELECT data_type FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`,
+		table, key).Scan(&dt); err != nil {
+		return "", fmt.Errorf("store.keyType(%s.%s): %w", table, key, err)
+	}
+	s.keyTypes.Store(cacheKey, dt)
+	return dt, nil
+}
+
+// queryArgs returns nil for an empty cursor (first page) and a single-value
+// slice otherwise, so the WHERE clause placeholder always matches the args.
+func queryArgs(cursor string) []any {
+	if cursor == "" {
+		return nil
+	}
+	return []any{cursor}
 }

@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"context"
 	"testing"
 
 	"github.com/agmonetti/relm/internal/conn"
@@ -128,7 +129,7 @@ func TestEditor_ExecuteAtSelectsStatementAtCursor(t *testing.T) {
 	e.Buffer = "SELECT 1;\nSELECT 2;\nSELECT * FROM users"
 
 	// cursor on line 2 (0-based): the third statement
-	if err := e.ExecuteAt(st, 2); err != nil {
+	if err := e.ExecuteAt(context.Background(), st, 2); err != nil {
 		t.Fatalf("ExecuteAt: %v", err)
 	}
 	if e.Result == nil || len(e.Result.Columns) != 2 {
@@ -140,7 +141,7 @@ func TestEditor_ExecuteAtSingleStatementIgnoresLine(t *testing.T) {
 	st := newTestStore(t)
 	e := New()
 	e.Buffer = "INSERT INTO users (name) VALUES ('X')"
-	if err := e.ExecuteAt(st, 5); err != nil {
+	if err := e.ExecuteAt(context.Background(), st, 5); err != nil {
 		t.Fatalf("ExecuteAt: %v", err)
 	}
 	if e.Result == nil || e.Result.Affected != 1 {
@@ -153,7 +154,7 @@ func TestEditor_ExecuteAtLineInPreamble(t *testing.T) {
 	e := New()
 	e.Buffer = "\n\nCREATE TABLE t (x INT);\nINSERT INTO t VALUES (1)"
 	// cursor on line 0 (leading whitespace): falls into the first statement
-	if err := e.ExecuteAt(st, 0); err != nil {
+	if err := e.ExecuteAt(context.Background(), st, 0); err != nil {
 		t.Fatalf("ExecuteAt: %v", err)
 	}
 	if _, err := st.CountTable("t"); err != nil {
@@ -167,12 +168,12 @@ func TestEditor_ExecuteAtSeparateLines(t *testing.T) {
 	e.Buffer = "CREATE TABLE t (x INT);\nINSERT INTO t VALUES (1)"
 
 	// cursor on line 0 → CREATE
-	if err := e.ExecuteAt(st, 0); err != nil {
+	if err := e.ExecuteAt(context.Background(), st, 0); err != nil {
 		t.Fatalf("ExecuteAt CREATE: %v", err)
 	}
 
 	// cursor on line 1 → INSERT
-	if err := e.ExecuteAt(st, 1); err != nil {
+	if err := e.ExecuteAt(context.Background(), st, 1); err != nil {
 		t.Fatalf("ExecuteAt INSERT: %v", err)
 	}
 	if e.Result == nil || e.Result.Affected != 1 {

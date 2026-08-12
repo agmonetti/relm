@@ -146,6 +146,128 @@ func TestBrowser_MoveCursor_Clamps(t *testing.T) {
 	}
 }
 
+func TestBrowser_KeysetRefreshIsStable(t *testing.T) {
+	st := newTestStore(t)
+	seedRows(t, st, 60) // users id 1..60
+
+	b := &Browser{PageSize: 50}
+	if err := b.SelectTable("users", st); err != nil {
+		t.Fatalf("SelectTable: %v", err)
+	}
+	if b.orderBy != "id" || b.keyIdx != 0 {
+		t.Fatalf("orderBy = %q keyIdx=%d, want keyset on id", b.orderBy, b.keyIdx)
+	}
+	if len(b.Rows) != 50 || b.Rows[0][1] != "u0" {
+		t.Fatalf("page 0 = %d rows, first %v", len(b.Rows), b.Rows[0])
+	}
+
+	// a row inserted before the last row of the page must not shift the page
+	if _, err := st.Exec("INSERT INTO users (name, email) VALUES ('u0b','u0b@t.com')"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := b.Refresh(st); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if b.Rows[0][1] != "u0" {
+		t.Errorf("first row after refresh = %v, want u0 (stable)", b.Rows[0])
+	}
+
+	// next page and back
+	if !b.HasNextPage() {
+		t.Fatal("page 0 should have a next page")
+	}
+	page0Last := b.Rows[len(b.Rows)-1][0]
+	if err := b.NextPage(st); err != nil {
+		t.Fatalf("NextPage: %v", err)
+	}
+	if b.Page != 1 || len(b.Rows) == 0 {
+		t.Fatalf("page 1 = %d rows, want > 0", len(b.Rows))
+	}
+	if err := b.PrevPage(st); err != nil {
+		t.Fatalf("PrevPage: %v", err)
+	}
+	if b.Page != 0 || len(b.Rows) != 50 {
+		t.Errorf("back to page 0 = %d rows, want 50", len(b.Rows))
+	}
+	if b.Rows[len(b.Rows)-1][0] != page0Last {
+		t.Errorf("last row of page 0 = %s, want %s (same page back)", b.Rows[len(b.Rows)-1][0], page0Last)
+	}
+}
+
+func TestBrowser_KeysetFallbackWithoutPK(t *testing.T) {
+	st := newTestStore(t)
+	if _, err := st.Exec("CREATE TABLE nopk (name TEXT, email TEXT)"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := st.Exec("INSERT INTO nopk (name, email) VALUES ('a','a@t.com'), ('b','b@t.com')"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	b := &Browser{PageSize: 50}
+	if err := b.SelectTable("nopk", st); err != nil {
+		t.Fatalf("SelectTable: %v", err)
+	}
+	if b.orderBy != "" {
+		t.Errorf("orderBy = %q, want empty (fallback)", b.orderBy)
+	}
+	if len(b.Rows) != 2 {
+		t.Errorf("Rows = %d, want 2", len(b.Rows))
+	}
+}
+
+func TestBrowser_ReloadAfterDropRecreateWithoutPK(t *testing.T) {
+	st := newTestStore(t)
+	b, err := New(st) // selects "orders" (has id PK)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if b.ActiveTable != "orders" || b.orderBy == "" {
+		t.Fatalf("setup: active=%q orderBy=%q, want orders on keyset", b.ActiveTable, b.orderBy)
+	}
+
+	// simulate the editor dropping and re-creating the table without a PK
+	if _, err := st.Exec("DROP TABLE orders"); err != nil {
+		t.Fatalf("drop: %v", err)
+	}
+	if _, err := st.Exec("CREATE TABLE orders (ref TEXT)"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := st.Exec("INSERT INTO orders VALUES ('x')"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	if err := b.Reload(st); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if b.orderBy != "" {
+		t.Errorf("orderBy = %q, want empty (fallback after recreate)", b.orderBy)
+	}
+	if len(b.Rows) != 1 {
+		t.Errorf("Rows = %v, want the re-created row", b.Rows)
+	}
+}
+
+func TestBrowser_KeysetFallbackWithCompositePK(t *testing.T) {
+	st := newTestStore(t)
+	if _, err := st.Exec("CREATE TABLE comp (a INT, b INT, PRIMARY KEY (a, b))"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := st.Exec("INSERT INTO comp VALUES (1, 1), (1, 2)"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	b := &Browser{PageSize: 50}
+	if err := b.SelectTable("comp", st); err != nil {
+		t.Fatalf("SelectTable: %v", err)
+	}
+	if b.orderBy != "" {
+		t.Errorf("orderBy = %q, want empty (fallback for composite PK)", b.orderBy)
+	}
+	if len(b.Rows) != 2 {
+		t.Errorf("Rows = %d, want 2", len(b.Rows))
+	}
+}
+
 func TestBrowser_EmptyDatabase(t *testing.T) {
 	cfg := conn.New(conn.DriverSQLite)
 	cfg.Path = ":memory:"
