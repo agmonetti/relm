@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/agmonetti/relm/internal/conn"
 	"github.com/agmonetti/relm/internal/tui/styles"
@@ -95,8 +97,13 @@ func (c *ConnScreen) fieldsVisible() []*field {
 	return out
 }
 
-// rebuildFields creates the persistent inputs (one per possible field).
+// rebuildFields creates the persistent inputs (one per possible field). Values
+// already typed are preserved so switching engines does not lose them.
 func (c *ConnScreen) rebuildFields() {
+	prev := map[string]field{}
+	for _, f := range c.fields {
+		prev[f.label] = f
+	}
 	mk := func(label, placeholder string) field {
 		in := textinput.New()
 		in.Placeholder = placeholder
@@ -113,6 +120,12 @@ func (c *ConnScreen) rebuildFields() {
 		mk("Database", "mydb"),
 		{label: "Read-only", isToggle: true},
 		mk("SSL", "prefer"),
+	}
+	for i := range c.fields {
+		if p, ok := prev[c.fields[i].label]; ok {
+			c.fields[i].input.SetValue(p.input.Value())
+			c.fields[i].checked = p.checked
+		}
 	}
 	// the password is masked only for network engines
 	if c.driver() != conn.DriverSQLite {
@@ -231,11 +244,18 @@ func (c *ConnScreen) validate() error {
 	} else if cfg.Host == "" {
 		return fmt.Errorf("type the host")
 	}
+	if cfg.Driver != conn.DriverSQLite {
+		if p := c.field("Port").input.Value(); p != "" {
+			if n, err := strconv.Atoi(p); err != nil || n <= 0 || n > 65535 {
+				return fmt.Errorf("port must be a number between 1 and 65535")
+			}
+		}
+	}
 	if cfg.SSLMode != "" {
 		switch cfg.SSLMode {
 		case "prefer", "require", "verify-ca", "verify-full", "disable":
 		default:
-			return fmt.Errorf("ssl: use prefer, require, verify-full or disable")
+			return fmt.Errorf("ssl: use prefer, require, verify-ca, verify-full or disable")
 		}
 	}
 	return nil
@@ -296,8 +316,12 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 				handled = true
 			}
 		case "ctrl+s":
-			cfg := c.cfg()
-			cmds = append(cmds, func() tea.Msg { return SaveConnectionMsg{Cfg: cfg} })
+			if err := c.validate(); err != nil {
+				c.err = err.Error()
+			} else {
+				cfg := c.cfg()
+				cmds = append(cmds, func() tea.Msg { return SaveConnectionMsg{Cfg: cfg} })
+			}
 			handled = true
 		case "d":
 			if c.focus == c.savedFocus() && len(c.saved) > 0 {
@@ -390,12 +414,12 @@ func (c *ConnScreen) View(width, height int) string {
 	b.WriteString(styles.StyleLogo.Render(logoASCII))
 	b.WriteString("\n\n")
 	b.WriteString(c.renderForm())
-	content := centerLines(b.String())
+	content := b.String()
 
 	// Saved connections are only shown if there is room next to the form;
 	// otherwise they are omitted so they don't hide it.
 	if len(c.saved) > 0 {
-		saved := centerLines(c.renderSaved())
+		saved := c.renderSaved()
 		if lipgloss.Height(content)+2+lipgloss.Height(saved) <= c.height {
 			content += "\n\n" + saved
 		}
@@ -405,8 +429,11 @@ func (c *ConnScreen) View(width, height int) string {
 		content += "\n\n" + styles.StyleError.Render(c.err)
 	}
 
-	// Center vertically if it fits; if it overflows, anchor to the top so the
-	// logo is never hidden.
+	// Center every line horizontally so logo and form share the center axis;
+	// then center vertically (a no-op horizontally once all lines are the
+	// terminal width).
+	content = centerBlock(content, c.width)
+
 	if lipgloss.Height(content) > c.height {
 		content = lipgloss.Place(c.width, c.height, lipgloss.Center, lipgloss.Top, content)
 	} else {
@@ -421,18 +448,17 @@ func (c *ConnScreen) View(width, height int) string {
 	return content
 }
 
-// centerLines centers each line of the block to the maximum width.
-func centerLines(content string) string {
+// centerBlock centers each line of the content horizontally within width and
+// pads it on both sides to exactly `width`, so a later lipgloss.Place only has
+// to do vertical alignment. Lines are measured with runewidth after stripping
+// ANSI, which is reliable for styled text.
+func centerBlock(content string, width int) string {
 	lines := strings.Split(content, "\n")
-	blockW := 0
-	for _, l := range lines {
-		if w := lipgloss.Width(l); w > blockW {
-			blockW = w
-		}
-	}
 	for i, l := range lines {
-		if pad := (blockW - lipgloss.Width(l)) / 2; pad > 0 {
-			lines[i] = strings.Repeat(" ", pad) + l
+		if w := runewidth.StringWidth(ansi.Strip(l)); w < width {
+			left := (width - w) / 2
+			right := width - w - left
+			lines[i] = strings.Repeat(" ", left) + l + strings.Repeat(" ", right)
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -450,7 +476,7 @@ func (c *ConnScreen) renderForm() string {
 	b.WriteString("\n\n")
 
 	// engine selector
-	b.WriteString(c.fieldRow("Engine", c.renderMotorSelector()))
+	b.WriteString(fieldRow("Engine", c.renderMotorSelector()))
 	b.WriteString("\n")
 
 	// fields, stacked without blank lines so they don't overflow on small terminals
@@ -470,7 +496,7 @@ func (c *ConnScreen) renderForm() string {
 		} else {
 			box = style.Width(fieldBoxW).Render(f.input.View())
 		}
-		b.WriteString(c.fieldRow(f.label, box))
+		b.WriteString(fieldRow(f.label, box))
 		b.WriteString("\n")
 	}
 
@@ -487,7 +513,7 @@ func (c *ConnScreen) renderForm() string {
 }
 
 // fieldRow joins the label (fixed width, on the left) with its box.
-func (c *ConnScreen) fieldRow(label, box string) string {
+func fieldRow(label, box string) string {
 	lbl := styles.StyleFieldLabel.Width(fieldLabelW).Align(lipgloss.Right).Render(label)
 	return lipgloss.JoinHorizontal(lipgloss.Center, lbl, " ", box)
 }

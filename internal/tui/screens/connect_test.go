@@ -1,10 +1,13 @@
 package screens
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/agmonetti/relm/internal/conn"
 )
@@ -167,5 +170,142 @@ func TestConnScreen_CycleDriverUpdatesConfig(t *testing.T) {
 	cfg := c.cfg()
 	if cfg.Driver != conn.DriverPostgres || cfg.Port != 5432 {
 		t.Errorf("cfg = %+v, want postgres:5432", cfg)
+	}
+}
+
+func TestConnScreen_ValuesSurviveDriverSwitch(t *testing.T) {
+	c := NewConnScreen(nil)
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	c.field("File").input.SetValue("/data/app.db")
+	c.field("Host").input.SetValue("db.example.com")
+	c.field("Port").input.SetValue("5433")
+
+	c.cycleDriver(true) // sqlite -> postgres
+	if got := c.field("Host").input.Value(); got != "db.example.com" {
+		t.Errorf("Host after switch = %q, want preserved", got)
+	}
+	if got := c.field("Port").input.Value(); got != "5433" {
+		t.Errorf("Port after switch = %q, want preserved", got)
+	}
+
+	c.cycleDriver(false) // postgres -> sqlite
+	if got := c.field("File").input.Value(); got != "/data/app.db" {
+		t.Errorf("File after switch back = %q, want preserved", got)
+	}
+}
+
+func TestConnScreen_ValidatePort(t *testing.T) {
+	c := NewConnScreen(nil)
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	c.cycleDriver(true) // postgres
+	c.field("Host").input.SetValue("localhost")
+
+	c.field("Port").input.SetValue("not-a-number")
+	if err := c.validate(); err == nil {
+		t.Error("expected error for a non-numeric port")
+	}
+	c.field("Port").input.SetValue("99999")
+	if err := c.validate(); err == nil {
+		t.Error("expected error for a port out of range")
+	}
+	c.field("Port").input.SetValue("")
+	if err := c.validate(); err != nil {
+		t.Errorf("empty port (use default) = %v, want nil", err)
+	}
+	c.field("Port").input.SetValue("5432")
+	if err := c.validate(); err != nil {
+		t.Errorf("valid port = %v, want nil", err)
+	}
+}
+
+func TestConnScreen_SaveValidatesBeforeSaving(t *testing.T) {
+	c := NewConnScreen(nil)
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// empty sqlite path: ctrl+s must not emit a SaveConnectionMsg
+	updated, cmd := c.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	c = updated
+	if cmd != nil {
+		t.Fatal("ctrl+s with invalid form must not emit a save command")
+	}
+	if c.err == "" {
+		t.Error("expected a visible error on invalid save")
+	}
+}
+
+// centerDelta returns twice the horizontal center of a line minus the ideal
+// center of a `width`-wide terminal (59.5 for 120), so centered content is 0.
+func centerDelta(line string, width int) (int, bool) {
+	plain := ansi.Strip(line)
+	trimmed := strings.TrimSpace(plain)
+	if trimmed == "" {
+		return 0, false
+	}
+	start := strings.Index(plain, trimmed)
+	w := runewidth.StringWidth(trimmed)
+	center := start + (w-1)/2
+	return 2*center - (width - 1), true
+}
+
+func absInt(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+func TestConnScreen_ContentHorizontallyCentered(t *testing.T) {
+	const w = 120
+	c := NewConnScreen(nil)
+	out := c.View(w, 30)
+
+	// cell column of a byte index (chars before `sub` may include multibyte)
+	colOf := func(plain, sub string) int {
+		return runewidth.StringWidth(plain[:strings.Index(plain, sub)])
+	}
+
+	var logoOK bool
+	var boxLeft, boxRight, boxTopCol = -1, -1, -1
+	for _, l := range strings.Split(out, "\n") {
+		plain := ansi.Strip(l)
+		trimmed := strings.TrimSpace(plain)
+		switch {
+		case strings.HasPrefix(trimmed, "_____"): // logo line 1
+			d, ok := centerDelta(l, w)
+			if !ok {
+				continue
+			}
+			logoOK = true
+			if d < -3 || d > 3 {
+				t.Errorf("logo center off by %d cols: %q", d, l)
+			}
+		case strings.Contains(trimmed, "Engine │"): // a field row (label + box)
+			boxLeft = runewidth.StringWidth(plain[:strings.Index(plain, "│")])
+			boxRight = runewidth.StringWidth(plain[:strings.LastIndex(plain, "│")])
+		case strings.HasPrefix(trimmed, "╭"): // the box top border line
+			boxTopCol = colOf(plain, "╭")
+		}
+	}
+	if !logoOK {
+		t.Error("logo line not found in the connect screen")
+	}
+	if boxLeft < 0 || boxRight < 0 {
+		t.Fatal("form field row not found in the connect screen")
+	}
+
+	// the field row is the label (fieldLabelW) + separator + box, centered as a
+	// unit: its left edge must be as far from the terminal left as its right
+	// edge is from the terminal right
+	rowLeft := boxLeft - (fieldLabelW + 1)
+	rowRight := boxRight
+	if d := absInt(rowLeft - (w - 1 - rowRight)); d > 1 {
+		t.Errorf("form row center off by %d cols (box %d..%d)", d, boxLeft, boxRight)
+	}
+
+	// the box top border must align with the box content
+	if boxTopCol < 0 {
+		t.Error("box top border not found")
+	} else if boxTopCol != boxLeft {
+		t.Errorf("box top border at col %d but content at %d", boxTopCol, boxLeft)
 	}
 }
