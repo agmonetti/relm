@@ -49,6 +49,10 @@ Table/column names are escaped with each engine's `QuoteIdent` dialect (`"x"`, `
 - **`ConnectionConfig.ReadOnly`** — opens SQLite with `mode=ro` (no WAL or `busy_timeout`). A write returns a driver error. Persisted in saved connections.
 - **`ConnectionConfig.SSLMode`** — PostgreSQL sets `sslmode` (`prefer` by default; `require`, `verify-ca`, `verify-full`, `disable`). Persisted in saved connections.
 - Validation of the `SSL` field in the form: invalid values prevent connecting.
+- **Query timeout and cancellation** — queries run with a `context.WithTimeout`
+  (configurable in the settings screen, `Ctrl+P`, persisted in `prefs.json`;
+  default 60s) and can be cancelled with `Esc`. The context aborts the driver
+  call, so a hung query no longer shows an indefinite spinner.
 
 ## Security backlog
 
@@ -57,8 +61,7 @@ Ordered by impact:
 1. **OS keychain** for saved passwords (removes the plaintext tradeoff).
 2. **Global `read-only` flag/option** that applies to all five engines, not just SQLite.
 3. **TLS options for MySQL/MariaDB and SQL Server** (not exposed today; they use the driver default).
-4. **Query execution timeout** (today there's only a 5s connection timeout; a hung query shows an indefinite spinner).
-5. **Persisted query history** — if added, make sure it doesn't include passwords (risk of queries with inline credentials).
+4. **Persisted query history** — if added, make sure it doesn't include passwords (risk of queries with inline credentials).
 
 ## What `relm` is NOT
 

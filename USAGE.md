@@ -19,7 +19,7 @@ go build -o relm ./cmd/relm
 ./relm
 ```
 
-(Requires Go 1.22+. The SQLite driver is pure-Go `modernc.org/sqlite`, so no gcc/CGO is needed; it builds and runs on Windows, Linux and macOS.)
+(Requires Go 1.26+. The SQLite driver is pure-Go `modernc.org/sqlite`, so no gcc/CGO is needed; it builds and runs on Windows, Linux and macOS.)
 
 ---
 
@@ -260,6 +260,7 @@ with `↑↓` and press `d`.
 | `Ctrl+C` / `q` | Quit |
 | `Ctrl+N` | New connection |
 | `Ctrl+S` | Save connection |
+| `Ctrl+P` | Settings (query timeout) |
 | `Tab` | Next pane (sidebar → main → editor) |
 | `Alt+1` / `Alt+2` / `Alt+3` | Jump to sidebar / main / editor |
 | `i` | Active table structure |
@@ -268,6 +269,7 @@ with `↑↓` and press `d`.
 | `PgUp` / `PgDn` | Change page |
 | `r` | Refresh |
 | `Ctrl+R` | Run query (editor) |
+| `Esc` (while running) | Cancel the running query |
 | `Ctrl+L` | Clear editor |
 | `↑↓` (editor, empty input) | Query history |
 | `?` | Help |

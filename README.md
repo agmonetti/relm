@@ -11,7 +11,7 @@ Supports exactly **five engines**: SQLite, PostgreSQL, MySQL, MariaDB and SQL Se
 
 ## Installation
 
-Requires Go 1.22+. No CGO or gcc needed: the SQLite driver is the pure-Go
+Requires Go 1.26+. No CGO or gcc needed: the SQLite driver is the pure-Go
 `modernc.org/sqlite`.
 
 ```bash
@@ -35,6 +35,7 @@ The **connection screen** opens. Pick the engine with `←`/`→`, fill in the f
 | `Ctrl+C` / `q` | Quit |
 | `Ctrl+N` | New connection |
 | `Ctrl+S` | Save connection (connection screen) |
+| `Ctrl+P` | Settings (query timeout) |
 | `Tab` | Move focus to the next pane (sidebar → main → editor) |
 | `Alt+1` / `Alt+2` / `Alt+3` | Jump to sidebar / main / editor |
 | `i` | View the active table structure (main pane) |
@@ -44,6 +45,7 @@ The **connection screen** opens. Pick the engine with `←`/`→`, fill in the f
 | `r` | Refresh table |
 | `Alt+B` | Show/hide sidebar |
 | `Ctrl+R` | Run query (in the editor) |
+| `Esc` (while running) | Cancel the running query |
 | `Ctrl+L` | Clear editor input |
 | `↑↓` (in editor) | Navigate query history |
 | `?` | Help |
@@ -54,10 +56,15 @@ The **connection screen** opens. Pick the engine with `←`/`→`, fill in the f
   in separate panes with visible borders; `Tab` / `Alt+1..3` move the focus.
 - Auto-refresh: after a write query (INSERT/UPDATE/DELETE/CREATE/...) the
   sidebar and the open table are reloaded automatically.
-- Table browser with pagination (50 rows per page) and a navigable sidebar.
-- Multiline SQL editor with history of the last 100 queries.
+- Stable table browser with keyset pagination over the primary key (with an
+  OFFSET fallback for tables without a single-column PK), so refreshing never
+  moves the visible rows.
+- Multiline SQL editor with history of the last 100 queries. Queries run in the
+  background with a configurable timeout (`Ctrl+P`) and can be cancelled with
+  `Esc` while running.
 - Table structure: columns, constraints and indexes.
-- Saved connections in `~/.config/relm/connections.json`.
+- Saved connections in `~/.config/relm/connections.json`; preferences (query
+  timeout) in `~/.config/relm/prefs.json`.
 - `Read-only` mode for SQLite and `SSL` field for PostgreSQL (see `06-security.md`).
 - NULL is shown as `∅`; long values are truncated with `…`.
 - No server, no prior configuration, a single binary.
@@ -92,7 +99,7 @@ go test ./...
 
 ## Stack
 
-Go 1.22+, bubbletea + lipgloss + bubbles (Charmbracelet), drivers:
+Go 1.26+, bubbletea + lipgloss + bubbles (Charmbracelet), drivers:
 `modernc.org/sqlite`, `jackc/pgx/v5`, `go-sql-driver/mysql`, `microsoft/go-mssqldb`.
 
 ## Design documentation

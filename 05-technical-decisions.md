@@ -50,14 +50,22 @@ func (s *SQLiteStore) Tables() ([]string, error) {
 
 | Engine | QuoteIdent | Pagination | Schema source |
 |---|---|---|---|
-| SQLite | `"name"` | `ORDER BY 1 LIMIT n OFFSET m` | `sqlite_master` + `PRAGMA` |
-| PostgreSQL | `"name"` | `ORDER BY 1 LIMIT n OFFSET m` | `information_schema` + `pg_indexes` |
-| MySQL | `` `name` `` | `ORDER BY 1 LIMIT n OFFSET m` | `information_schema` |
-| MariaDB | `` `name` `` | `ORDER BY 1 LIMIT n OFFSET m` | `information_schema` |
-| SQL Server | `[name]` | `ORDER BY 1 OFFSET m ROWS FETCH NEXT n ROWS ONLY` | `INFORMATION_SCHEMA` + `sys.indexes` |
+| SQLite | `"name"` | keyset `ORDER BY "pk"` / `LIMIT n` (OFFSET fallback) | `sqlite_master` + `PRAGMA` |
+| PostgreSQL | `"name"` | keyset `ORDER BY "pk"` / `LIMIT n` (OFFSET fallback) | `information_schema` + `pg_indexes` |
+| MySQL | `` `name` `` | keyset `ORDER BY "pk"` / `LIMIT n` (OFFSET fallback) | `information_schema` |
+| MariaDB | `` `name` `` | keyset `ORDER BY "pk"` / `LIMIT n` (OFFSET fallback) | `information_schema` |
+| SQL Server | `[name]` | keyset `ORDER BY "pk"` / `OFFSET..FETCH` (OFFSET fallback) | `INFORMATION_SCHEMA` + `sys.indexes` |
 
-- `ORDER BY 1` (first column) keeps the pagination stable when rows change between refreshes; it is the same heuristic SQL Server already required.
-- `LIMIT n OFFSET m` uses integers (page, pageSize), safe for direct interpolation.
+- Tables with a single-column primary key are browsed with **keyset pagination**
+  (`WHERE "pk" > <last key> ORDER BY "pk" LIMIT n`), so refreshing never moves
+  the visible rows and pages do not skip/duplicate rows between refreshes. The
+  browser fetches one extra row to know whether another page exists.
+- PostgreSQL casts the bound parameter (`$1::<data_type>` with the type read
+  from `information_schema` and cached per table+column) so the primary-key
+  index stays usable regardless of the column type.
+- Tables without a primary key or with a composite primary key fall back to
+  OFFSET pagination with `ORDER BY 1` (the first column).
+- `LIMIT n` uses integers (page, pageSize), safe for direct interpolation.
 - Identifiers (table/column names) are ALWAYS escaped with `QuoteIdent`, including the browser's active table: `SELECT * FROM "my table"`.
 - `Result.Rows` is `[][]string` in all engines. The engine store converts each native type to string (including `[]byte`, `time.Time`, `decimal`) and `NULL` to `""` (the UI renders it as `∅`).
 
@@ -167,7 +175,7 @@ dsn := fmt.Sprintf(
 | Query ending with semicolon | Works normally. |
 | Multiple statements separated by `;` | Execute the statement under the cursor (by line). If several statements are on the same line, the first one is chosen. The split respects strings (`'...'`, `''`, `\`). |
 | `DROP TABLE users` | Execute normally. `relm` doesn't ask for confirmation (the user knows what they're doing). |
-| Query taking >5 seconds | No execution timeout. Show a spinner. |
+| Query taking >5 seconds | No execution timeout by default. Show a spinner. The query runs with `context.WithTimeout` using the user's configured timeout (`Ctrl+P`, default 60s); `Esc` cancels it (both abort the driver call via `QueryContext`/`ExecContext`). |
 | Unsupported dialect | The engine's literal SQL error is shown in red. The user writes SQL for the engine they're connected to. |
 
 ### Terminal
@@ -196,6 +204,20 @@ dsn := fmt.Sprintf(
 - `read_only` (SQLite) and `ssl_mode` (PostgreSQL) are also persisted and reused when connecting.
 - The password is never shown in the form (masked field). If the saved connection has no password, the field is left empty for the user to enter it.
 - The file is read when opening `ScreenConnect` and written with `Ctrl+S`. File read/write errors are silently ignored (they don't break the session).
+
+## Preferences
+
+- File: `~/.config/relm/prefs.json`, permissions `0600`.
+- Structure:
+  ```json
+  { "query_timeout_seconds": 60 }
+  ```
+- `query_timeout_seconds` bounds every user query run from the editor
+  (`context.WithTimeout`); values `<= 0` fall back to the default (60s).
+- Edited from the settings screen (`Ctrl+P`, available from the connect and
+  workspace screens) and saved with `Enter`. The change applies to the next
+  query.
+- Same directory resolution as `connections.json` (`RELM_CONFIG_DIR` override).
 
 ## User-facing messages
 
