@@ -15,6 +15,11 @@ Browse tables, run queries and inspect schemas — all from the keyboard, all in
 
 > **First time?** `relm` connects to databases that already exist — it doesn't start servers.
 > See **[USAGE.md](USAGE.md)** for a step-by-step guide: create a test database, connect and run your first query.
+>
+> **Try it right now:** `go run ./cmd/demo` creates `demo.db` with 20 tables and
+> a few thousand rows each (no server needed). With `docker compose up -d` first,
+> `go run ./cmd/demo --all` seeds the same dataset into PostgreSQL, MySQL,
+> MariaDB and SQL Server too.
 
 ## Install
 

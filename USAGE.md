@@ -39,6 +39,8 @@ go run ./cmd/demo
 ./relm
 ```
 
+The same generator can also seed the network engines (see section 2a):
+
 **By hand with the sqlite CLI:**
 
 ```bash
@@ -194,7 +196,24 @@ CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
 > server create the `test` database on its own. SQL Server does not need it: it already ships `master`.
 > You can create tables directly from the `relm` editor (`Ctrl+R`) — no other client needed.
 
-### 2b. Connect from the connection screen
+### 2b. Seed the demo data into every engine (optional)
+
+The `test` databases start empty. To fill all four with the same example
+dataset as `demo.db` (20 tables, a few thousand rows each) in one command:
+
+```bash
+go run ./cmd/demo --all
+# or per engine:  go run ./cmd/demo --postgres | --mysql | --mariadb | --mssql
+# make targets:   make demo-pg / demo-mysql / demo-maria / demo-mssql / demo-all
+```
+
+The dataset is deterministic (same rows every run) and the command drops and
+recreates the demo tables, so it is safe to re-run. Credentials default to the
+`compose.yaml` values and can be overridden with environment variables
+(`POSTGRES_HOST`, `MYSQL_PASSWORD`, `MSSQL_PORT`, ...). For PostgreSQL you can
+point the `SSL` field at `disable` for the local container.
+
+### 2c. Connect from the connection screen
 
 1. With `←`/`→` on the **Engine** selector, pick the engine (SQLite, PostgreSQL, MySQL, MariaDB, SQL Server).
 2. The form changes to `Host · Port · User · Password · Database` (PostgreSQL adds `SSL`):
@@ -227,7 +246,7 @@ CONTAINER ID   IMAGE     COMMAND   CREATED   STATUS    PORTS     NAMES
 > In MySQL/MariaDB an empty database shows `no tables — use the editor to create one`.
 > Type `CREATE TABLE ...` in the editor and `Ctrl+R`, and the table appears in the sidebar after `r`.
 
-### 2c. Save the connection for next time
+### 2d. Save the connection for next time
 
 With the connection screen ready, `Ctrl+S` saves it in
 `~/.config/relm/connections.json`. Next time it appears in the
