@@ -3,6 +3,7 @@
 package browser
 
 import (
+	"context"
 	"sort"
 
 	"github.com/agmonetti/relm/internal/store"
@@ -32,13 +33,13 @@ type Browser struct {
 }
 
 // New loads the tables of the database and selects the first one.
-func New(st store.Store) (*Browser, error) {
+func New(ctx context.Context, st store.Store) (*Browser, error) {
 	b := &Browser{PageSize: PageSizeDefault}
-	if err := b.Load(st); err != nil {
+	if err := b.Load(ctx, st); err != nil {
 		return nil, err
 	}
 	if len(b.Tables) > 0 {
-		if err := b.SelectTable(b.Tables[0], st); err != nil {
+		if err := b.SelectTable(ctx, b.Tables[0], st); err != nil {
 			return nil, err
 		}
 	}
@@ -46,7 +47,7 @@ func New(st store.Store) (*Browser, error) {
 }
 
 // Load reloads the list of tables.
-func (b *Browser) Load(st store.Store) error {
+func (b *Browser) Load(ctx context.Context, st store.Store) error {
 	tables, err := st.Tables()
 	if err != nil {
 		return err
@@ -57,7 +58,7 @@ func (b *Browser) Load(st store.Store) error {
 }
 
 // SelectTable switches the active table, resets the page and loads its data.
-func (b *Browser) SelectTable(name string, st store.Store) error {
+func (b *Browser) SelectTable(ctx context.Context, name string, st store.Store) error {
 	b.ActiveTable = name
 	b.Page = 0
 	b.Cursor = 0
@@ -77,7 +78,7 @@ func (b *Browser) SelectTable(name string, st store.Store) error {
 	b.orderBy, b.keyIdx = keysetKey(cols)
 	b.cur = []string{""}
 	b.hasNext = false
-	return b.countAndRefresh(st)
+	return b.countAndRefresh(ctx, st)
 }
 
 // keysetKey returns the single-column primary key for keyset pagination, or an
@@ -100,33 +101,33 @@ func keysetKey(cols []store.Column) (string, int) {
 // (countAndRefresh); page navigation keeps the last known count, so COUNT(*)
 // does not run on every PgUp/PgDn. In keyset mode the page is re-fetched from
 // its stored cursor, so refreshing does not move the visible rows.
-func (b *Browser) Refresh(st store.Store) error {
+func (b *Browser) Refresh(ctx context.Context, st store.Store) error {
 	if b.ActiveTable == "" {
 		return nil
 	}
-	return b.fetchPage(st)
+	return b.fetchPage(ctx, st)
 }
 
 // countAndRefresh loads the row count of the active table and its page. It is
 // the expensive path: a full COUNT(*) runs here, on table selection and on
 // Reload (manual refresh or after a write query from the editor).
-func (b *Browser) countAndRefresh(st store.Store) error {
+func (b *Browser) countAndRefresh(ctx context.Context, st store.Store) error {
 	if b.ActiveTable == "" {
 		return nil
 	}
-	total, err := st.CountTable(b.ActiveTable)
+	total, err := st.CountTableContext(ctx, b.ActiveTable)
 	if err != nil {
 		return err
 	}
 	b.TotalRows = total
-	return b.fetchPage(st)
+	return b.fetchPage(ctx, st)
 }
 
 // fetchPage loads the current page of the active table using the stored
 // pagination state. It never runs COUNT(*).
-func (b *Browser) fetchPage(st store.Store) error {
+func (b *Browser) fetchPage(ctx context.Context, st store.Store) error {
 	if b.orderBy == "" {
-		res, err := st.SelectTablePage(b.ActiveTable, b.PageSize, b.Page*b.PageSize)
+		res, err := st.SelectTablePageContext(ctx, b.ActiveTable, b.PageSize, b.Page*b.PageSize)
 		if err != nil {
 			return err
 		}
@@ -137,7 +138,7 @@ func (b *Browser) fetchPage(st store.Store) error {
 
 	// keyset: fetch the page after cur[Page], asking for one extra row to
 	// know whether another page follows
-	res, err := st.SelectTableKeysetPage(b.ActiveTable, b.orderBy, b.PageSize+1, b.cur[b.Page])
+	res, err := st.SelectTableKeysetPageContext(ctx, b.ActiveTable, b.orderBy, b.PageSize+1, b.cur[b.Page])
 	if err != nil {
 		return err
 	}
@@ -155,13 +156,13 @@ func (b *Browser) fetchPage(st store.Store) error {
 // had no active table (e.g. you created a table from the editor) or the active
 // one no longer exists, it selects the first. Covers tables created/dropped
 // externally or from the editor.
-func (b *Browser) Reload(st store.Store) error {
-	if err := b.Load(st); err != nil {
+func (b *Browser) Reload(ctx context.Context, st store.Store) error {
+	if err := b.Load(ctx, st); err != nil {
 		return err
 	}
 	if b.ActiveTable == "" || !hasString(b.Tables, b.ActiveTable) {
 		if len(b.Tables) > 0 {
-			return b.SelectTable(b.Tables[0], st)
+			return b.SelectTable(ctx, b.Tables[0], st)
 		}
 		b.ActiveTable = ""
 		b.Columns = nil
@@ -175,7 +176,7 @@ func (b *Browser) Reload(st store.Store) error {
 	if err := b.refreshMeta(st); err != nil {
 		return err
 	}
-	return b.countAndRefresh(st)
+	return b.countAndRefresh(ctx, st)
 }
 
 // refreshMeta reloads the columns and indexes of the active table and
@@ -217,14 +218,14 @@ func hasString(list []string, want string) bool {
 }
 
 // NextPage advances to the next page if it exists.
-func (b *Browser) NextPage(st store.Store) error {
+func (b *Browser) NextPage(ctx context.Context, st store.Store) error {
 	if !b.HasNextPage() {
 		return nil
 	}
 	if b.orderBy == "" {
 		b.Page++
 		b.Cursor = 0
-		return b.Refresh(st)
+		return b.Refresh(ctx, st)
 	}
 	last, ok := b.lastKey()
 	if !ok {
@@ -233,25 +234,25 @@ func (b *Browser) NextPage(st store.Store) error {
 	b.cur = append(b.cur, last)
 	b.Page++
 	b.Cursor = 0
-	return b.Refresh(st)
+	return b.Refresh(ctx, st)
 }
 
 // PrevPage goes back to the previous page if it exists.
-func (b *Browser) PrevPage(st store.Store) error {
+func (b *Browser) PrevPage(ctx context.Context, st store.Store) error {
 	if !b.HasPrevPage() {
 		return nil
 	}
 	if b.orderBy == "" {
 		b.Page--
 		b.Cursor = 0
-		return b.Refresh(st)
+		return b.Refresh(ctx, st)
 	}
 	// re-fetching forward from the previous page's cursor and trimming to the
 	// page size yields exactly the previous page (it is full by construction)
 	b.cur = b.cur[:b.Page]
 	b.Page--
 	b.Cursor = 0
-	return b.Refresh(st)
+	return b.Refresh(ctx, st)
 }
 
 // MoveCursor moves the selected row within the visible page.
@@ -288,4 +289,20 @@ func (b *Browser) clampCursor() {
 	if max := len(b.Rows) - 1; b.Cursor > max {
 		b.Cursor = max
 	}
+}
+
+// Clone returns a deep copy of the browser. The TUI runs slow navigation
+// operations on a clone in a background goroutine and swaps the result in, so
+// the UI goroutine never observes a partially-updated Browser.
+func (b *Browser) Clone() *Browser {
+	c := *b
+	c.Tables = append([]string(nil), b.Tables...)
+	c.Columns = append([]store.Column(nil), b.Columns...)
+	c.Indexes = append([]store.Index(nil), b.Indexes...)
+	c.Rows = make([][]string, len(b.Rows))
+	for i, r := range b.Rows {
+		c.Rows[i] = append([]string(nil), r...)
+	}
+	c.cur = append([]string(nil), b.cur...)
+	return &c
 }

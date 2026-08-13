@@ -14,13 +14,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	_ "modernc.org/sqlite"
 
+	"github.com/agmonetti/relm/internal/conn"
+	"github.com/agmonetti/relm/internal/prefs"
+	"github.com/agmonetti/relm/internal/store"
 	_ "github.com/agmonetti/relm/internal/store/mssql"
 	_ "github.com/agmonetti/relm/internal/store/mysql" // registers the engines for the tests
 	_ "github.com/agmonetti/relm/internal/store/postgres"
 	_ "github.com/agmonetti/relm/internal/store/sqlite"
-	"github.com/agmonetti/relm/internal/conn"
-	"github.com/agmonetti/relm/internal/prefs"
-	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
@@ -469,7 +469,7 @@ func TestModel_DetailViewShowsLongValue(t *testing.T) {
 
 func TestModel_MouseIgnoredOnConnectScreen(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir()) // don't depend on the user's prefs
-	m := newModel(t) // starts on the connect screen
+	m := newModel(t)                         // starts on the connect screen
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
 	step(t, m, mouseMsg(20, 5, tea.MouseButtonRight, tea.MouseActionPress))
@@ -502,7 +502,7 @@ func TestModel_WheelScrollsSidebar(t *testing.T) {
 			t.Fatalf("create: %v", err)
 		}
 	}
-	if err := m.browser.Reload(m.store); err != nil {
+	if err := m.browser.Reload(context.Background(), m.store); err != nil {
 		t.Fatalf("reload: %v", err)
 	}
 	if m.sidebarCursor != 0 {
@@ -566,7 +566,7 @@ func TestModel_ClickSelectsSidebarTable(t *testing.T) {
 			t.Fatalf("create: %v", err)
 		}
 	}
-	if err := m.browser.Reload(m.store); err != nil {
+	if err := m.browser.Reload(context.Background(), m.store); err != nil {
 		t.Fatalf("reload: %v", err)
 	}
 	step(t, m, mouseMsg(5, 5, tea.MouseButtonLeft, tea.MouseActionPress)) // table 2
@@ -583,7 +583,7 @@ func TestModel_ClickSelectsMainRow(t *testing.T) {
 			t.Fatalf("insert: %v", err)
 		}
 	}
-	press(t, m, "2") // open users (10 rows)
+	press(t, m, "2")                                                       // open users (10 rows)
 	step(t, m, mouseMsg(50, 6, tea.MouseButtonLeft, tea.MouseActionPress)) // data row 2
 	if m.browser.Cursor != 2 {
 		t.Errorf("cursor = %d, want 2", m.browser.Cursor)
@@ -726,6 +726,28 @@ func TestModel_AutoRefreshAfterInsert(t *testing.T) {
 	}
 }
 
+func TestModel_AutoRefreshAfterInsertReturning(t *testing.T) {
+	m := connect(t)
+
+	press(t, m, "2") // open users
+	if m.browser.ActiveTable != "users" {
+		t.Fatalf("setup: ActiveTable = %q, want users", m.browser.ActiveTable)
+	}
+
+	pressAlt(t, m, "3")
+	press(t, m, "INSERT INTO users (name, email) VALUES ('Dana','d@t.com') RETURNING id")
+	pressKey(t, m, "ctrl+r")
+	if m.editor == nil || m.editor.Result == nil || len(m.editor.Result.Columns) == 0 {
+		t.Fatalf("INSERT RETURNING did not produce a table: %+v", m.editor)
+	}
+
+	// RETURNING returns rows (Affected = -1) but the data changed: the browser
+	// must still auto-refresh.
+	if m.browser.TotalRows != 3 {
+		t.Errorf("TotalRows = %d, want 3 after auto-refresh (RETURNING)", m.browser.TotalRows)
+	}
+}
+
 func TestModel_ToggleSidebar(t *testing.T) {
 	m := connect(t)
 	press(t, m, "2") // open users (has rows)
@@ -860,4 +882,134 @@ func TestModel_ConnectToPostgres(t *testing.T) {
 		t.Fatalf("browser without tables")
 	}
 	_ = m.View()
+}
+
+// blockingStore blocks page fetches until its unblock channel is closed, so
+// tests can observe the navigating state while a navigation is in flight.
+type blockingStore struct {
+	store.Store
+	unblock chan struct{}
+}
+
+func (s *blockingStore) SelectTablePageContext(ctx context.Context, table string, limit, offset int) (*store.Result, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-s.unblock:
+	}
+	return s.Store.SelectTablePageContext(ctx, table, limit, offset)
+}
+
+func (s *blockingStore) SelectTableKeysetPageContext(ctx context.Context, table, key string, limit int, cursor string) (*store.Result, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-s.unblock:
+	}
+	return s.Store.SelectTableKeysetPageContext(ctx, table, key, limit, cursor)
+}
+
+func (s *blockingStore) CountTableContext(ctx context.Context, table string) (int, error) {
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case <-s.unblock:
+	}
+	return s.Store.CountTableContext(ctx, table)
+}
+
+// TestModel_PageNavigationRunsAsync verifies that a page change is applied in
+// the background: the model reports navigating while it is in flight and the
+// new page is swapped in when it lands.
+func TestModel_PageNavigationRunsAsync(t *testing.T) {
+	m := connect(t)
+	for i := 0; i < 60; i++ {
+		if _, err := m.store.Exec(fmt.Sprintf("INSERT INTO users (name, email) VALUES ('u%d','u%d@t.com')", i, i)); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	press(t, m, "2") // open users
+	pressAlt(t, m, "2")
+
+	unblock := make(chan struct{})
+	m.store = &blockingStore{Store: m.store, unblock: unblock}
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m = updated.(*Model)
+	if !m.navigating {
+		t.Fatal("navigating should be true while the page is loading")
+	}
+
+	// let the in-flight operation complete
+	close(unblock)
+	if out := cmd(); out != nil {
+		if batch, ok := out.(tea.BatchMsg); ok {
+			for _, sub := range batch {
+				if sub == nil {
+					continue
+				}
+				if subMsg := sub(); subMsg != nil {
+					step(t, m, subMsg)
+				}
+			}
+		} else {
+			step(t, m, out)
+		}
+	}
+	if m.navigating {
+		t.Error("navigating should be false after the page lands")
+	}
+	if m.browser.Page != 1 {
+		t.Errorf("Page = %d, want 1", m.browser.Page)
+	}
+}
+
+// TestModel_EscCancelsNavigation verifies that Esc aborts an in-flight
+// navigation and that a superseded navigation is dropped.
+func TestModel_EscCancelsNavigation(t *testing.T) {
+	m := connect(t)
+	press(t, m, "2") // open users
+	pressAlt(t, m, "2")
+
+	unblock := make(chan struct{})
+	m.store = &blockingStore{Store: m.store, unblock: unblock}
+
+	// start a navigation; it blocks in the background
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m = updated.(*Model)
+	if !m.navigating {
+		t.Fatal("setup: navigating should be true")
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(*Model)
+	if m.navigating {
+		t.Error("navigating should be false after Esc")
+	}
+
+	// let the cancelled op finish; its cancelled result must not move pages
+	close(unblock)
+	if m.browser.Page != 0 {
+		t.Errorf("Page = %d, want 0 (cancelled navigation must not move pages)", m.browser.Page)
+	}
+}
+
+func TestModel_ConnectIsAsync(t *testing.T) {
+	m := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	db := createTestDB(t)
+	pressKey(t, m, "tab") // focus the File field
+	press(t, m, db)
+	pressKey(t, m, "enter") // connect
+
+	if m.screen != ScreenWorkspace {
+		t.Fatalf("screen = %d, want ScreenWorkspace", m.screen)
+	}
+	if m.connecting {
+		t.Error("connecting should be false after the load lands")
+	}
+	if m.browser == nil {
+		t.Fatal("browser should be loaded")
+	}
 }

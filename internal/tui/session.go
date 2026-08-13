@@ -3,19 +3,28 @@ package tui
 import (
 	"fmt"
 
-	"github.com/agmonetti/relm/internal/browser"
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/agmonetti/relm/internal/conn"
 	"github.com/agmonetti/relm/internal/editor"
 	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
-// doConnect opens the store and loads the browser.
-func (m *Model) doConnect(cfg conn.ConnectionConfig) {
+// doConnect opens the store and starts loading the browser. The store opening
+// (with the engine's connection timeout) is synchronous; the schema and first
+// page are loaded in the background so connecting to a big or slow database
+// shows a spinner instead of freezing the UI.
+func (m *Model) doConnect(cfg conn.ConnectionConfig) tea.Cmd {
+	m.cancelNav()
+	m.cancelConnect()
 	m.cancelQuery()
 	m.closeStore()
 	m.queryID++
+	m.navID = 0
 	m.loading = false
+	m.navigating = false
+	m.connecting = false
 	m.resizing = false
 	m.showDetail = false
 	m.editorScreen.ResetResult()
@@ -32,20 +41,10 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) {
 	if err != nil {
 		m.connect.SetError(err.Error())
 		m.screen = ScreenConnect
-		return
+		return nil
 	}
 	m.store = st
-
-	b, err := browser.New(st)
-	if err != nil {
-		st.Close()
-		m.store = nil
-		m.connect.SetError(err.Error())
-		m.screen = ScreenConnect
-		return
-	}
-	m.browser = b
-	m.screen = ScreenWorkspace
+	return m.loadBrowserCmd(st)
 }
 
 // saveConnection persists the current connection.
@@ -97,10 +96,15 @@ func (m *Model) deleteConnection(name string) {
 
 // newSession closes the session and returns to the connection screen.
 func (m *Model) newSession() {
+	m.cancelNav()
+	m.cancelConnect()
 	m.cancelQuery()
 	m.closeStore()
 	m.queryID++
+	m.navID = 0
 	m.loading = false
+	m.navigating = false
+	m.connecting = false
 	m.resizing = false
 	m.showDetail = false
 	m.editorScreen.ResetResult()

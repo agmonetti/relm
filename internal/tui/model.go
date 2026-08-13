@@ -63,8 +63,18 @@ type Model struct {
 
 	spinner spinner.Model
 	loading bool
-	queryID int             // token to discard results from stale queries
+	queryID int                // token to discard results from stale queries
 	cancel  context.CancelFunc // cancels the running query
+
+	// browser navigation runs in the background (like the editor) so a slow
+	// table cannot freeze the UI. Only one navigation and one connection load
+	// may be in flight; both are bounded by the configured query timeout and
+	// cancelled with Esc.
+	navigating    bool
+	navCancel     context.CancelFunc
+	navID         int // incremented per navigation; stale results are dropped
+	connecting    bool
+	connectCancel context.CancelFunc
 
 	// workspace pane sizes (0 = auto), resizable with a right-click drag
 	sidebarW  int

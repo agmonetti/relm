@@ -256,9 +256,14 @@ func (s *Store) ExecContext(ctx context.Context, sql string) (int64, error) {
 
 // CountTable returns the number of rows in a table.
 func (s *Store) CountTable(table string) (int, error) {
+	return s.CountTableContext(context.Background(), table)
+}
+
+// CountTableContext returns the number of rows in a table, bounded by ctx.
+func (s *Store) CountTableContext(ctx context.Context, table string) (int, error) {
 	q := fmt.Sprintf("SELECT COUNT(*) FROM %s", QuoteIdent(table))
 	var n int
-	if err := s.db.QueryRow(q).Scan(&n); err != nil {
+	if err := s.db.QueryRowContext(ctx, q).Scan(&n); err != nil {
 		return 0, fmt.Errorf("store.CountTable(%s): %w", table, err)
 	}
 	return n, nil
@@ -266,18 +271,34 @@ func (s *Store) CountTable(table string) (int, error) {
 
 // SelectTablePage returns a page of rows from a table.
 func (s *Store) SelectTablePage(table string, limit, offset int) (*store.Result, error) {
+	return s.SelectTablePageContext(context.Background(), table, limit, offset)
+}
+
+// SelectTablePageContext returns a page of rows from a table, bounded by ctx.
+func (s *Store) SelectTablePageContext(ctx context.Context, table string, limit, offset int) (*store.Result, error) {
 	q := fmt.Sprintf("SELECT * FROM %s %s", QuoteIdent(table), Limit(limit, offset))
-	return s.Query(q)
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return store.ScanResult(rows)
 }
 
 // SelectTableKeysetPage returns the page after cursor ordered by the key.
 func (s *Store) SelectTableKeysetPage(table, key string, limit int, cursor string) (*store.Result, error) {
+	return s.SelectTableKeysetPageContext(context.Background(), table, key, limit, cursor)
+}
+
+// SelectTableKeysetPageContext returns the page after cursor ordered by the
+// key, bounded by ctx.
+func (s *Store) SelectTableKeysetPageContext(ctx context.Context, table, key string, limit int, cursor string) (*store.Result, error) {
 	q := fmt.Sprintf("SELECT * FROM %s", QuoteIdent(table))
 	if cursor != "" {
 		q += fmt.Sprintf(" WHERE %s > ?", QuoteIdent(key))
 	}
 	q += fmt.Sprintf(" ORDER BY %s LIMIT %d", QuoteIdent(key), limit)
-	rows, err := s.db.Query(q, queryArgs(cursor)...)
+	rows, err := s.db.QueryContext(ctx, q, queryArgs(cursor)...)
 	if err != nil {
 		return nil, err
 	}

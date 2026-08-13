@@ -1,9 +1,13 @@
 package tui
 
 import (
+	"context"
+
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/agmonetti/relm/internal/browser"
+	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
@@ -32,9 +36,9 @@ func (m *Model) handleWorkspaceKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setFocus(screens.FocusMain)
 		return m, nil
 	case !typingEditor && key.Matches(msg, m.keys.Refresh) && m.browser != nil:
-		m.setErr(m.browser.Reload(m.store))
-		m.clampSidebar()
-		return m, nil
+		return m, m.runBrowserOp(func(b *browser.Browser, st store.Store, ctx context.Context) error {
+			return b.Reload(ctx, st)
+		})
 	}
 
 	switch m.focus {
@@ -107,25 +111,27 @@ func (m *Model) handleSidebarKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case msg.Type == tea.KeyEnter:
-		m.selectTable(m.sidebarCursor)
-		return m, nil
+		return m, m.selectTable(m.sidebarCursor)
 	case msg.Type == tea.KeyRunes && !msg.Alt && len(msg.Runes) == 1 &&
 		msg.Runes[0] >= '1' && msg.Runes[0] <= '9':
 		idx := int(msg.Runes[0] - '1')
-		m.selectTable(idx)
-		return m, nil
+		return m, m.selectTable(idx)
 	}
 	return m, nil
 }
 
-// selectTable opens the table at index idx in the sidebar.
-func (m *Model) selectTable(idx int) {
+// selectTable opens the table at index idx in the sidebar, loading its data in
+// the background.
+func (m *Model) selectTable(idx int) tea.Cmd {
 	if m.browser == nil || idx < 0 || idx >= len(m.browser.Tables) {
-		return
+		return nil
 	}
 	m.sidebarCursor = idx
 	m.structure = false
-	m.setErr(m.browser.SelectTable(m.browser.Tables[idx], m.store))
+	name := m.browser.Tables[idx]
+	return m.runBrowserOp(func(b *browser.Browser, st store.Store, ctx context.Context) error {
+		return b.SelectTable(ctx, name, st)
+	})
 }
 
 // clampSidebar keeps the sidebar cursor inside the table list.
@@ -148,6 +154,10 @@ func (m *Model) handleMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	b := m.browser
+	if m.navigating {
+		// a navigation is in flight: ignore row/page keys until it lands
+		return m, nil
+	}
 	switch {
 	case key.Matches(msg, m.keys.Back):
 		if m.structure {
@@ -170,11 +180,13 @@ func (m *Model) handleMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		b.MoveCursor(1)
 		return m, nil
 	case key.Matches(msg, m.keys.PageUp):
-		m.setErr(b.PrevPage(m.store))
-		return m, nil
+		return m, m.runBrowserOp(func(nb *browser.Browser, st store.Store, ctx context.Context) error {
+			return nb.PrevPage(ctx, st)
+		})
 	case key.Matches(msg, m.keys.PageDown):
-		m.setErr(b.NextPage(m.store))
-		return m, nil
+		return m, m.runBrowserOp(func(nb *browser.Browser, st store.Store, ctx context.Context) error {
+			return nb.NextPage(ctx, st)
+		})
 	case key.Matches(msg, m.keys.First):
 		b.MoveCursor(-len(b.Rows))
 		return m, nil

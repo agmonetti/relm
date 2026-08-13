@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -44,7 +45,7 @@ func seedRows(t *testing.T, st store.Store, n int) {
 
 func TestNewLoadsTablesAndSelectsFirst(t *testing.T) {
 	st := newTestStore(t)
-	b, err := New(st)
+	b, err := New(context.Background(), st)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -63,10 +64,10 @@ func TestNewLoadsTablesAndSelectsFirst(t *testing.T) {
 func TestBrowser_SelectTable_LoadsColumns(t *testing.T) {
 	st := newTestStore(t)
 	b := &Browser{PageSize: 50}
-	if err := b.Load(st); err != nil {
+	if err := b.Load(context.Background(), st); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if err := b.SelectTable("users", st); err != nil {
+	if err := b.SelectTable(context.Background(), "users", st); err != nil {
 		t.Fatalf("SelectTable: %v", err)
 	}
 	if len(b.Columns) != 3 {
@@ -82,7 +83,7 @@ func TestBrowser_Pagination(t *testing.T) {
 	seedRows(t, st, 120)
 
 	b := &Browser{PageSize: 50}
-	if err := b.SelectTable("users", st); err != nil {
+	if err := b.SelectTable(context.Background(), "users", st); err != nil {
 		t.Fatalf("SelectTable: %v", err)
 	}
 
@@ -96,14 +97,14 @@ func TestBrowser_Pagination(t *testing.T) {
 		t.Error("page 0: HasNextPage=true and HasPrevPage=false expected")
 	}
 
-	if err := b.NextPage(st); err != nil {
+	if err := b.NextPage(context.Background(), st); err != nil {
 		t.Fatalf("NextPage: %v", err)
 	}
 	if len(b.Rows) != 50 || b.Page != 1 {
 		t.Errorf("page 1: rows=%d page=%d", len(b.Rows), b.Page)
 	}
 
-	if err := b.NextPage(st); err != nil {
+	if err := b.NextPage(context.Background(), st); err != nil {
 		t.Fatalf("NextPage: %v", err)
 	}
 	if len(b.Rows) != 20 {
@@ -113,14 +114,14 @@ func TestBrowser_Pagination(t *testing.T) {
 		t.Error("page 2 (last) should not have a next page")
 	}
 
-	if err := b.NextPage(st); err != nil {
+	if err := b.NextPage(context.Background(), st); err != nil {
 		t.Fatalf("NextPage out of range: %v", err)
 	}
 	if b.Page != 2 {
 		t.Errorf("Page = %d, should not advance beyond 2", b.Page)
 	}
 
-	if err := b.PrevPage(st); err != nil {
+	if err := b.PrevPage(context.Background(), st); err != nil {
 		t.Fatalf("PrevPage: %v", err)
 	}
 	if b.Page != 1 {
@@ -133,7 +134,7 @@ func TestBrowser_MoveCursor_Clamps(t *testing.T) {
 	seedRows(t, st, 5)
 
 	b := &Browser{PageSize: 50}
-	if err := b.SelectTable("users", st); err != nil {
+	if err := b.SelectTable(context.Background(), "users", st); err != nil {
 		t.Fatalf("SelectTable: %v", err)
 	}
 	b.MoveCursor(10)
@@ -151,7 +152,7 @@ func TestBrowser_KeysetRefreshIsStable(t *testing.T) {
 	seedRows(t, st, 60) // users id 1..60
 
 	b := &Browser{PageSize: 50}
-	if err := b.SelectTable("users", st); err != nil {
+	if err := b.SelectTable(context.Background(), "users", st); err != nil {
 		t.Fatalf("SelectTable: %v", err)
 	}
 	if b.orderBy != "id" || b.keyIdx != 0 {
@@ -165,7 +166,7 @@ func TestBrowser_KeysetRefreshIsStable(t *testing.T) {
 	if _, err := st.Exec("INSERT INTO users (name, email) VALUES ('u0b','u0b@t.com')"); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	if err := b.Refresh(st); err != nil {
+	if err := b.Refresh(context.Background(), st); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
 	if b.Rows[0][1] != "u0" {
@@ -177,13 +178,13 @@ func TestBrowser_KeysetRefreshIsStable(t *testing.T) {
 		t.Fatal("page 0 should have a next page")
 	}
 	page0Last := b.Rows[len(b.Rows)-1][0]
-	if err := b.NextPage(st); err != nil {
+	if err := b.NextPage(context.Background(), st); err != nil {
 		t.Fatalf("NextPage: %v", err)
 	}
 	if b.Page != 1 || len(b.Rows) == 0 {
 		t.Fatalf("page 1 = %d rows, want > 0", len(b.Rows))
 	}
-	if err := b.PrevPage(st); err != nil {
+	if err := b.PrevPage(context.Background(), st); err != nil {
 		t.Fatalf("PrevPage: %v", err)
 	}
 	if b.Page != 0 || len(b.Rows) != 50 {
@@ -204,7 +205,7 @@ func TestBrowser_KeysetFallbackWithoutPK(t *testing.T) {
 	}
 
 	b := &Browser{PageSize: 50}
-	if err := b.SelectTable("nopk", st); err != nil {
+	if err := b.SelectTable(context.Background(), "nopk", st); err != nil {
 		t.Fatalf("SelectTable: %v", err)
 	}
 	if b.orderBy != "" {
@@ -217,7 +218,7 @@ func TestBrowser_KeysetFallbackWithoutPK(t *testing.T) {
 
 func TestBrowser_ReloadAfterDropRecreateWithoutPK(t *testing.T) {
 	st := newTestStore(t)
-	b, err := New(st) // selects "orders" (has id PK)
+	b, err := New(context.Background(), st) // selects "orders" (has id PK)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -236,7 +237,7 @@ func TestBrowser_ReloadAfterDropRecreateWithoutPK(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 
-	if err := b.Reload(st); err != nil {
+	if err := b.Reload(context.Background(), st); err != nil {
 		t.Fatalf("Reload: %v", err)
 	}
 	if b.orderBy != "" {
@@ -257,7 +258,7 @@ func TestBrowser_KeysetFallbackWithCompositePK(t *testing.T) {
 	}
 
 	b := &Browser{PageSize: 50}
-	if err := b.SelectTable("comp", st); err != nil {
+	if err := b.SelectTable(context.Background(), "comp", st); err != nil {
 		t.Fatalf("SelectTable: %v", err)
 	}
 	if b.orderBy != "" {
@@ -277,7 +278,7 @@ func TestBrowser_EmptyDatabase(t *testing.T) {
 	}
 	defer st.Close()
 
-	b, err := New(st)
+	b, err := New(context.Background(), st)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -301,29 +302,34 @@ func (c *countingStore) CountTable(table string) (int, error) {
 	return c.Store.CountTable(table)
 }
 
+func (c *countingStore) CountTableContext(ctx context.Context, table string) (int, error) {
+	c.counts++
+	return c.Store.CountTableContext(ctx, table)
+}
+
 func TestBrowser_CountRunsOnSelectNotOnPageNav(t *testing.T) {
 	st := newTestStore(t)
 	seedRows(t, st, 120)
 
 	b := &Browser{PageSize: 50}
-	if err := b.SelectTable("users", st); err != nil {
+	if err := b.SelectTable(context.Background(), "users", st); err != nil {
 		t.Fatalf("SelectTable: %v", err)
 	}
 
 	c := &countingStore{Store: st}
-	if err := b.Refresh(c); err != nil {
+	if err := b.Refresh(context.Background(), c); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
 	if c.counts != 0 {
 		t.Errorf("Refresh must not re-count, CountTable called %d times", c.counts)
 	}
-	if err := b.NextPage(c); err != nil {
+	if err := b.NextPage(context.Background(), c); err != nil {
 		t.Fatalf("NextPage: %v", err)
 	}
 	if c.counts != 0 {
 		t.Errorf("NextPage must not re-count, CountTable called %d times", c.counts)
 	}
-	if err := b.Reload(c); err != nil {
+	if err := b.Reload(context.Background(), c); err != nil {
 		t.Fatalf("Reload: %v", err)
 	}
 	if c.counts != 1 {
@@ -333,7 +339,7 @@ func TestBrowser_CountRunsOnSelectNotOnPageNav(t *testing.T) {
 
 func TestBrowser_ReloadPicksUpNewTableAndRows(t *testing.T) {
 	st := newTestStore(t)
-	b, err := New(st)
+	b, err := New(context.Background(), st)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -350,7 +356,7 @@ func TestBrowser_ReloadPicksUpNewTableAndRows(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 
-	if err := b.Reload(st); err != nil {
+	if err := b.Reload(context.Background(), st); err != nil {
 		t.Fatalf("Reload: %v", err)
 	}
 	if len(b.Tables) != 3 {
@@ -371,14 +377,14 @@ func TestBrowser_ReloadPicksUpNewTableAndRows(t *testing.T) {
 		t.Fatalf("store.New: %v", err)
 	}
 	defer st2.Close()
-	b2, err := New(st2) // empty database → ActiveTable ""
+	b2, err := New(context.Background(), st2) // empty database → ActiveTable ""
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	if _, err := st2.Exec("CREATE TABLE recien (id INTEGER PRIMARY KEY)"); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if err := b2.Reload(st2); err != nil {
+	if err := b2.Reload(context.Background(), st2); err != nil {
 		t.Fatalf("Reload: %v", err)
 	}
 	if b2.ActiveTable != "recien" {

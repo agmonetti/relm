@@ -117,9 +117,15 @@ func (m *Model) renderFooter() string {
 	}
 
 	right := ""
-	if m.loading {
+	switch {
+	case m.loading:
 		right = m.spinner.View() + " running query…"
-	} else if m.screen == ScreenWorkspace && m.focus != screens.FocusEditor &&
+	case m.connecting:
+		right = m.spinner.View() + " connecting…"
+	case m.navigating:
+		right = m.spinner.View() + " loading…"
+	}
+	if right == "" && m.screen == ScreenWorkspace && m.focus != screens.FocusEditor &&
 		m.browser != nil && m.browser.ActiveTable != "" && m.browser.TotalRows > 0 {
 		first := m.browser.Page*m.browser.PageSize + 1
 		last := (m.browser.Page + 1) * m.browser.PageSize

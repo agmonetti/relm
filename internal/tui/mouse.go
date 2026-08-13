@@ -1,17 +1,22 @@
 package tui
 
 import (
+	"context"
+
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/agmonetti/relm/internal/browser"
+	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
 // handleMouse handles mouse events in the workspace: a left click focuses and
 // selects the clicked row, a right-click drag resizes the nearest pane divider
-// and the wheel scrolls the pane under the pointer.
-func (m *Model) handleMouse(msg tea.MouseMsg) {
+// and the wheel scrolls the pane under the pointer. Page changes from the
+// wheel run in the background; the returned cmd carries the navigation.
+func (m *Model) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	if m.screen != ScreenWorkspace || m.showHelp {
-		return
+		return nil
 	}
 	if m.showDetail {
 		switch msg.Button {
@@ -20,7 +25,11 @@ func (m *Model) handleMouse(msg tea.MouseMsg) {
 		case tea.MouseButtonWheelDown:
 			m.detailScroll++
 		}
-		return
+		return nil
+	}
+	if m.navigating {
+		// a navigation is in flight: ignore wheel/click row ops until it lands
+		return nil
 	}
 	innerW := m.width - 2
 	if innerW < 1 {
@@ -38,8 +47,7 @@ func (m *Model) handleMouse(msg tea.MouseMsg) {
 	wy := msg.Y - 2
 
 	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
-		m.scrollAt(wx, wy, layout, msg.Button)
-		return
+		return m.scrollAt(wx, wy, layout, msg.Button)
 	}
 
 	switch msg.Action {
@@ -65,10 +73,11 @@ func (m *Model) handleMouse(msg tea.MouseMsg) {
 			m.persistLayout()
 		}
 	}
+	return nil
 }
 
 // scrollAt scrolls the pane under the pointer with the mouse wheel.
-func (m *Model) scrollAt(wx, wy int, layout screens.WorkspaceLayout, btn tea.MouseButton) {
+func (m *Model) scrollAt(wx, wy int, layout screens.WorkspaceLayout, btn tea.MouseButton) tea.Cmd {
 	delta := 0
 	switch btn {
 	case tea.MouseButtonWheelUp:
@@ -76,7 +85,7 @@ func (m *Model) scrollAt(wx, wy int, layout screens.WorkspaceLayout, btn tea.Mou
 	case tea.MouseButtonWheelDown:
 		delta = 1
 	default:
-		return
+		return nil
 	}
 	const wheelStep = 3
 
@@ -84,10 +93,11 @@ func (m *Model) scrollAt(wx, wy int, layout screens.WorkspaceLayout, btn tea.Mou
 	case layout.ShowSidebar && wx < layout.SidebarW:
 		m.scrollSidebar(delta * wheelStep)
 	case wy > layout.MainH:
-		m.scrollResults(delta * wheelStep, layout)
+		m.scrollResults(delta*wheelStep, layout)
 	default:
-		m.scrollMain(delta * wheelStep)
+		return m.scrollMain(delta * wheelStep)
 	}
+	return nil
 }
 
 func (m *Model) scrollSidebar(delta int) {
@@ -103,21 +113,28 @@ func (m *Model) scrollSidebar(delta int) {
 	}
 }
 
-func (m *Model) scrollMain(delta int) {
+func (m *Model) scrollMain(delta int) tea.Cmd {
 	b := m.browser
 	if b == nil || len(b.Rows) == 0 {
-		return
+		return nil
 	}
 	if delta < 0 && b.Cursor == 0 && b.HasPrevPage() {
-		b.PrevPage(m.store)
-		b.MoveCursor(len(b.Rows)) // land on the last row of the previous page
-		return
+		// land on the last row of the previous page after the async swap
+		return m.runBrowserOp(func(nb *browser.Browser, st store.Store, ctx context.Context) error {
+			if err := nb.PrevPage(ctx, st); err != nil {
+				return err
+			}
+			nb.MoveCursor(len(nb.Rows))
+			return nil
+		})
 	}
 	if delta > 0 && b.Cursor >= len(b.Rows)-1 && b.HasNextPage() {
-		b.NextPage(m.store)
-		return
+		return m.runBrowserOp(func(nb *browser.Browser, st store.Store, ctx context.Context) error {
+			return nb.NextPage(ctx, st)
+		})
 	}
 	b.MoveCursor(delta)
+	return nil
 }
 
 func (m *Model) scrollResults(delta int, layout screens.WorkspaceLayout) {

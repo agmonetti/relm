@@ -68,6 +68,13 @@ type Store interface {
 	// It may return up to limit rows. Tables without a usable single-column
 	// key use SelectTablePage instead.
 	SelectTableKeysetPage(table, key string, limit int, cursor string) (*Result, error)
+
+	// The Context variants of the pagination helpers let the caller bound the
+	// query with a timeout or cancel it. They are used by the browser so a
+	// slow or hung engine cannot freeze the UI.
+	CountTableContext(ctx context.Context, table string) (int, error)
+	SelectTablePageContext(ctx context.Context, table string, limit, offset int) (*Result, error)
+	SelectTableKeysetPageContext(ctx context.Context, table, key string, limit int, cursor string) (*Result, error)
 }
 
 // Constructor is the function that creates a Store for an engine.

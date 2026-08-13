@@ -1,12 +1,15 @@
 package tui
 
 import (
+	"context"
 	"os"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	term "github.com/charmbracelet/x/term"
 
+	"github.com/agmonetti/relm/internal/browser"
+	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
@@ -77,6 +80,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// while a query runs, Esc cancels it instead of the pane default
 		if m.loading && msg.Type == tea.KeyEsc {
 			m.cancelQuery()
+			m.loading = false
+			return m, nil
+		}
+		if m.navigating && msg.Type == tea.KeyEsc {
+			m.cancelNav()
+			m.navigating = false
+			return m, nil
+		}
+		if m.connecting && msg.Type == tea.KeyEsc {
+			m.cancelConnect()
+			m.connecting = false
 			return m, nil
 		}
 		// Esc also closes the help cheatsheet
@@ -95,7 +109,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case screens.ConnectMsg:
-		m.doConnect(msg.Cfg)
+		cmd := m.doConnect(msg.Cfg)
+		return m, cmd
 
 	case screens.SaveConnectionMsg:
 		m.saveConnection(msg.Cfg)
@@ -134,23 +149,64 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// A write query (INSERT/UPDATE/DELETE/CREATE/DROP/...) may have changed
-		// the schema or the data: refresh the table list and the open table.
+		// the schema or the data: refresh the table list and the open table in
+		// the background, so a slow reload cannot freeze the UI.
+		var cmds []tea.Cmd
 		if msg.err == nil && m.browser != nil && m.store != nil && msg.ed.Wrote {
-			m.setErr(m.browser.Reload(m.store))
-			m.clampSidebar()
+			if cmd := m.runBrowserOp(func(b *browser.Browser, st store.Store, ctx context.Context) error {
+				return b.Reload(ctx, st)
+			}); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		}
+		if len(cmds) == 0 {
+			return m, nil
+		}
+		return m, tea.Batch(cmds...)
+
+	case browserDoneMsg:
+		if msg.load {
+			if msg.token != m.queryID {
+				return m, nil // stale result: the session changed
+			}
+			m.cancelConnect()
+			m.connecting = false
+		} else {
+			if msg.navID != m.navID || msg.token != m.queryID {
+				return m, nil // stale: superseded by a newer navigation or the session changed
+			}
+			m.cancelNav()
+			m.navigating = false
+		}
+		if msg.err != nil {
+			err := friendlyErr(msg.err)
+			if msg.load {
+				// the initial load failed: close the store and go back to the
+				// connection screen with the engine error
+				m.closeStore()
+				m.connect.SetError(err.Error())
+				m.screen = ScreenConnect
+				return m, nil
+			}
+			m.setErr(err)
+			return m, nil
+		}
+		m.browser = msg.b
+		if msg.load {
+			m.screen = ScreenWorkspace
+		}
+		m.clampSidebar()
 		return m, nil
 
 	case spinner.TickMsg:
-		if m.loading {
+		if m.busy() {
 			var cmd tea.Cmd
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
 		}
 
 	case tea.MouseMsg:
-		m.handleMouse(msg)
-		return m, nil
+		return m, m.handleMouse(msg)
 	}
 
 	return m, nil
