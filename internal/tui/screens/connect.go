@@ -308,8 +308,8 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 		case "left", "right":
 			if c.focus == 0 {
 				c.cycleDriver(msg.String() == "right")
+				handled = true
 			}
-			handled = true
 		case "up", "down":
 			if c.focus == c.savedFocus() {
 				c.moveSaved(msg.String() == "up")

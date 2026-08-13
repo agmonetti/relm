@@ -254,6 +254,34 @@ func absInt(n int) int {
 	return n
 }
 
+func TestConnScreen_ArrowsMoveCaretInField(t *testing.T) {
+	c := NewConnScreen(nil)
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// focus on the File field (sqlite: engine(0) + File(1))
+	c.focus = 1
+	c.applyFocus()
+	f := c.field("File")
+	f.input.SetValue("abcd")
+	updated, _ := f.input.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	f.input = updated
+	if p := f.input.Position(); p != 3 {
+		t.Fatalf("left arrow on a field should move the caret, position = %d, want 3", p)
+	}
+	updated, _ = f.input.Update(tea.KeyMsg{Type: tea.KeyRight})
+	f.input = updated
+	if p := f.input.Position(); p != 4 {
+		t.Fatalf("right arrow on a field should move the caret, position = %d, want 4", p)
+	}
+	// the screen must not swallow the arrow when a field has the focus
+	c.fields[0].input = f.input
+	c.focus = 1
+	c.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	if p := c.field("File").input.Position(); p != 3 {
+		t.Errorf("ConnScreen must forward left arrow to the focused field, position = %d, want 3", p)
+	}
+}
+
 func TestConnScreen_ContentHorizontallyCentered(t *testing.T) {
 	for _, w := range []int{80, 120, 160} {
 		w := w
