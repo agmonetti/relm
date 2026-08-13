@@ -240,6 +240,33 @@ This file documents crossroads and decisions the agent makes during development,
 
 **Lesson:** a CGO driver that "builds without CGO" via a stub is a silent failure — the binary compiles but the engine is broken at runtime. Prefer a pure-Go driver when the tool must be a single portable binary. Bonus: on Windows, tests that open a SQLite file must close the store, or `TempDir` cleanup fails because the file stays locked. It was the same with mattn; the stub hid it before.
 
+---
+
+## L-24 — A portable demo generator needs per-engine DDL, not just placeholders
+
+**Crossroads:** extending `cmd/demo` to seed the four network engines from the same dataset as SQLite. The SQLite schema (`INTEGER PRIMARY KEY`, `TEXT`, `REAL`) and `CREATE TABLE IF NOT EXISTS` do not translate directly.
+
+**Decision:** a `internal/demo` package that maps SQLite column types per engine:
+- PK autoincrement: `BIGSERIAL` (PG), `AUTO_INCREMENT` (MySQL/MariaDB), `IDENTITY(1,1)` (MSSQL).
+- `TEXT UNIQUE` → `VARCHAR(255) UNIQUE` / `NVARCHAR(255) UNIQUE` (TEXT and NVARCHAR(MAX) can't be UNIQUE key columns in MySQL/MSSQL).
+- `CREATE TABLE IF NOT EXISTS` doesn't exist in MSSQL → drop tables first, then plain `CREATE TABLE`.
+- Reserved words (`key`, `read`) need quoting; quote ALL identifiers per engine (backticks/brackets), mirroring relm's own `QuoteIdent`.
+- Placeholders differ: `?` / `$N` (pgx) / `@pN` (mssql).
+- `sql.Open` driver names differ from engine names: mariadb → "mysql", postgres → "pgx", mssql → "sqlserver".
+
+**Lesson:** "portable SQL" is a myth for DDL; the demo needed a small per-engine DDL translator plus identifier quoting. Validated against the real `docker compose` containers (C5).
+
+---
+
+## L-25 — Moving the browser to background ops needs an ID, not just a session token
+
+**Crossroads:** page/table navigation ran synchronously on the UI goroutine, so a slow `COUNT(*)` or page fetch froze the TUI. Making it asynchronous (like the editor) surfaced a staleness bug: after `Esc` cancels a navigation, a new one can start while the old goroutine is still finishing, and the old result would overwrite the new one.
+
+**Decision:** the session token (`queryID`) only changes on connect/session-switch, so it can't distinguish two navigations in the same session. Added `navID`, incremented per navigation dispatch; a `browserDoneMsg` is applied only if its `navID` matches the current one. Also: navigation mutates a `Clone()` of the Browser off-screen and swaps it in on success, so the UI never sees a half-updated browser.
+
+**Lesson:** when moving a stateful operation off the UI goroutine, cancellation and supersession need a per-operation identity, not just a per-session one. Cloning the state for off-screen mutation is a simple way to keep the UI race-free without locking.
+
+
 
 
 
