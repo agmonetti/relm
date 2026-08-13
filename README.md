@@ -91,7 +91,10 @@ go test ./...       # tests
 go vet ./...        # lint
 ```
 
-`relm --print-layout` prints the connect screen and workspace as plain text — useful to report layout bugs from any terminal.
+`relm --print-layout` prints the connect screen and workspace as plain text —
+useful to report layout bugs from any terminal. Pass `--width`/`--height` to
+force the terminal size (e.g. `relm --print-layout --width 80 --height 40`),
+which makes layout bugs reproducible in CI without a real terminal.
 
 ### Integration tests (network engines)
 

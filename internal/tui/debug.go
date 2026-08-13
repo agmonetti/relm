@@ -14,11 +14,22 @@ import (
 
 // PrintLayout renders the connection screen and a sample workspace as plain
 // text (no TUI) together with the terminal size the app would use. It is meant
-// to diagnose layout problems on any terminal: `relm --print-layout`.
-func PrintLayout() int {
-	w, h, err := term.GetSize(os.Stdout.Fd())
-	if err != nil {
-		w, h = 120, 30
+// to diagnose layout problems on any terminal: `relm --print-layout`. A zero
+// width/height detects the real terminal (120x30 when not a TTY); a positive
+// value forces the size, which makes layout bugs reproducible in CI.
+func PrintLayout(width, height int) int {
+	w, h := width, height
+	if w == 0 || h == 0 {
+		rw, rh, err := term.GetSize(os.Stdout.Fd())
+		if err != nil {
+			rw, rh = 120, 30
+		}
+		if w == 0 {
+			w = rw
+		}
+		if h == 0 {
+			h = rh
+		}
 	}
 	w, h = correctSize(w, h)
 

@@ -17,9 +17,11 @@ import (
 
 func main() {
 	printLayout := flag.Bool("print-layout", false, "print the layout as text and exit (debug)")
+	layoutW := flag.Int("width", 0, "force the terminal width for --print-layout (0 = detect)")
+	layoutH := flag.Int("height", 0, "force the terminal height for --print-layout (0 = detect)")
 	flag.Parse()
 	if *printLayout {
-		os.Exit(tui.PrintLayout())
+		os.Exit(tui.PrintLayout(*layoutW, *layoutH))
 	}
 
 	// Cell motion reports mouse movement only while a button is held, which is
