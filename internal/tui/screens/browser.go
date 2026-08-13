@@ -23,7 +23,7 @@ func SidebarWindow(cursor, height int) (offset, visible int) {
 // RenderSidebar renders the table list with a selection cursor and the opened
 // table marked. It scrolls vertically so the cursor stays visible.
 func RenderSidebar(b *browser.Browser, cursor, width, height int) string {
-	if width < 10 || height < 1 {
+	if b == nil || width < 10 || height < 1 {
 		return ""
 	}
 	n := len(b.Tables)
