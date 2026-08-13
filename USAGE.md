@@ -264,6 +264,7 @@ with `↑↓` and press `d`.
 | `Tab` | Next pane (sidebar → main → editor) |
 | `Alt+1` / `Alt+2` / `Alt+3` | Jump to sidebar / main / editor |
 | `i` | Active table structure |
+| `v` | Row detail (full values) |
 | `Enter` (sidebar) | Open the selected table |
 | `↑↓` / `j k` | Navigate rows (main) or tables (sidebar) |
 | `PgUp` / `PgDn` | Change page |

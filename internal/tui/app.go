@@ -106,6 +106,13 @@ type Model struct {
 	showSidebar bool
 	showHelp    bool
 	err         string
+
+	// detail view ("v"): a snapshot of the selected row with full values
+	showDetail   bool
+	detailScroll int
+	detailTitle  string
+	detailCols   []string
+	detailVals   []string
 }
 
 // Divider targeted by a right-click drag.
@@ -170,6 +177,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.openSettings()
 			}
 			return m, nil
+		}
+
+		// the detail view only accepts scrolling and Esc
+		if m.showDetail {
+			return m.handleDetailKeys(msg)
 		}
 
 		// while a query runs, Esc cancels it instead of the pane default
@@ -285,9 +297,14 @@ func (m *Model) render() string {
 	case ScreenSettings:
 		content = m.settings.View(innerW, contentHeight)
 	case ScreenWorkspace:
-		layout := screens.ComputeLayout(innerW, contentHeight, m.showSidebar, m.sidebarW, m.editorH)
-		content = screens.RenderWorkspace(m.browser, m.editorScreen, m.editor,
-			m.focus, m.structure, layout, m.sidebarCursor, innerW, contentHeight)
+		if m.showDetail {
+			content = screens.RenderRowDetail(m.detailTitle, m.detailCols, m.detailVals,
+				m.detailScroll, innerW, contentHeight)
+		} else {
+			layout := screens.ComputeLayout(innerW, contentHeight, m.showSidebar, m.sidebarW, m.editorH)
+			content = screens.RenderWorkspace(m.browser, m.editorScreen, m.editor,
+				m.focus, m.structure, layout, m.sidebarCursor, innerW, contentHeight)
+		}
 	}
 
 	body := content
@@ -350,7 +367,7 @@ func (m *Model) renderFooter() string {
 			if m.structure {
 				left = "esc back · tab next"
 			} else {
-				left = "↑↓ rows · i structure · r refresh · pgup/pgdn page · tab next · right-click resize"
+				left = "↑↓ rows · i structure · v detail · r refresh · pgup/pgdn page · tab next · right-click resize"
 			}
 		case screens.FocusEditor:
 			left = "ctrl+r run · ctrl+l clear · esc back"
@@ -423,6 +440,37 @@ func (m *Model) leaveSettings() {
 	m.settings.Blur()
 }
 
+// handleDetailKeys handles the keys of the row detail view.
+func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case msg.Type == tea.KeyEsc:
+		m.showDetail = false
+		m.detailScroll = 0
+	case key.Matches(msg, m.keys.Up):
+		m.detailScroll--
+	case key.Matches(msg, m.keys.Down):
+		m.detailScroll++
+	case key.Matches(msg, m.keys.PageUp):
+		m.detailScroll -= 10
+	case key.Matches(msg, m.keys.PageDown):
+		m.detailScroll += 10
+	case key.Matches(msg, m.keys.First):
+		m.detailScroll = 0
+	case key.Matches(msg, m.keys.Last):
+		m.detailScroll = 1 << 30 // clamped in the renderer
+	}
+	return m, nil
+}
+
+// openDetail shows the full values of a row.
+func (m *Model) openDetail(title string, cols, vals []string) {
+	m.detailTitle = title
+	m.detailCols = cols
+	m.detailVals = vals
+	m.detailScroll = 0
+	m.showDetail = true
+}
+
 // cancelQuery cancels a running query, if any.
 func (m *Model) cancelQuery() {
 	if m.cancel != nil {
@@ -436,6 +484,15 @@ func (m *Model) cancelQuery() {
 // and the wheel scrolls the pane under the pointer.
 func (m *Model) handleMouse(msg tea.MouseMsg) {
 	if m.screen != ScreenWorkspace || m.showHelp {
+		return
+	}
+	if m.showDetail {
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			m.detailScroll--
+		case tea.MouseButtonWheelDown:
+			m.detailScroll++
+		}
 		return
 	}
 	innerW := m.width - 2
@@ -670,6 +727,7 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) {
 	m.queryID++
 	m.loading = false
 	m.resizing = false
+	m.showDetail = false
 	m.editorScreen.ResetResult()
 	m.browser = nil
 	m.editor = editor.New()
@@ -754,6 +812,7 @@ func (m *Model) newSession() {
 	m.queryID++
 	m.loading = false
 	m.resizing = false
+	m.showDetail = false
 	m.editorScreen.ResetResult()
 	m.browser = nil
 	m.editor = editor.New()
@@ -919,6 +978,15 @@ func (m *Model) handleMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Back):
 		if m.structure {
 			m.structure = false
+		}
+		return m, nil
+	case key.Matches(msg, m.keys.Detail):
+		if !m.structure && len(b.Rows) > 0 && b.Cursor >= 0 && b.Cursor < len(b.Rows) {
+			cols := make([]string, len(b.Columns))
+			for i, c := range b.Columns {
+				cols[i] = c.Name
+			}
+			m.openDetail(b.ActiveTable, cols, b.Rows[b.Cursor])
 		}
 		return m, nil
 	case key.Matches(msg, m.keys.Up):

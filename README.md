@@ -39,6 +39,7 @@ The **connection screen** opens. Pick the engine with `←`/`→`, fill in the f
 | `Tab` | Move focus to the next pane (sidebar → main → editor) |
 | `Alt+1` / `Alt+2` / `Alt+3` | Jump to sidebar / main / editor |
 | `i` | View the active table structure (main pane) |
+| `v` | Row detail: full values of the selected row |
 | `Enter` (sidebar) | Open the selected table in the main pane |
 | `↑↓` / `k j` | Navigate rows (main) or tables (sidebar) |
 | `PgUp` / `PgDn` | Change page |

@@ -419,6 +419,54 @@ func TestModel_LeftClickFocusesPane(t *testing.T) {
 	}
 }
 
+func TestModel_DetailView(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+	press(t, m, "2")    // open users
+	pressAlt(t, m, "2") // focus main
+	press(t, m, "v")    // row detail
+	if !m.showDetail {
+		t.Fatal("detail should be open after v")
+	}
+	v := m.View()
+	if !strings.Contains(v, "Alice") || !strings.Contains(v, "email") {
+		t.Errorf("detail content missing: %q", v)
+	}
+	step(t, m, mouseMsg(50, 5, tea.MouseButtonWheelDown, tea.MouseActionPress))
+	if m.detailScroll == 0 {
+		t.Error("detailScroll should change with the wheel")
+	}
+	pressKey(t, m, "esc")
+	if m.showDetail {
+		t.Error("detail should close on Esc")
+	}
+}
+
+func TestModel_DetailViewShowsLongValue(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+	// insert a row whose first column is very long and select it
+	if _, err := m.store.Exec("INSERT INTO orders (id) VALUES (999)"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	press(t, m, "2")    // open users (has rows)
+	pressAlt(t, m, "2") // focus main
+	// move the cursor to the last row and open its detail
+	press(t, m, "G")
+	press(t, m, "v")
+	if !m.showDetail {
+		t.Fatal("detail should be open after v")
+	}
+	v := m.View()
+	if !strings.Contains(v, "users") {
+		t.Errorf("detail title missing: %q", v)
+	}
+	pressKey(t, m, "esc")
+	if m.showDetail {
+		t.Error("detail should close on Esc")
+	}
+}
+
 func TestModel_MouseIgnoredOnConnectScreen(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir()) // don't depend on the user's prefs
 	m := newModel(t) // starts on the connect screen

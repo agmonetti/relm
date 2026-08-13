@@ -111,9 +111,20 @@ func renderHeader(cells []string, widths []int) string {
 	return sb.String()
 }
 
-// colWidths computes the width of each column based on the visible content.
+// colMaxW caps the width of any single column so one very long value does not
+// starve the rest of the table. The full value is available in the detail view.
+const colMaxW = 36
+
+// colMinW is the smallest width a column is allowed to shrink to.
+const colMinW = 4
+
+// colWidths computes the width of each column based on the visible content. A
+// column is capped at colMaxW and, when the row overflows the pane, the excess
+// is distributed proportionally to each column's headroom instead of shrinking
+// the first columns to the floor.
 func colWidths(cols []string, rows [][]string, width int) []int {
-	widths := make([]int, len(cols))
+	n := len(cols)
+	widths := make([]int, n)
 	for i, c := range cols {
 		widths[i] = runewidth.StringWidth(c)
 	}
@@ -124,7 +135,7 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 	}
 	for r := 0; r < maxRows; r++ {
 		for i, cell := range rows[r] {
-			if i >= len(widths) {
+			if i >= n {
 				break
 			}
 			if w := runewidth.StringWidth(cell); w > widths[i] {
@@ -132,31 +143,70 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 			}
 		}
 	}
+	// cap wide columns so a single long value does not blow the layout
+	for i := range widths {
+		if widths[i] > colMaxW {
+			widths[i] = colMaxW
+		}
+	}
 
-	// adjust to the available width: shrink wide columns first, iterating until
-	// the row fits or no column can give up more space
-	total := len(widths) - 1 // separators
+	total := n - 1 // separators
 	for _, w := range widths {
 		total += w
 	}
-	if total > width {
-		over := total - width
-		for over > 0 {
+	if total <= width {
+		return widths
+	}
+
+	// shrink proportionally to the headroom of each column (above the floor),
+	// then absorb any remainder greedily
+	over := total - width
+	giveable := 0
+	for _, w := range widths {
+		if g := w - colMinW; g > 0 {
+			giveable += g
+		}
+	}
+	if giveable > 0 {
+		remaining := over
+		for i := range widths {
+			if remaining <= 0 {
+				break
+			}
+			g := widths[i] - colMinW
+			if g <= 0 {
+				continue
+			}
+			share := g * over / giveable
+			if share > g {
+				share = g
+			}
+			if share > remaining {
+				share = remaining
+			}
+			if share < 0 {
+				share = 0
+			}
+			widths[i] -= share
+			remaining -= share
+		}
+		// absorb any remainder greedily without going below the floor
+		for remaining > 0 {
 			progress := false
 			for i := range widths {
-				if over <= 0 {
+				if remaining <= 0 {
 					break
 				}
-				shrink := widths[i] - 4 // reasonable minimum
-				if shrink > over {
-					shrink = over
+				shrink := widths[i] - colMinW
+				if shrink > remaining {
+					shrink = remaining
 				}
 				if shrink < 0 {
 					shrink = 0
 				}
 				if shrink > 0 {
 					widths[i] -= shrink
-					over -= shrink
+					remaining -= shrink
 					progress = true
 				}
 			}
@@ -220,4 +270,82 @@ func pad(s string, w int) string {
 		return s + strings.Repeat(" ", d)
 	}
 	return s
+}
+
+// RenderRowDetail renders a single row with every column and its full value,
+// wrapped to the pane width and scrollable. Used by the detail view ("v").
+func RenderRowDetail(title string, cols, vals []string, scroll, width, height int) string {
+	if width < 4 {
+		width = 40
+	}
+	contentW := width - 4 // border (2) + padding (2)
+	if contentW < 4 {
+		contentW = 4
+	}
+
+	var b strings.Builder
+	b.WriteString(styles.StyleHeader.Render(title))
+	b.WriteString("\n")
+	if len(cols) == 0 {
+		b.WriteString(styles.StyleHeaderDim.Render("  no columns"))
+		return b.String()
+	}
+
+	var lines []string
+	lines = append(lines, "")
+	for i := range cols {
+		name := cols[i]
+		val := ""
+		if i < len(vals) {
+			val = vals[i]
+		}
+		if val == "" {
+			val = styles.NullCell()
+		}
+		lines = append(lines, styles.StyleColHeader.Render(name)+":")
+		wrapped := wrapCells(val, contentW)
+		for _, wl := range wrapped {
+			lines = append(lines, "  "+wl)
+		}
+		lines = append(lines, "")
+	}
+
+	if scroll < 0 {
+		scroll = 0
+	}
+	if scroll > len(lines) {
+		scroll = len(lines)
+	}
+	end := scroll + height
+	if end > len(lines) {
+		end = len(lines)
+	}
+	return strings.Join(lines[scroll:end], "\n")
+}
+
+// wrapCells hard-wraps a string at max cells without splitting multibyte runes.
+func wrapCells(s string, max int) []string {
+	if max <= 0 {
+		return []string{""}
+	}
+	var out []string
+	line := ""
+	lineW := 0
+	for _, r := range s {
+		w := runewidth.RuneWidth(r)
+		if lineW+w > max && lineW > 0 {
+			out = append(out, line)
+			line = ""
+			lineW = 0
+		}
+		line += string(r)
+		lineW += w
+	}
+	if line != "" {
+		out = append(out, line)
+	}
+	if len(out) == 0 {
+		out = []string{""}
+	}
+	return out
 }

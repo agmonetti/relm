@@ -182,6 +182,71 @@ func dataLines(out string, height int) []string {
 	return data
 }
 
+func TestColWidths_KeepsNaturalWhenItFits(t *testing.T) {
+	cols := []string{"id", "name"}
+	rows := [][]string{{"1", "alice"}}
+	widths := colWidths(cols, rows, 40)
+	if widths[0] != 2 || widths[1] != 5 {
+		t.Errorf("widths = %v, want [2 5]", widths)
+	}
+}
+
+func TestColWidths_CapsAndDistributes(t *testing.T) {
+	cols := []string{"id", "name", "body"}
+	rows := [][]string{{"1", "alice", strings.Repeat("x", 100)}}
+	widths := colWidths(cols, rows, 40)
+	if len(widths) != 3 {
+		t.Fatalf("widths = %v", widths)
+	}
+	if widths[2] > colMaxW {
+		t.Errorf("body width = %d, want <= %d", widths[2], colMaxW)
+	}
+	total := len(widths) - 1
+	for _, w := range widths {
+		total += w
+	}
+	if total > 40 {
+		t.Errorf("total = %d, want <= 40", total)
+	}
+	// the narrow columns keep their natural width; the long one absorbs the rest
+	if widths[0] != 2 {
+		t.Errorf("id width = %d, want 2 (kept natural)", widths[0])
+	}
+	if widths[2] <= widths[1] {
+		t.Errorf("body width %d should be the largest", widths[2])
+	}
+}
+
+func TestColWidths_CapsSingleHugeColumn(t *testing.T) {
+	cols := []string{"id", "huge"}
+	rows := [][]string{{"1", strings.Repeat("x", 500)}}
+	widths := colWidths(cols, rows, 200)
+	if widths[1] != colMaxW {
+		t.Errorf("huge width = %d, want %d", widths[1], colMaxW)
+	}
+}
+
+func TestRenderRowDetail_ShowsFullValue(t *testing.T) {
+	val := strings.Repeat("z", 100)
+	out := RenderRowDetail("users", []string{"id", "text"}, []string{"1", val}, 0, 40, 20)
+	// the value is wrapped, so every character must still be present
+	if got := strings.Count(out, "z"); got != 100 {
+		t.Errorf("found %d 'z', want 100 (full value)", got)
+	}
+	if !strings.Contains(out, "id") || !strings.Contains(out, "text") {
+		t.Error("column names must appear")
+	}
+}
+
+func TestRenderRowDetail_Scrolls(t *testing.T) {
+	val := strings.Repeat("y", 100)
+	out0 := RenderRowDetail("t", []string{"id", "body"}, []string{"1", val}, 0, 40, 3)
+	out1 := RenderRowDetail("t", []string{"id", "body"}, []string{"1", val}, 5, 40, 3)
+	if out0 == out1 {
+		t.Error("scrolling should change the visible content")
+	}
+}
+
 func ansiStripLines(s string) []string {
 	var out []string
 	for _, l := range strings.Split(s, "\n") {
