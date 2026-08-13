@@ -289,6 +289,48 @@ func TestBrowser_EmptyDatabase(t *testing.T) {
 	}
 }
 
+// countingStore wraps a store and counts CountTable calls, so tests can assert
+// when the expensive COUNT(*) runs.
+type countingStore struct {
+	store.Store
+	counts int
+}
+
+func (c *countingStore) CountTable(table string) (int, error) {
+	c.counts++
+	return c.Store.CountTable(table)
+}
+
+func TestBrowser_CountRunsOnSelectNotOnPageNav(t *testing.T) {
+	st := newTestStore(t)
+	seedRows(t, st, 120)
+
+	b := &Browser{PageSize: 50}
+	if err := b.SelectTable("users", st); err != nil {
+		t.Fatalf("SelectTable: %v", err)
+	}
+
+	c := &countingStore{Store: st}
+	if err := b.Refresh(c); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if c.counts != 0 {
+		t.Errorf("Refresh must not re-count, CountTable called %d times", c.counts)
+	}
+	if err := b.NextPage(c); err != nil {
+		t.Fatalf("NextPage: %v", err)
+	}
+	if c.counts != 0 {
+		t.Errorf("NextPage must not re-count, CountTable called %d times", c.counts)
+	}
+	if err := b.Reload(c); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if c.counts != 1 {
+		t.Errorf("Reload must re-count once, CountTable called %d times", c.counts)
+	}
+}
+
 func TestBrowser_ReloadPicksUpNewTableAndRows(t *testing.T) {
 	st := newTestStore(t)
 	b, err := New(st)

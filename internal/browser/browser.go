@@ -77,7 +77,7 @@ func (b *Browser) SelectTable(name string, st store.Store) error {
 	b.orderBy, b.keyIdx = keysetKey(cols)
 	b.cur = []string{""}
 	b.hasNext = false
-	return b.Refresh(st)
+	return b.countAndRefresh(st)
 }
 
 // keysetKey returns the single-column primary key for keyset pagination, or an
@@ -95,10 +95,22 @@ func keysetKey(cols []store.Column) (string, int) {
 	return "", -1
 }
 
-// Refresh reloads the current page of the active table. In keyset mode the
-// page is re-fetched from its stored cursor, so refreshing does not move the
-// visible rows.
+// Refresh reloads the current page of the active table without re-counting it.
+// The row count is only refreshed when the table is (re)selected or reloaded
+// (countAndRefresh); page navigation keeps the last known count, so COUNT(*)
+// does not run on every PgUp/PgDn. In keyset mode the page is re-fetched from
+// its stored cursor, so refreshing does not move the visible rows.
 func (b *Browser) Refresh(st store.Store) error {
+	if b.ActiveTable == "" {
+		return nil
+	}
+	return b.fetchPage(st)
+}
+
+// countAndRefresh loads the row count of the active table and its page. It is
+// the expensive path: a full COUNT(*) runs here, on table selection and on
+// Reload (manual refresh or after a write query from the editor).
+func (b *Browser) countAndRefresh(st store.Store) error {
 	if b.ActiveTable == "" {
 		return nil
 	}
@@ -107,7 +119,12 @@ func (b *Browser) Refresh(st store.Store) error {
 		return err
 	}
 	b.TotalRows = total
+	return b.fetchPage(st)
+}
 
+// fetchPage loads the current page of the active table using the stored
+// pagination state. It never runs COUNT(*).
+func (b *Browser) fetchPage(st store.Store) error {
 	if b.orderBy == "" {
 		res, err := st.SelectTablePage(b.ActiveTable, b.PageSize, b.Page*b.PageSize)
 		if err != nil {
@@ -158,7 +175,7 @@ func (b *Browser) Reload(st store.Store) error {
 	if err := b.refreshMeta(st); err != nil {
 		return err
 	}
-	return b.Refresh(st)
+	return b.countAndRefresh(st)
 }
 
 // refreshMeta reloads the columns and indexes of the active table and
