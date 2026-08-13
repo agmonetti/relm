@@ -106,6 +106,7 @@ func (c *ConnScreen) rebuildFields() {
 	}
 	mk := func(label, placeholder string) field {
 		in := textinput.New()
+		in.Cursor.BlinkSpeed = CursorBlink
 		in.Placeholder = placeholder
 		in.Prompt = " "
 		in.Width = 24

@@ -29,6 +29,7 @@ type SettingsScreen struct {
 // NewSettingsScreen creates the settings form with the input focused.
 func NewSettingsScreen() *SettingsScreen {
 	in := textinput.New()
+	in.Cursor.BlinkSpeed = CursorBlink
 	in.Placeholder = "60"
 	in.Prompt = " "
 	in.Width = 24

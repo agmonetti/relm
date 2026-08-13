@@ -19,6 +19,7 @@ type EditorScreen struct {
 // NewEditorScreen creates the editor textarea.
 func NewEditorScreen() *EditorScreen {
 	ta := textarea.New()
+	ta.Cursor.BlinkSpeed = CursorBlink
 	ta.Placeholder = "SELECT * FROM table LIMIT 10"
 	ta.ShowLineNumbers = true
 	ta.Prompt = ""

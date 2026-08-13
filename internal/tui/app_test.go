@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	_ "modernc.org/sqlite"
@@ -20,6 +21,12 @@ import (
 	"github.com/agmonetti/relm/internal/prefs"
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
+
+// Cursor blink and spinner wait commands would block the synchronous step()
+// helper for their real duration; a tiny blink keeps the tests fast.
+func init() {
+	screens.CursorBlink = time.Millisecond
+}
 
 // createTestDB creates a temporary sqlite with users and orders tables.
 func createTestDB(t *testing.T) string {
