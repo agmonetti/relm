@@ -269,7 +269,8 @@ with `↑↓` and press `d`.
 | `PgUp` / `PgDn` | Change page |
 | `r` | Refresh |
 | right-click drag | Resize panes (sidebar / editor) |
-| click | Focus a pane |
+| click | Focus / select a row |
+| wheel | Scroll the pane under the pointer |
 | `Ctrl+R` | Run query (editor) |
 | `Esc` (while running) | Cancel the running query |
 | `Ctrl+L` | Clear editor |

@@ -14,6 +14,11 @@ import (
 // EditorScreen keeps the multiline SQL editor input and its rendering.
 type EditorScreen struct {
 	ta textarea.Model
+
+	// result viewport: the query results table can be scrolled and a row can
+	// be selected with the mouse
+	resultScroll int
+	resultCursor int
 }
 
 // NewEditorScreen creates the editor textarea.
@@ -25,6 +30,46 @@ func NewEditorScreen() *EditorScreen {
 	ta.Prompt = ""
 	ta.CharLimit = 0
 	return &EditorScreen{ta: ta}
+}
+
+// SetResultScroll sets the scroll offset of the query results table.
+func (s *EditorScreen) SetResultScroll(n int) { s.resultScroll = n }
+
+// ResultScroll returns the scroll offset of the query results table.
+func (s *EditorScreen) ResultScroll() int { return s.resultScroll }
+
+// SetResultCursor selects a row of the query results (-1 = none).
+func (s *EditorScreen) SetResultCursor(n int) { s.resultCursor = n }
+
+// ResultCursor returns the selected row of the query results.
+func (s *EditorScreen) ResultCursor() int { return s.resultCursor }
+
+// ResetResult resets the results viewport after a new query.
+func (s *EditorScreen) ResetResult() {
+	s.resultScroll = 0
+	s.resultCursor = -1
+}
+
+// EditorInputHeight returns the textarea height for an editor pane content
+// height, matching View.
+func EditorInputHeight(contentH int) int {
+	h := contentH / 2
+	if h < 3 {
+		h = 3
+	}
+	return h
+}
+
+// EditorResultsLayout returns the content line where the query results table
+// starts and how many data rows it can show, for the given editor content
+// height. Used both by View and the mouse hit-test so they agree.
+func EditorResultsLayout(contentH int) (startLine, dataRows int) {
+	ih := EditorInputHeight(contentH)
+	regionH := contentH - ih
+	if regionH < 2 {
+		regionH = 2
+	}
+	return ih, regionH - 1
 }
 
 // SetValue replaces the textarea content.
@@ -101,7 +146,32 @@ func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 	}
 
 	if len(e.Result.Columns) > 0 {
-		b.WriteString(RenderDataTable(e.Result.Columns, e.Result.Rows, -1, width-2, height-inputHeight))
+		rows := e.Result.Rows
+		resH := height - inputHeight
+		if resH < 2 {
+			resH = 2
+		}
+		dataRows := resH - 1
+		maxScroll := len(rows) - dataRows
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		scroll := s.resultScroll
+		if scroll < 0 {
+			scroll = 0
+		}
+		if scroll > maxScroll {
+			scroll = maxScroll
+		}
+		view := rows[scroll:]
+		cursor := -1
+		if s.resultCursor >= scroll {
+			cursor = s.resultCursor - scroll
+			if cursor >= len(view) {
+				cursor = len(view) - 1
+			}
+		}
+		b.WriteString(RenderDataTable(e.Result.Columns, view, cursor, width-2, resH))
 	} else if e.Result.Affected >= 0 {
 		b.WriteString(fmt.Sprintf("  %d rows affected", e.Result.Affected))
 	}

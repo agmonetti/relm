@@ -48,9 +48,10 @@ The **connection screen** opens. Pick the engine with `←`/`→`, fill in the f
 | `Esc` (while running) | Cancel the running query |
 | `Ctrl+L` | Clear editor input |
 | `↑↓` (in editor) | Navigate query history |
-| `?` | Help |
+| `?` | Help (`Esc` to close) |
 | right-click drag | Resize panes (sidebar / editor) |
-| click | Focus a pane |
+| click | Focus / select a row |
+| wheel | Scroll the pane under the pointer |
 
 ## Features
 

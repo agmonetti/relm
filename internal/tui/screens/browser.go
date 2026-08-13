@@ -9,6 +9,17 @@ import (
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
+// SidebarWindow returns the visible window of the sidebar list: `offset` is
+// the index of the first shown table and `visible` how many are shown.
+func SidebarWindow(cursor, height int) (offset, visible int) {
+	offset = 0
+	if cursor >= height {
+		offset = cursor
+	}
+	visible = height
+	return
+}
+
 // RenderSidebar renders the table list with a selection cursor and the opened
 // table marked. It scrolls vertically so the cursor stays visible.
 func RenderSidebar(b *browser.Browser, cursor, width, height int) string {
@@ -25,10 +36,7 @@ func RenderSidebar(b *browser.Browser, cursor, width, height int) string {
 	if cursor < 0 {
 		cursor = 0
 	}
-	offset := 0
-	if cursor >= height {
-		offset = cursor
-	}
+	offset, _ := SidebarWindow(cursor, height)
 
 	var sb strings.Builder
 	for i := offset; i < n && i < offset+height; i++ {
@@ -46,6 +54,24 @@ func RenderSidebar(b *browser.Browser, cursor, width, height int) string {
 	return sb.String()
 }
 
+// TableWindow returns the visible window of a data table: `start` is the index
+// of the first visible row and `visible` the number of rows shown, keeping the
+// cursor row on screen.
+func TableWindow(rows, cursor, height int) (start, visible int) {
+	visible = height - 1 // leaves room for the header
+	if visible > rows {
+		visible = rows
+	}
+	if visible < 0 {
+		visible = 0
+	}
+	start = 0
+	if cursor >= visible {
+		start = cursor - visible + 1
+	}
+	return
+}
+
 // RenderDataTable renders columns + rows with the cursor row highlighted. The
 // rows scroll vertically so the cursor row always stays visible.
 func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) string {
@@ -54,20 +80,7 @@ func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) 
 	}
 
 	widths := colWidths(cols, rows, width)
-	visible := height - 1 // leaves room for the header
-	if visible > len(rows) {
-		visible = len(rows)
-	}
-	if visible < 0 {
-		visible = 0
-	}
-
-	// scroll so the cursor row is never off-screen: when the cursor passes
-	// the bottom edge it becomes the last visible row
-	start := 0
-	if cursor >= visible {
-		start = cursor - visible + 1
-	}
+	start, visible := TableWindow(len(rows), cursor, height)
 
 	var sb strings.Builder
 	// header
