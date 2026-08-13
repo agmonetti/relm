@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	_ "github.com/agmonetti/relm/internal/store/sqlite"
 	"github.com/agmonetti/relm/internal/conn"
 	"github.com/agmonetti/relm/internal/prefs"
+	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
@@ -429,6 +431,134 @@ func TestModel_MouseIgnoredOnConnectScreen(t *testing.T) {
 	step(t, m, mouseMsg(30, 5, tea.MouseButtonRight, tea.MouseActionMotion))
 	if m.sidebarW != 0 {
 		t.Errorf("sidebarW = %d, want 0", m.sidebarW)
+	}
+}
+
+func TestModel_EscClosesHelp(t *testing.T) {
+	m := connect(t)
+	press(t, m, "?")
+	if !m.showHelp {
+		t.Fatal("help should be open after ?")
+	}
+	pressKey(t, m, "esc")
+	if m.showHelp {
+		t.Error("help should close on Esc")
+	}
+}
+
+func TestModel_WheelScrollsSidebar(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir()) // deterministic pane geometry
+	m := connect(t)
+	for i := 0; i < 30; i++ {
+		if _, err := m.store.Exec(fmt.Sprintf("CREATE TABLE t%02d (id INTEGER PRIMARY KEY)", i)); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+	}
+	if err := m.browser.Reload(m.store); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if m.sidebarCursor != 0 {
+		t.Fatalf("setup: sidebarCursor = %d", m.sidebarCursor)
+	}
+	step(t, m, mouseMsg(5, 5, tea.MouseButtonWheelDown, tea.MouseActionPress))
+	if m.sidebarCursor != 3 { // wheelStep
+		t.Errorf("sidebarCursor = %d, want 3", m.sidebarCursor)
+	}
+	step(t, m, mouseMsg(5, 5, tea.MouseButtonWheelUp, tea.MouseActionPress))
+	if m.sidebarCursor != 0 {
+		t.Errorf("sidebarCursor = %d, want 0", m.sidebarCursor)
+	}
+}
+
+func TestModel_WheelScrollsMain(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+	for i := 0; i < 60; i++ {
+		if _, err := m.store.Exec(fmt.Sprintf("INSERT INTO users (name, email) VALUES ('u%d','u%d@t.com')", i, i)); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	press(t, m, "2") // open users
+	pressAlt(t, m, "2")
+	press(t, m, "G") // last row of page 0
+	if m.browser.Cursor != 49 {
+		t.Fatalf("setup: cursor = %d, want 49", m.browser.Cursor)
+	}
+	step(t, m, mouseMsg(50, 5, tea.MouseButtonWheelDown, tea.MouseActionPress))
+	if m.browser.Page != 1 || m.browser.Cursor != 0 {
+		t.Errorf("after wheel at bottom: page=%d cursor=%d, want page 1 cursor 0", m.browser.Page, m.browser.Cursor)
+	}
+	step(t, m, mouseMsg(50, 5, tea.MouseButtonWheelUp, tea.MouseActionPress))
+	if m.browser.Page != 0 || m.browser.Cursor != len(m.browser.Rows)-1 {
+		t.Errorf("after wheel at top: page=%d cursor=%d, want page 0 last row", m.browser.Page, m.browser.Cursor)
+	}
+}
+
+func TestModel_WheelScrollsResults(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+	m.editor.Result = &store.Result{Columns: []string{"c"}, Rows: make([][]string, 60)}
+	m.editorScreen.ResetResult()
+
+	step(t, m, mouseMsg(50, 24, tea.MouseButtonWheelDown, tea.MouseActionPress))
+	if got := m.editorScreen.ResultScroll(); got != 3 {
+		t.Errorf("resultScroll = %d, want 3", got)
+	}
+	step(t, m, mouseMsg(50, 24, tea.MouseButtonWheelUp, tea.MouseActionPress))
+	if got := m.editorScreen.ResultScroll(); got != 0 {
+		t.Errorf("resultScroll = %d, want 0", got)
+	}
+}
+
+func TestModel_ClickSelectsSidebarTable(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+	for i := 0; i < 30; i++ {
+		if _, err := m.store.Exec(fmt.Sprintf("CREATE TABLE t%02d (id INTEGER PRIMARY KEY)", i)); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+	}
+	if err := m.browser.Reload(m.store); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	step(t, m, mouseMsg(5, 5, tea.MouseButtonLeft, tea.MouseActionPress)) // table 2
+	if m.sidebarCursor != 2 {
+		t.Errorf("sidebarCursor = %d, want 2", m.sidebarCursor)
+	}
+}
+
+func TestModel_ClickSelectsMainRow(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+	for i := 0; i < 10; i++ {
+		if _, err := m.store.Exec(fmt.Sprintf("INSERT INTO users (name, email) VALUES ('u%d','u%d@t.com')", i, i)); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	press(t, m, "2") // open users (10 rows)
+	step(t, m, mouseMsg(50, 6, tea.MouseButtonLeft, tea.MouseActionPress)) // data row 2
+	if m.browser.Cursor != 2 {
+		t.Errorf("cursor = %d, want 2", m.browser.Cursor)
+	}
+	step(t, m, mouseMsg(50, 8, tea.MouseButtonLeft, tea.MouseActionPress)) // data row 4
+	if m.browser.Cursor != 4 {
+		t.Errorf("cursor = %d, want 4", m.browser.Cursor)
+	}
+}
+
+func TestModel_ClickSelectsResultRow(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+	m.editor.Result = &store.Result{Columns: []string{"c"}, Rows: make([][]string, 60)}
+	m.editorScreen.ResetResult()
+
+	step(t, m, mouseMsg(50, 24, tea.MouseButtonLeft, tea.MouseActionPress)) // first result row
+	if m.editorScreen.ResultCursor() != 0 {
+		t.Errorf("resultCursor = %d, want 0", m.editorScreen.ResultCursor())
+	}
+	step(t, m, mouseMsg(50, 26, tea.MouseButtonLeft, tea.MouseActionPress)) // third result row
+	if m.editorScreen.ResultCursor() != 2 {
+		t.Errorf("resultCursor = %d, want 2", m.editorScreen.ResultCursor())
 	}
 }
 
