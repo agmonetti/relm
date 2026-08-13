@@ -334,6 +334,104 @@ func TestFriendlyErr(t *testing.T) {
 	}
 }
 
+func mouseMsg(x, y int, button tea.MouseButton, action tea.MouseAction) tea.MouseMsg {
+	return tea.MouseMsg{X: x, Y: y, Button: button, Action: action}
+}
+
+// The workspace content starts at terminal cell (1, 2), and the test window is
+// 100x30 (innerW=98, contentHeight=26). With automatic sizes the sidebar
+// divider is at workspace x=19 (terminal x=20) and the editor divider at
+// workspace y=16 (terminal y=18).
+func TestModel_RightDragResizesSidebar(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+
+	step(t, m, mouseMsg(20, 5, tea.MouseButtonRight, tea.MouseActionPress))
+	if !m.resizing || m.resizeDiv != resizeSidebar {
+		t.Fatalf("resizing=%v div=%d, want sidebar drag", m.resizing, m.resizeDiv)
+	}
+	step(t, m, mouseMsg(30, 5, tea.MouseButtonRight, tea.MouseActionMotion))
+	if m.sidebarW != 29 { // workspace x = 30-1
+		t.Errorf("sidebarW = %d, want 29", m.sidebarW)
+	}
+	step(t, m, mouseMsg(30, 5, tea.MouseButtonRight, tea.MouseActionRelease))
+	if m.resizing {
+		t.Error("resizing should end on release")
+	}
+
+	p, err := prefs.Load()
+	if err != nil {
+		t.Fatalf("prefs.Load: %v", err)
+	}
+	if p.SidebarWidth != 29 {
+		t.Errorf("persisted SidebarWidth = %d, want 29", p.SidebarWidth)
+	}
+}
+
+func TestModel_RightDragResizesEditor(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+
+	step(t, m, mouseMsg(50, 18, tea.MouseButtonRight, tea.MouseActionPress))
+	if !m.resizing || m.resizeDiv != resizeEditor {
+		t.Fatalf("resizing=%v div=%d, want editor drag", m.resizing, m.resizeDiv)
+	}
+	// contentHeight-1 = 25; editorH = 25 - wy = 25 - 20 = 5
+	step(t, m, mouseMsg(50, 22, tea.MouseButtonRight, tea.MouseActionMotion))
+	if m.editorH != 5 {
+		t.Errorf("editorH = %d, want 5", m.editorH)
+	}
+	step(t, m, mouseMsg(50, 22, tea.MouseButtonRight, tea.MouseActionRelease))
+	if m.resizing {
+		t.Error("resizing should end on release")
+	}
+
+	p, err := prefs.Load()
+	if err != nil {
+		t.Fatalf("prefs.Load: %v", err)
+	}
+	if p.EditorHeight != 5 {
+		t.Errorf("persisted EditorHeight = %d, want 5", p.EditorHeight)
+	}
+}
+
+func TestModel_LeftClickFocusesPane(t *testing.T) {
+	m := connect(t)
+
+	// sidebar region (workspace x < 19)
+	step(t, m, mouseMsg(5, 5, tea.MouseButtonLeft, tea.MouseActionPress))
+	if m.focus != screens.FocusSidebar {
+		t.Errorf("click sidebar: focus = %v, want sidebar", m.focus)
+	}
+
+	// main region (workspace y <= 16)
+	step(t, m, mouseMsg(50, 5, tea.MouseButtonLeft, tea.MouseActionPress))
+	if m.focus != screens.FocusMain {
+		t.Errorf("click main: focus = %v, want main", m.focus)
+	}
+
+	// editor region (workspace y > 16)
+	step(t, m, mouseMsg(50, 22, tea.MouseButtonLeft, tea.MouseActionPress))
+	if m.focus != screens.FocusEditor {
+		t.Errorf("click editor: focus = %v, want editor", m.focus)
+	}
+}
+
+func TestModel_MouseIgnoredOnConnectScreen(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir()) // don't depend on the user's prefs
+	m := newModel(t) // starts on the connect screen
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	step(t, m, mouseMsg(20, 5, tea.MouseButtonRight, tea.MouseActionPress))
+	if m.resizing {
+		t.Error("mouse must be ignored outside the workspace")
+	}
+	step(t, m, mouseMsg(30, 5, tea.MouseButtonRight, tea.MouseActionMotion))
+	if m.sidebarW != 0 {
+		t.Errorf("sidebarW = %d, want 0", m.sidebarW)
+	}
+}
+
 func TestModel_StructureMode(t *testing.T) {
 	m := connect(t)
 	pressAlt(t, m, "2") // main

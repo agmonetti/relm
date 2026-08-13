@@ -20,6 +20,14 @@ type Prefs struct {
 	// QueryTimeoutSeconds is the maximum time a query may run before being
 	// cancelled. Values <= 0 fall back to the default.
 	QueryTimeoutSeconds int `json:"query_timeout_seconds"`
+
+	// SidebarWidth is the preferred workspace sidebar width in columns,
+	// resized with a right-click drag. 0 means automatic.
+	SidebarWidth int `json:"sidebar_width,omitempty"`
+
+	// EditorHeight is the preferred SQL editor height in rows, resized with a
+	// right-click drag. 0 means automatic.
+	EditorHeight int `json:"editor_height,omitempty"`
 }
 
 // Default returns the built-in preferences.

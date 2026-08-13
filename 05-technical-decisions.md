@@ -185,6 +185,7 @@ dsn := fmt.Sprintf(
 | Very small terminal (<60 cols) | Hide the sidebar automatically. If <40 cols, show a warning: `terminal too small`. |
 | Very small terminal (<10 rows) | Show only header + footer with an error. |
 | Resize during query | The resize is processed when the query finishes. No concurrency. |
+| Mouse | Enabled with cell motion (drag-only reporting). A left click focuses a pane; a right-click drag resizes the nearest divider (sidebar width or editor height), persisted in `prefs.json`. Only active on the workspace screen. |
 | Terminal without color support | lipgloss detects it automatically. Render without colors if `TERM=dumb` or similar. |
 | `SIGTERM` / `Ctrl+C` | Exit cleanly: `store.Close()` before terminating. |
 
@@ -210,10 +211,13 @@ dsn := fmt.Sprintf(
 - File: `~/.config/relm/prefs.json`, permissions `0600`.
 - Structure:
   ```json
-  { "query_timeout_seconds": 60 }
+  { "query_timeout_seconds": 60, "sidebar_width": 0, "editor_height": 0 }
   ```
 - `query_timeout_seconds` bounds every user query run from the editor
   (`context.WithTimeout`); values `<= 0` fall back to the default (60s).
+- `sidebar_width` / `editor_height` persist the workspace pane sizes changed
+  with a right-click drag; `0` means automatic. The values are clamped again
+  against the current terminal size on every render.
 - Edited from the settings screen (`Ctrl+P`, available from the connect and
   workspace screens) and saved with `Enter`. The change applies to the next
   query.

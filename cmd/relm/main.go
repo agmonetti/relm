@@ -22,7 +22,9 @@ func main() {
 		os.Exit(tui.PrintLayout())
 	}
 
-	p := tea.NewProgram(tui.New(), tea.WithAltScreen())
+	// Cell motion reports mouse movement only while a button is held, which is
+	// exactly what the pane resize drag needs.
+	p := tea.NewProgram(tui.New(), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "relm: %v\n", err)
 		os.Exit(1)

@@ -14,7 +14,7 @@ import (
 
 func TestRenderWorkspace_ShowsPaneTitles(t *testing.T) {
 	out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-		FocusSidebar, false, true, 0, 100, 24)
+		FocusSidebar, false, ComputeLayout(100, 24, true, 0, 0), 0, 100, 24)
 
 	if !strings.Contains(out, "TABLES") {
 		t.Error("workspace must show the TABLES sidebar title")
@@ -42,7 +42,7 @@ func TestRenderWorkspace_ShowsPaneTitles(t *testing.T) {
 func TestRenderWorkspace_ExactHeight(t *testing.T) {
 	for _, h := range []int{12, 20, 30} {
 		out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-			FocusSidebar, false, true, 0, 100, h)
+			FocusSidebar, false, ComputeLayout(100, h, true, 0, 0), 0, 100, h)
 		if n := len(strings.Split(out, "\n")); n != h {
 			t.Errorf("height=%d: got %d lines", h, n)
 		}
@@ -52,7 +52,7 @@ func TestRenderWorkspace_ExactHeight(t *testing.T) {
 func TestRenderWorkspace_ExactWidth(t *testing.T) {
 	for _, w := range []int{60, 100, 150} {
 		out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-			FocusSidebar, false, true, 0, w, 20)
+			FocusSidebar, false, ComputeLayout(w, 20, true, 0, 0), 0, w, 20)
 		for i, line := range strings.Split(out, "\n") {
 			if got := runewidth.StringWidth(ansi.Strip(line)); got != w {
 				t.Errorf("width=%d: line %d is %d cols", w, i, got)
@@ -63,7 +63,7 @@ func TestRenderWorkspace_ExactWidth(t *testing.T) {
 
 func TestRenderWorkspace_HasPanelGapsAndPadding(t *testing.T) {
 	out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-		FocusSidebar, false, true, 0, 100, 24)
+		FocusSidebar, false, ComputeLayout(100, 24, true, 0, 0), 0, 100, 24)
 	lines := strings.Split(out, "\n")
 
 	// the sidebar and main boxes are separated by exactly one char
@@ -89,7 +89,7 @@ func TestRenderWorkspace_HasPanelGapsAndPadding(t *testing.T) {
 func TestRenderWorkspace_WithoutSidebarSpansWidth(t *testing.T) {
 	// with the sidebar hidden the output must not contain the sidebar tables
 	out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-		FocusSidebar, false, false, 0, 100, 20)
+		FocusSidebar, false, ComputeLayout(100, 20, false, 0, 0), 0, 100, 20)
 	if strings.Contains(out, "TABLES") {
 		t.Error("sidebar must be hidden")
 	}
@@ -112,4 +112,64 @@ func sampleTestBrowser() *browser.Browser {
 
 func sampleTestEditor() *editor.Editor {
 	return &editor.Editor{Buffer: "SELECT * FROM users", History: editor.NewHistory()}
+}
+
+func TestComputeLayout_Automatic(t *testing.T) {
+	l := ComputeLayout(100, 30, true, 0, 0)
+	if !l.ShowSidebar {
+		t.Fatal("sidebar should be shown")
+	}
+	if l.SidebarW != 20 { // width/5
+		t.Errorf("SidebarW = %d, want 20", l.SidebarW)
+	}
+	if l.EditorH != 9 { // height/4 min 9
+		t.Errorf("EditorH = %d, want 9", l.EditorH)
+	}
+	if l.MainH != 30-9-1 {
+		t.Errorf("MainH = %d, want %d", l.MainH, 30-9-1)
+	}
+	if l.RightW != 100-20-1 {
+		t.Errorf("RightW = %d, want %d", l.RightW, 100-20-1)
+	}
+}
+
+func TestComputeLayout_CustomClamped(t *testing.T) {
+	l := ComputeLayout(100, 30, true, 200, 1000)
+	if l.SidebarW > 100-RightMinW-1 {
+		t.Errorf("SidebarW = %d, not clamped to width", l.SidebarW)
+	}
+	if l.EditorH != 30-MainMinH-1 {
+		t.Errorf("EditorH = %d, want %d", l.EditorH, 30-MainMinH-1)
+	}
+
+	l = ComputeLayout(100, 30, true, 3, 2)
+	if l.SidebarW < SidebarMinW {
+		t.Errorf("SidebarW = %d, below min %d", l.SidebarW, SidebarMinW)
+	}
+	if l.EditorH < EditorMinH {
+		t.Errorf("EditorH = %d, below min %d", l.EditorH, EditorMinH)
+	}
+}
+
+func TestComputeLayout_RespectsCustomValue(t *testing.T) {
+	l := ComputeLayout(100, 30, true, 32, 14)
+	if l.SidebarW != 32 {
+		t.Errorf("SidebarW = %d, want 32", l.SidebarW)
+	}
+	if l.EditorH != 14 {
+		t.Errorf("EditorH = %d, want 14", l.EditorH)
+	}
+	if l.MainH != 30-14-1 {
+		t.Errorf("MainH = %d, want %d", l.MainH, 30-14-1)
+	}
+}
+
+func TestComputeLayout_SidebarHiddenOnSmallWidth(t *testing.T) {
+	l := ComputeLayout(50, 20, true, 20, 8)
+	if l.ShowSidebar {
+		t.Error("sidebar must be hidden below 60 columns")
+	}
+	if l.RightW != 50 {
+		t.Errorf("RightW = %d, want full width", l.RightW)
+	}
 }

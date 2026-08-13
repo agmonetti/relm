@@ -40,6 +40,8 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 
 	p := Default()
 	p.QueryTimeoutSeconds = 120
+	p.SidebarWidth = 30
+	p.EditorHeight = 18
 	if err := p.Save(); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -50,6 +52,19 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	}
 	if got.QueryTimeoutSeconds != 120 {
 		t.Errorf("QueryTimeoutSeconds = %d, want 120", got.QueryTimeoutSeconds)
+	}
+	if got.SidebarWidth != 30 {
+		t.Errorf("SidebarWidth = %d, want 30", got.SidebarWidth)
+	}
+	if got.EditorHeight != 18 {
+		t.Errorf("EditorHeight = %d, want 18", got.EditorHeight)
+	}
+}
+
+func TestDefaultLayoutIsAuto(t *testing.T) {
+	p := Default()
+	if p.SidebarWidth != 0 || p.EditorHeight != 0 {
+		t.Errorf("default layout = %d/%d, want 0 (auto)", p.SidebarWidth, p.EditorHeight)
 	}
 }
 

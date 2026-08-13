@@ -24,51 +24,102 @@ const (
 	FocusEditor
 )
 
+// Pane sizing bounds used when the user resizes the panes with a right-click
+// drag. The automatic defaults keep the current look.
+const (
+	SidebarMinW = 10
+	EditorMinH  = 5
+	RightMinW   = 20
+	MainMinH    = 2
+)
+
+// WorkspaceLayout is the resolved geometry of the workspace panes, shared by
+// the renderer and the mouse resize handler so both agree on the sizes.
+type WorkspaceLayout struct {
+	ShowSidebar bool
+	SidebarW    int
+	EditorH     int
+	MainH       int
+	RightW      int
+}
+
+// ComputeLayout resolves the pane sizes for the given terminal size. A zero
+// sidebarW/editorH uses the automatic defaults; a positive value (e.g. from a
+// previous right-click drag) is clamped to keep every pane usable on the
+// current terminal.
+func ComputeLayout(width, height int, showSidebar bool, sidebarW, editorH int) WorkspaceLayout {
+	if width < 60 {
+		showSidebar = false
+	}
+	l := WorkspaceLayout{ShowSidebar: showSidebar}
+
+	if editorH > 0 {
+		l.EditorH = clampInt(editorH, EditorMinH, height-MainMinH-1)
+		if l.EditorH < 2 {
+			l.EditorH = 2
+		}
+	} else {
+		// automatic default, matching the previous fixed layout
+		l.EditorH = height / 4
+		if l.EditorH < 9 {
+			l.EditorH = 9
+		}
+		if l.EditorH > height-5 {
+			l.EditorH = height - 5
+		}
+		if l.EditorH < 2 {
+			l.EditorH = 2
+		}
+	}
+	l.MainH = height - l.EditorH - 1
+	if l.MainH < MainMinH {
+		l.MainH = MainMinH
+	}
+
+	if showSidebar && sidebarW > 0 {
+		l.SidebarW = clampInt(sidebarW, SidebarMinW, width-RightMinW-1)
+	} else {
+		l.SidebarW = clampInt(width/5, 14, 20)
+	}
+
+	l.RightW = width
+	if showSidebar {
+		l.RightW = width - l.SidebarW - 1
+	}
+	if l.RightW < 4 {
+		l.RightW = 4
+	}
+	return l
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
 // RenderWorkspace renders the single working screen: sidebar, main pane and
 // editor, each inside a visible border. The focused pane has an accent border.
 func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
-	focus WorkspaceFocus, structure, showSidebar bool, sidebarCursor int,
+	focus WorkspaceFocus, structure bool, layout WorkspaceLayout, sidebarCursor int,
 	width, height int) string {
 	if width < 10 || height < 3 {
 		return styles.StyleHeaderDim.Render("terminal too small")
 	}
-	if width < 60 {
-		showSidebar = false
-	}
 
-	sidebarW := width / 5
-	if sidebarW < 14 {
-		sidebarW = 14
-	}
-	if sidebarW > 20 {
-		sidebarW = 20
-	}
-	editorH := height / 4
-	if editorH < 9 {
-		editorH = 9
-	}
-	if editorH > height-5 {
-		editorH = height - 5
-	}
-	if editorH < 2 {
-		editorH = 2
-	}
-	// one line of air between the main pane and the editor
-	mainH := height - editorH - 1
-	if mainH < 2 {
-		mainH = 2
-	}
+	sidebarW := layout.SidebarW
+	editorH := layout.EditorH
+	mainH := layout.MainH
+	rightW := layout.RightW
+	showSidebar := layout.ShowSidebar
 
 	// the right column spans the full width when the sidebar is hidden; a
 	// one-char gap separates it from the sidebar
 	gap := " "
-	rightW := width
-	if showSidebar {
-		rightW = width - sidebarW - 1
-	}
-	if rightW < 4 {
-		rightW = 4
-	}
 
 	// content width inside a pane: border (1 col/side) + padding (1 col/side)
 	contentW := func(paneW int) int {

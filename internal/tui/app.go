@@ -95,12 +95,25 @@ type Model struct {
 	queryID int    // token to discard results from stale queries
 	cancel  context.CancelFunc // cancels the running query
 
+	// workspace pane sizes (0 = auto), resizable with a right-click drag
+	sidebarW int
+	editorH  int
+	resizing bool
+	resizeDiv int // resizeNone, resizeSidebar or resizeEditor
+
 	width       int
 	height      int
 	showSidebar bool
 	showHelp    bool
 	err         string
 }
+
+// Divider targeted by a right-click drag.
+const (
+	resizeNone int = iota
+	resizeSidebar
+	resizeEditor
+)
 
 // New creates the initial model (connection screen).
 func New() *Model {
@@ -118,6 +131,8 @@ func New() *Model {
 		spinner:      spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(styles.StyleHeaderDim)),
 		showSidebar:  true,
 		prefs:        p,
+		sidebarW:     p.SidebarWidth,
+		editorH:      p.EditorHeight,
 	}
 }
 
@@ -225,6 +240,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
 		}
+
+	case tea.MouseMsg:
+		m.handleMouse(msg)
+		return m, nil
 	}
 
 	return m, nil
@@ -260,8 +279,9 @@ func (m *Model) render() string {
 	case ScreenSettings:
 		content = m.settings.View(innerW, contentHeight)
 	case ScreenWorkspace:
+		layout := screens.ComputeLayout(innerW, contentHeight, m.showSidebar, m.sidebarW, m.editorH)
 		content = screens.RenderWorkspace(m.browser, m.editorScreen, m.editor,
-			m.focus, m.structure, m.showSidebar, m.sidebarCursor, innerW, contentHeight)
+			m.focus, m.structure, layout, m.sidebarCursor, innerW, contentHeight)
 	}
 
 	body := content
@@ -324,7 +344,7 @@ func (m *Model) renderFooter() string {
 			if m.structure {
 				left = "esc back · tab next"
 			} else {
-				left = "↑↓ rows · i structure · r refresh · pgup/pgdn page · tab next"
+				left = "↑↓ rows · i structure · r refresh · pgup/pgdn page · tab next · right-click resize"
 			}
 		case screens.FocusEditor:
 			left = "ctrl+r run · ctrl+l clear · esc back"
@@ -405,6 +425,105 @@ func (m *Model) cancelQuery() {
 	}
 }
 
+// handleMouse handles mouse events in the workspace: a left click focuses the
+// clicked pane and a right-click drag resizes the nearest pane divider.
+func (m *Model) handleMouse(msg tea.MouseMsg) {
+	if m.screen != ScreenWorkspace || m.showHelp {
+		return
+	}
+	innerW := m.width - 2
+	if innerW < 1 {
+		innerW = 1
+	}
+	contentHeight := m.height - 4
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+	layout := screens.ComputeLayout(innerW, contentHeight, m.showSidebar, m.sidebarW, m.editorH)
+
+	// the workspace content starts at terminal cell (1, 2): the frame adds a
+	// blank line, the header and a one-column left margin
+	wx := msg.X - 1
+	wy := msg.Y - 2
+
+	switch msg.Action {
+	case tea.MouseActionPress:
+		switch msg.Button {
+		case tea.MouseButtonRight:
+			if div := m.pickResizeDivider(wx, wy, layout); div != resizeNone {
+				m.resizing = true
+				m.resizeDiv = div
+			}
+		case tea.MouseButtonLeft:
+			m.focusPaneAt(wx, wy, layout)
+		}
+	case tea.MouseActionMotion:
+		if m.resizing {
+			m.applyResize(wx, wy, layout)
+		}
+	case tea.MouseActionRelease:
+		if m.resizing {
+			m.resizing = false
+			m.resizeDiv = resizeNone
+			m.persistLayout()
+		}
+	}
+}
+
+// pickResizeDivider returns the pane divider closest to the given workspace
+// coordinates, or resizeNone when there is none to resize.
+func (m *Model) pickResizeDivider(wx, wy int, layout screens.WorkspaceLayout) int {
+	best := resizeNone
+	bestDist := 1 << 30
+	if layout.ShowSidebar {
+		if d := absInt(wx - layout.SidebarW); d < bestDist {
+			bestDist = d
+			best = resizeSidebar
+		}
+	}
+	if d := absInt(wy - layout.MainH); d < bestDist {
+		best = resizeEditor
+	}
+	return best
+}
+
+// applyResize moves the divider being dragged to the pointer position. The
+// stored value is clamped again when the next layout is computed.
+func (m *Model) applyResize(wx, wy int, layout screens.WorkspaceLayout) {
+	switch m.resizeDiv {
+	case resizeSidebar:
+		m.sidebarW = wx
+	case resizeEditor:
+		m.editorH = layout.MainH + layout.EditorH - wy
+	}
+}
+
+// focusPaneAt focuses the pane under the pointer.
+func (m *Model) focusPaneAt(wx, wy int, layout screens.WorkspaceLayout) {
+	switch {
+	case layout.ShowSidebar && wx < layout.SidebarW:
+		m.setFocus(screens.FocusSidebar)
+	case wy > layout.MainH:
+		m.setFocus(screens.FocusEditor)
+	default:
+		m.setFocus(screens.FocusMain)
+	}
+}
+
+// persistLayout stores the current pane sizes in the preferences.
+func (m *Model) persistLayout() {
+	m.prefs.SidebarWidth = m.sidebarW
+	m.prefs.EditorHeight = m.editorH
+	_ = m.prefs.Save() // best effort: layout is not critical
+}
+
+func absInt(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
 // friendlyErr maps context cancellation to the message shown to the user.
 func friendlyErr(err error) error {
 	switch {
@@ -422,6 +541,7 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) {
 	m.closeStore()
 	m.queryID++
 	m.loading = false
+	m.resizing = false
 	m.browser = nil
 	m.editor = editor.New()
 	m.editorScreen.SetValue("")
@@ -504,6 +624,7 @@ func (m *Model) newSession() {
 	m.closeStore()
 	m.queryID++
 	m.loading = false
+	m.resizing = false
 	m.browser = nil
 	m.editor = editor.New()
 	m.editorScreen.SetValue("")
@@ -783,6 +904,8 @@ func (m *Model) renderHelp() string {
 		}
 		out += "\n"
 	}
+	out += fmt.Sprintf("  %-18s %s\n", "right-click drag", "resize panes")
+	out += fmt.Sprintf("  %-18s %s\n", "click", "focus pane")
 	return lipgloss.JoinVertical(lipgloss.Left,
 		styles.StyleHeader.Render("Help"),
 		out,

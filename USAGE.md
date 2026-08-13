@@ -268,6 +268,8 @@ with `↑↓` and press `d`.
 | `↑↓` / `j k` | Navigate rows (main) or tables (sidebar) |
 | `PgUp` / `PgDn` | Change page |
 | `r` | Refresh |
+| right-click drag | Resize panes (sidebar / editor) |
+| click | Focus a pane |
 | `Ctrl+R` | Run query (editor) |
 | `Esc` (while running) | Cancel the running query |
 | `Ctrl+L` | Clear editor |

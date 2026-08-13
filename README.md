@@ -49,6 +49,8 @@ The **connection screen** opens. Pick the engine with `←`/`→`, fill in the f
 | `Ctrl+L` | Clear editor input |
 | `↑↓` (in editor) | Navigate query history |
 | `?` | Help |
+| right-click drag | Resize panes (sidebar / editor) |
+| click | Focus a pane |
 
 ## Features
 
