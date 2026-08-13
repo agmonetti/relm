@@ -76,7 +76,7 @@ func TestConnScreen_SSLModeInConfig(t *testing.T) {
 func TestConnScreen_ValidateSSLMode(t *testing.T) {
 	c := NewConnScreen(nil)
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	c.cycleDriver(true) // postgres
+	c.cycleDriver(true)                     // postgres
 	c.fields[1].input.SetValue("localhost") // required host
 	vis := c.fieldsVisible()
 	vis[5].input.SetValue("bogus")
@@ -279,6 +279,31 @@ func TestConnScreen_ArrowsMoveCaretInField(t *testing.T) {
 	c.Update(tea.KeyMsg{Type: tea.KeyLeft})
 	if p := c.field("File").input.Position(); p != 3 {
 		t.Errorf("ConnScreen must forward left arrow to the focused field, position = %d, want 3", p)
+	}
+}
+
+func TestConnScreen_PortResetsToNewEngineDefault(t *testing.T) {
+	c := NewConnScreen(nil)
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// sqlite -> postgres: the port was empty (sqlite has no port), so it lands
+	// on the postgres default placeholder
+	c.cycleDriver(true)
+	if got := c.field("Port").input.Value(); got != "" {
+		t.Errorf("postgres default port value = %q, want empty (placeholder %q)",
+			got, c.field("Port").input.Placeholder)
+	}
+
+	// postgres -> mysql: the port is still empty, so the mysql default applies
+	c.field("Port").input.SetValue("5432") // postgres default typed
+	c.cycleDriver(true)                    // -> mysql (default 3306)
+	if got := c.field("Port").input.Value(); got != "" {
+		t.Errorf("after cycling with the old default, port = %q, want empty", got)
+	}
+	c.field("Port").input.SetValue("1234") // custom port
+	c.cycleDriver(true)                    // -> mariadb
+	if got := c.field("Port").input.Value(); got != "1234" {
+		t.Errorf("custom port should survive the switch, got %q", got)
 	}
 }
 

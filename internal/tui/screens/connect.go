@@ -170,6 +170,7 @@ func (c *ConnScreen) nextFocus() {
 }
 
 func (c *ConnScreen) cycleDriver(right bool) {
+	prevDefault := conn.DefaultPort(c.driver())
 	n := len(conn.Drivers)
 	if right {
 		c.driverIdx = (c.driverIdx + 1) % n
@@ -177,6 +178,14 @@ func (c *ConnScreen) cycleDriver(right bool) {
 		c.driverIdx = (c.driverIdx - 1 + n) % n
 	}
 	c.rebuildFields()
+	// Reset the port when it still holds the previous engine's default (or is
+	// empty), so switching engines lands on the new engine's default port
+	// instead of a stale one. A custom port the user typed is preserved.
+	if p := c.field("Port"); p != nil {
+		if v := p.input.Value(); v == "" || v == strconv.Itoa(prevDefault) {
+			p.input.SetValue("")
+		}
+	}
 	c.focus = 0
 	c.applyFocus()
 }
