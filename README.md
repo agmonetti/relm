@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.png" alt="relm" width="160">
+  <img src="assets/icon.png" alt="relm" width="320">
 </p>
 
 # relm
