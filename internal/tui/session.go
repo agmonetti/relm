@@ -69,7 +69,7 @@ func defaultName(cfg conn.ConnectionConfig) string {
 	if cfg.Driver == conn.DriverSQLite {
 		return cfg.Path
 	}
-	return fmt.Sprintf("%s/%s", cfg.Host, cfg.Database)
+	return fmt.Sprintf("%s:%d/%s", cfg.Host, cfg.Port, cfg.Database)
 }
 
 // deleteConnection removes a saved connection by name.

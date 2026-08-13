@@ -814,6 +814,23 @@ func TestCorrectSize_ClampsWhenRequeryFails(t *testing.T) {
 	}
 }
 
+func TestDefaultName(t *testing.T) {
+	cfg := conn.ConnectionConfig{Driver: conn.DriverSQLite, Path: "/data/app.db"}
+	if got := defaultName(cfg); got != "/data/app.db" {
+		t.Errorf("sqlite defaultName = %q, want /data/app.db", got)
+	}
+	cfg = conn.ConnectionConfig{Driver: conn.DriverPostgres, Host: "localhost", Port: 5432, Database: "test"}
+	if got := defaultName(cfg); got != "localhost:5432/test" {
+		t.Errorf("postgres defaultName = %q, want localhost:5432/test (port must not collide)", got)
+	}
+	// two engines on different ports with the same host+db must not collide
+	a := conn.ConnectionConfig{Driver: conn.DriverPostgres, Host: "localhost", Port: 5432, Database: "test"}
+	b := conn.ConnectionConfig{Driver: conn.DriverMySQL, Host: "localhost", Port: 3306, Database: "test"}
+	if defaultName(a) == defaultName(b) {
+		t.Error("defaultName must include the port so different ports do not collide")
+	}
+}
+
 func TestModel_ConnectToPostgres(t *testing.T) {
 	host := os.Getenv("SQLISH_TEST_POSTGRES_HOST")
 	if host == "" {
