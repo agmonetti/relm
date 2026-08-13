@@ -476,7 +476,7 @@ func (c *ConnScreen) renderForm() string {
 	b.WriteString("\n\n")
 
 	// engine selector
-	b.WriteString(fieldRow("Engine", c.renderMotorSelector()))
+	b.WriteString(fieldRow("Engine", c.renderMotorSelector(), c.width))
 	b.WriteString("\n")
 
 	// fields, stacked without blank lines so they don't overflow on small terminals
@@ -496,7 +496,7 @@ func (c *ConnScreen) renderForm() string {
 		} else {
 			box = style.Width(fieldBoxW).Render(f.input.View())
 		}
-		b.WriteString(fieldRow(f.label, box))
+		b.WriteString(fieldRow(f.label, box, c.width))
 		b.WriteString("\n")
 	}
 
@@ -512,10 +512,35 @@ func (c *ConnScreen) renderForm() string {
 	return b.String()
 }
 
-// fieldRow joins the label (fixed width, on the left) with its box.
-func fieldRow(label, box string) string {
+// fieldRow centers the input box on the terminal axis and places the label to
+// its left. Centering the whole label+box group would visibly shift the box
+// right by half the label width.
+func fieldRow(label, box string, width int) string {
 	lbl := styles.StyleFieldLabel.Width(fieldLabelW).Align(lipgloss.Right).Render(label)
-	return lipgloss.JoinHorizontal(lipgloss.Center, lbl, " ", box)
+	boxW := lipgloss.Width(box)
+	boxLeft := (width - boxW) / 2
+	if boxLeft < 0 {
+		boxLeft = 0
+	}
+	prefix := boxLeft - fieldLabelW - 1
+	if prefix < 0 {
+		prefix = 0
+	}
+	right := width - boxLeft - boxW
+	if right < 0 {
+		right = 0
+	}
+
+	lines := strings.Split(box, "\n")
+	middle := len(lines) / 2
+	for i, line := range lines {
+		if i == middle {
+			lines[i] = strings.Repeat(" ", prefix) + lbl + " " + line + strings.Repeat(" ", right)
+		} else {
+			lines[i] = strings.Repeat(" ", boxLeft) + line + strings.Repeat(" ", right)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // renderMotorSelector draws the engine selector as a focusable box.

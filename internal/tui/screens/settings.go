@@ -91,7 +91,7 @@ func (s *SettingsScreen) View(width, height int) string {
 	var b strings.Builder
 	b.WriteString(styles.StyleHeader.Render("Settings"))
 	b.WriteString("\n\n")
-	b.WriteString(fieldRow("query timeout (s)", box))
+	b.WriteString(fieldRow("query timeout (s)", box, width))
 	b.WriteString("\n\n")
 	b.WriteString(styles.StyleBtnPrimary.Render("Enter · Save"))
 	b.WriteString("\n")

@@ -294,13 +294,11 @@ func TestConnScreen_ContentHorizontallyCentered(t *testing.T) {
 			t.Fatalf("width %d: form field row not found in the connect screen", w)
 		}
 
-		// the field row is the label (fieldLabelW) + separator + box, centered
-		// as a unit: its left edge must be as far from the terminal left as its
-		// right edge is from the terminal right
-		rowLeft := boxLeft - (fieldLabelW + 1)
-		rowRight := boxRight
-		if d := absInt(rowLeft - (w - 1 - rowRight)); d > 1 {
-			t.Errorf("width %d: form row center off by %d cols (box %d..%d)", w, d, boxLeft, boxRight)
+		// The input box itself is the visual anchor. Labels intentionally sit
+		// to its left and must not move the box away from the terminal center.
+		boxCenter2 := boxLeft + boxRight
+		if d := absInt(boxCenter2 - (w - 1)); d > 1 {
+			t.Errorf("width %d: form box center off by %d cols (box %d..%d)", w, d, boxLeft, boxRight)
 		}
 
 		// the box top border must align with the box content
