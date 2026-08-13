@@ -18,6 +18,11 @@ const (
 	EditorModeExecuting
 )
 
+// MaxResultRows caps how many rows an editor query loads into memory. A query
+// that returns more is cut short and the result is marked Truncated, so a
+// SELECT over a giant table cannot exhaust the machine's memory.
+const MaxResultRows = 10000
+
 // Editor keeps the state of the SQL editor.
 type Editor struct {
 	Buffer  string
@@ -62,7 +67,7 @@ func (e *Editor) ExecuteAt(ctx context.Context, st store.Store, line int) error 
 	defer func() { e.Mode = EditorModeNormal }()
 
 	if e.returnsRows(q) {
-		res, err := st.QueryContext(ctx, q)
+		res, err := st.QueryContextMax(ctx, q, MaxResultRows)
 		if err != nil {
 			e.Result = nil
 			e.Error = err.Error()

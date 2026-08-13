@@ -12,6 +12,14 @@ import (
 // ScanResult reads all rows from a Rows and converts them to a Result.
 // NULL becomes ""; binary, time and numeric types are serialized to string.
 func ScanResult(rows *sql.Rows) (*Result, error) {
+	return ScanResultMax(rows, 0)
+}
+
+// ScanResultMax reads up to max rows from Rows (0 = unlimited) and converts
+// them to a Result. When the result set is longer than max, the scan stops
+// early and Result.Truncated is set, so the caller can avoid loading an
+// unbounded number of rows into memory.
+func ScanResultMax(rows *sql.Rows, max int) (*Result, error) {
 	colTypes, err := rows.ColumnTypes()
 	if err != nil {
 		return nil, err
@@ -25,6 +33,10 @@ func ScanResult(rows *sql.Rows) (*Result, error) {
 	res.Affected = -1 // read query
 	res.Columns = columns
 	for rows.Next() {
+		if max > 0 && len(res.Rows) >= max {
+			res.Truncated = true
+			break
+		}
 		vals := make([]any, len(columns))
 		ptrs := make([]any, len(columns))
 		for i := range vals {

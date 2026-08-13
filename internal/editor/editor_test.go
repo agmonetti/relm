@@ -267,6 +267,26 @@ func TestEditor_ExecuteInsertReturning(t *testing.T) {
 	}
 }
 
+func TestEditor_ResultTruncatedOverLimit(t *testing.T) {
+	st := newTestStore(t)
+	for i := 0; i < MaxResultRows+5; i++ {
+		if _, err := st.Exec("INSERT INTO users (name) VALUES ('u')"); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	e := New()
+	e.Buffer = "SELECT * FROM users"
+	if err := e.Execute(st); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if e.Result == nil || !e.Result.Truncated {
+		t.Errorf("Result.Truncated = %v, want true (result over the row cap)", e.Result)
+	}
+	if len(e.Result.Rows) != MaxResultRows {
+		t.Errorf("Rows = %d, want %d", len(e.Result.Rows), MaxResultRows)
+	}
+}
+
 func TestEditor_ReturnsRows(t *testing.T) {
 	e := New()
 	cases := []struct {

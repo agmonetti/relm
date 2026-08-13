@@ -225,6 +225,17 @@ func (s *Store) QueryContext(ctx context.Context, sql string) (*store.Result, er
 	return store.ScanResult(rows)
 }
 
+// QueryContextMax runs a query that returns rows, stopping after max rows
+// (0 = unlimited) and marking Result.Truncated when the result is longer.
+func (s *Store) QueryContextMax(ctx context.Context, sql string, max int) (*store.Result, error) {
+	rows, err := s.db.QueryContext(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return store.ScanResultMax(rows, max)
+}
+
 // Exec runs SQL without a result (INSERT/UPDATE/DELETE) and returns affected rows.
 func (s *Store) Exec(sql string) (int64, error) {
 	return s.ExecContext(context.Background(), sql)

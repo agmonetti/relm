@@ -172,6 +172,10 @@ func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 			}
 		}
 		b.WriteString(RenderDataTable(e.Result.Columns, view, cursor, width-2, resH))
+		if e.Result.Truncated {
+			b.WriteString(styles.StyleHeaderDim.Render(
+				fmt.Sprintf("  showing first %d rows", editor.MaxResultRows)) + "\n")
+		}
 	} else if e.Result.Affected >= 0 {
 		b.WriteString(fmt.Sprintf("  %d rows affected", e.Result.Affected))
 	}
