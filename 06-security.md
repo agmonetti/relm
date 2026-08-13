@@ -32,9 +32,12 @@ Document aimed at project maintainers. For the end-user guide, see `07-user-secu
 - **Mitigation:** `Read-only` mode (SQLite) as a safety net for production databases; the UI clearly shows which database you're connected to in the header.
 - **Backlog (optional):** global `--read-only` flag that forces read-only mode in all engines.
 
-### Only the first statement is executed
+### Only one statement is executed
 
-The editor only executes the first statement in the buffer (separated by `;`) and shows a warning. This avoids the kind of accidents of `multiStatements=true` (chaining destructive statements).
+The editor executes the statement under the cursor (separated by `;`; if several
+statements start on the same line, the first one is chosen). It never sends
+multiple statements in a single round trip. This avoids the kind of accidents of
+`multiStatements=true` (chaining destructive statements).
 
 ### MySQL/MariaDB: `multiStatements` disabled
 

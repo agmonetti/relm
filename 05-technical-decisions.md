@@ -266,7 +266,15 @@ ERROR: PERMISSION DENIED
 
 ## Performance considerations
 
-- `CountTable` (the `COUNT(*)` for pagination) runs separately and is cached per table. Don't recompute on every render.
+- `CountTable` (the `COUNT(*)` for pagination) runs when a table is selected and
+  on `Reload` (manual refresh or after a write query). It does NOT run on every
+  page navigation (`PgUp`/`PgDn`): the row count is kept from the last load, so
+  browsing a big table does not re-scan it on every page.
+- Browser navigation (open table, change page, refresh) runs in the background,
+  like editor queries: it is bounded by the configured query timeout, cancellable
+  with `Esc`, and shows a spinner instead of freezing the UI.
+- Editor queries cap the number of rows loaded into memory (`MaxResultRows`,
+  10k); a longer result is marked `Truncated` and the UI shows a notice.
 - Column widths are computed once when loading the table/result. Not on every frame.
 - `View()` in bubbletea is called every frame. Don't do I/O there. Only string building.
 - `lipgloss.Render()` is expensive in loops. Precompute styles as package-level variables, don't create them on every `View()` call.
