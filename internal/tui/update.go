@@ -135,8 +135,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// A write query (INSERT/UPDATE/DELETE/CREATE/DROP/...) may have changed
 		// the schema or the data: refresh the table list and the open table.
-		if msg.err == nil && m.browser != nil && m.store != nil &&
-			msg.ed.Result != nil && msg.ed.Result.Affected >= 0 {
+		if msg.err == nil && m.browser != nil && m.store != nil && msg.ed.Wrote {
 			m.setErr(m.browser.Reload(m.store))
 			m.clampSidebar()
 		}

@@ -33,6 +33,11 @@ type Editor struct {
 	// LastQuery is the exact statement that was executed (used by the UI to
 	// push it into the persistent history without crossing goroutines).
 	LastQuery string
+	// Wrote is true when the executed statement may have changed the schema or
+	// the data (INSERT/UPDATE/DELETE/CREATE/DROP/...), even when it returned
+	// rows (e.g. INSERT ... RETURNING). The UI uses it to decide whether the
+	// table list and open table need a reload.
+	Wrote bool
 }
 
 // New creates an editor with an empty history.
@@ -65,6 +70,7 @@ func (e *Editor) ExecuteAt(ctx context.Context, st store.Store, line int) error 
 
 	e.Mode = EditorModeExecuting
 	defer func() { e.Mode = EditorModeNormal }()
+	e.Wrote = isWrite(q)
 
 	if e.returnsRows(q) {
 		res, err := st.QueryContextMax(ctx, q, MaxResultRows)
@@ -98,7 +104,7 @@ type Statement struct {
 }
 
 // splitStatements splits the SQL into statements respecting strings (single
-// quotes, "\" escapes and "''" duplication), comments (`--`, `/* */` and
+// quotes, "\" escapes and "”" duplication), comments (`--`, `/* */` and
 // MySQL's `#`) and the `;` outside them. Comments are replaced by a space so
 // adjacent tokens are not glued together.
 func splitStatements(sql string) []Statement {
@@ -251,6 +257,20 @@ func (e *Editor) returnsRows(q string) bool {
 	case "INSERT", "UPDATE", "DELETE", "MERGE":
 		// e.g. PostgreSQL's INSERT ... RETURNING produces rows
 		return strings.Contains(strings.ToUpper(q), "RETURNING")
+	}
+	return false
+}
+
+// isWrite reports whether the statement may change the schema or the data,
+// regardless of whether it also returns rows (e.g. INSERT ... RETURNING). The
+// heuristic only inspects the leading keyword; exotic forms (a WITH that wraps
+// a DELETE) are missed and simply keep the UI from auto-refreshing.
+func isWrite(q string) bool {
+	switch firstKeyword(q) {
+	case "INSERT", "UPDATE", "DELETE", "MERGE", "REPLACE", "CREATE", "DROP",
+		"ALTER", "TRUNCATE", "GRANT", "REVOKE", "ANALYZE", "VACUUM",
+		"ATTACH", "DETACH", "REINDEX", "COMMENT":
+		return true
 	}
 	return false
 }

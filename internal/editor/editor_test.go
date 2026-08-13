@@ -267,6 +267,34 @@ func TestEditor_ExecuteInsertReturning(t *testing.T) {
 	}
 }
 
+func TestEditor_WroteFlag(t *testing.T) {
+	st := newTestStore(t)
+	cases := []struct {
+		sql  string
+		want bool
+	}{
+		{"SELECT * FROM users", false},
+		{"WITH x AS (SELECT 1) SELECT * FROM x", false},
+		{"INSERT INTO users (name) VALUES ('x')", true},
+		{"INSERT INTO users (name) VALUES ('x') RETURNING id", true}, // rows but still a write
+		{"UPDATE users SET name = 'x'", true},
+		{"CREATE TABLE t (x INT)", true},
+		{"ALTER TABLE users ADD COLUMN y INT", true},
+		{"DELETE FROM users", true},
+		{"DROP TABLE users", true},
+	}
+	for _, tc := range cases {
+		e := New()
+		e.Buffer = tc.sql
+		if err := e.Execute(st); err != nil {
+			t.Fatalf("Execute(%q): %v", tc.sql, err)
+		}
+		if got := e.Wrote; got != tc.want {
+			t.Errorf("Wrote for %q = %v, want %v", tc.sql, got, tc.want)
+		}
+	}
+}
+
 func TestEditor_ResultTruncatedOverLimit(t *testing.T) {
 	st := newTestStore(t)
 	for i := 0; i < MaxResultRows+5; i++ {
