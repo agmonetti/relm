@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 
 	"github.com/agmonetti/relm/internal/conn"
@@ -412,7 +411,7 @@ func (c *ConnScreen) View(width, height int) string {
 	}
 
 	var b strings.Builder
-	b.WriteString(styles.StyleLogo.Render(logoASCII))
+	b.WriteString(renderLogo(c.width))
 	b.WriteString("\n\n")
 	b.WriteString(c.renderForm())
 	content := b.String()
@@ -430,10 +429,10 @@ func (c *ConnScreen) View(width, height int) string {
 		content += "\n\n" + styles.StyleError.Render(c.err)
 	}
 
-	// Center every line horizontally so logo and form share the center axis;
+	// Center every line horizontally so logo and form share the center axis,
 	// then center vertically (a no-op horizontally once all lines are the
 	// terminal width).
-	content = centerBlock(content, c.width)
+	content = lipgloss.NewStyle().Width(c.width).Align(lipgloss.Center).Render(content)
 
 	if lipgloss.Height(content) > c.height {
 		content = lipgloss.Place(c.width, c.height, lipgloss.Center, lipgloss.Top, content)
@@ -449,20 +448,20 @@ func (c *ConnScreen) View(width, height int) string {
 	return content
 }
 
-// centerBlock centers each line of the content horizontally within width and
-// pads it on both sides to exactly `width`, so a later lipgloss.Place only has
-// to do vertical alignment. Lines are measured with runewidth after stripping
-// ANSI, which is reliable for styled text.
-func centerBlock(content string, width int) string {
-	lines := strings.Split(content, "\n")
-	for i, l := range lines {
-		if w := runewidth.StringWidth(ansi.Strip(l)); w < width {
-			left := (width - w) / 2
-			right := width - w - left
-			lines[i] = strings.Repeat(" ", left) + l + strings.Repeat(" ", right)
+// renderLogo renders the ASCII logo centered on the given width. The lines are
+// first padded to a uniform width so lipgloss.Center does not skew them.
+func renderLogo(width int) string {
+	lines := strings.Split(logoASCII, "\n")
+	maxW := 0
+	for _, l := range lines {
+		if w := runewidth.StringWidth(l); w > maxW {
+			maxW = w
 		}
 	}
-	return strings.Join(lines, "\n")
+	for i, l := range lines {
+		lines[i] = l + strings.Repeat(" ", maxW-runewidth.StringWidth(l))
+	}
+	return styles.StyleLogo.Width(width).Align(lipgloss.Center).Render(strings.Join(lines, "\n"))
 }
 
 // Fixed form widths: label on the left + input box.

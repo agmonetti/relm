@@ -255,57 +255,69 @@ func absInt(n int) int {
 }
 
 func TestConnScreen_ContentHorizontallyCentered(t *testing.T) {
-	const w = 120
-	c := NewConnScreen(nil)
-	out := c.View(w, 30)
+	for _, w := range []int{80, 120, 160} {
+		w := w
+		c := NewConnScreen(nil)
+		out := c.View(w, 30)
 
-	// cell column of a byte index (chars before `sub` may include multibyte)
-	colOf := func(plain, sub string) int {
-		return runewidth.StringWidth(plain[:strings.Index(plain, sub)])
-	}
+		// cell column of a byte index (chars before `sub` may include multibyte)
+		colOf := func(plain, sub string) int {
+			return runewidth.StringWidth(plain[:strings.Index(plain, sub)])
+		}
 
-	var logoOK bool
-	var boxLeft, boxRight, boxTopCol = -1, -1, -1
-	for _, l := range strings.Split(out, "\n") {
-		plain := ansi.Strip(l)
-		trimmed := strings.TrimSpace(plain)
-		switch {
-		case strings.HasPrefix(trimmed, "_____"): // logo line 1
-			d, ok := centerDelta(l, w)
-			if !ok {
-				continue
+		var logoOK bool
+		var boxLeft, boxRight, boxTopCol = -1, -1, -1
+		for _, l := range strings.Split(out, "\n") {
+			plain := ansi.Strip(l)
+			trimmed := strings.TrimSpace(plain)
+			switch {
+			case strings.HasPrefix(trimmed, "_____"): // logo line 1
+				d, ok := centerDelta(l, w)
+				if !ok {
+					continue
+				}
+				logoOK = true
+				if d < -3 || d > 3 {
+					t.Errorf("width %d: logo center off by %d cols: %q", w, d, l)
+				}
+			case strings.Contains(trimmed, "Engine │"): // a field row (label + box)
+				boxLeft = runewidth.StringWidth(plain[:strings.Index(plain, "│")])
+				boxRight = runewidth.StringWidth(plain[:strings.LastIndex(plain, "│")])
+			case strings.HasPrefix(trimmed, "╭"): // the box top border line
+				boxTopCol = colOf(plain, "╭")
 			}
-			logoOK = true
-			if d < -3 || d > 3 {
-				t.Errorf("logo center off by %d cols: %q", d, l)
-			}
-		case strings.Contains(trimmed, "Engine │"): // a field row (label + box)
-			boxLeft = runewidth.StringWidth(plain[:strings.Index(plain, "│")])
-			boxRight = runewidth.StringWidth(plain[:strings.LastIndex(plain, "│")])
-		case strings.HasPrefix(trimmed, "╭"): // the box top border line
-			boxTopCol = colOf(plain, "╭")
+		}
+		if !logoOK {
+			t.Fatalf("width %d: logo line not found in the connect screen", w)
+		}
+		if boxLeft < 0 || boxRight < 0 {
+			t.Fatalf("width %d: form field row not found in the connect screen", w)
+		}
+
+		// the field row is the label (fieldLabelW) + separator + box, centered
+		// as a unit: its left edge must be as far from the terminal left as its
+		// right edge is from the terminal right
+		rowLeft := boxLeft - (fieldLabelW + 1)
+		rowRight := boxRight
+		if d := absInt(rowLeft - (w - 1 - rowRight)); d > 1 {
+			t.Errorf("width %d: form row center off by %d cols (box %d..%d)", w, d, boxLeft, boxRight)
+		}
+
+		// the box top border must align with the box content
+		if boxTopCol < 0 {
+			t.Error("box top border not found")
+		} else if boxTopCol != boxLeft {
+			t.Errorf("width %d: box top border at col %d but content at %d", w, boxTopCol, boxLeft)
 		}
 	}
-	if !logoOK {
-		t.Error("logo line not found in the connect screen")
-	}
-	if boxLeft < 0 || boxRight < 0 {
-		t.Fatal("form field row not found in the connect screen")
-	}
+}
 
-	// the field row is the label (fieldLabelW) + separator + box, centered as a
-	// unit: its left edge must be as far from the terminal left as its right
-	// edge is from the terminal right
-	rowLeft := boxLeft - (fieldLabelW + 1)
-	rowRight := boxRight
-	if d := absInt(rowLeft - (w - 1 - rowRight)); d > 1 {
-		t.Errorf("form row center off by %d cols (box %d..%d)", d, boxLeft, boxRight)
-	}
-
-	// the box top border must align with the box content
-	if boxTopCol < 0 {
-		t.Error("box top border not found")
-	} else if boxTopCol != boxLeft {
-		t.Errorf("box top border at col %d but content at %d", boxTopCol, boxLeft)
+func TestLogoLinesAreUniform(t *testing.T) {
+	lines := strings.Split(logoASCII, "\n")
+	w := runewidth.StringWidth(lines[0])
+	for i, l := range lines {
+		if got := runewidth.StringWidth(l); got != w {
+			t.Errorf("logo line %d is %d cells wide, want %d (uniform, so centering does not skew)", i, got, w)
+		}
 	}
 }

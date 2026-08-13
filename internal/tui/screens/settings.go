@@ -100,7 +100,7 @@ func (s *SettingsScreen) View(width, height int) string {
 		b.WriteString("\n\n" + styles.StyleError.Render(s.err))
 	}
 
-	content := centerBlock(b.String(), width)
+	content := lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(b.String())
 	if lipgloss.Height(content) > height {
 		content = lipgloss.Place(width, height, lipgloss.Center, lipgloss.Top, content)
 	} else {
