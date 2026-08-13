@@ -37,6 +37,7 @@ const logoASCII = `  _____  ______  _      __  __
  |  _  /|  __|  | |    | |\/| |
  | | \ \| |____ | |____| |  | |
  |_|  \_\______|_\_____|_|  |_|`
+
 // field is a form label + input. If isToggle is true, the field is a boolean
 // (checkbox) and input is not used.
 type field struct {
