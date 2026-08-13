@@ -1,7 +1,7 @@
 BINARY := relm
 PKG    := ./cmd/relm
 
-.PHONY: build test lint clean demo
+.PHONY: build test lint clean demo demo-pg demo-mysql demo-maria demo-mssql demo-all
 
 build:
 	go build -o bin/$(BINARY) $(PKG)
@@ -13,10 +13,26 @@ test:
 lint:
 	go vet ./...
 
-# Creates an example SQLite database to test without docker (no sqlite3 CLI
-# needed; works on any platform). Usage: make demo && ./bin/relm
+# Creates the example database. Without a target it seeds SQLite (demo.db, no
+# server needed); the network engines need their server running first
+# (docker compose up -d). Usage: make demo && ./bin/relm
 demo:
 	go run ./cmd/demo
+
+demo-pg:
+	go run ./cmd/demo --postgres
+
+demo-mysql:
+	go run ./cmd/demo --mysql
+
+demo-maria:
+	go run ./cmd/demo --mariadb
+
+demo-mssql:
+	go run ./cmd/demo --mssql
+
+demo-all:
+	go run ./cmd/demo --all
 
 clean:
 	rm -rf bin
