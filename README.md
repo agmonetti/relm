@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon.jpg" alt="relm" width="160">
+</p>
+
 # relm
 
 Terminal database browser. Explore, query and edit databases from the keyboard, without leaving your terminal.
