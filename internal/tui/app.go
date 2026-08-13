@@ -177,6 +177,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cancelQuery()
 			return m, nil
 		}
+		// Esc also closes the help cheatsheet
+		if m.showHelp && msg.Type == tea.KeyEsc {
+			m.showHelp = false
+			return m, nil
+		}
 
 		switch m.screen {
 		case ScreenConnect:
