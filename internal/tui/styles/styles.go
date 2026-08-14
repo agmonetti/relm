@@ -65,8 +65,8 @@ var (
 
 	// StyleFieldLabel is a label of a connection form field.
 	StyleFieldLabel = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(ColorHeader)
+			Bold(true).
+			Foreground(ColorHeader)
 
 	// StyleInputBox is the visible box of a form input.
 	StyleInputBox = lipgloss.NewStyle().
@@ -80,10 +80,10 @@ var (
 
 	// StyleBtnPrimary is the primary button (solid teal background).
 	StyleBtnPrimary = lipgloss.NewStyle().
-				Background(ColorPrimary).
-				Foreground(lipgloss.Color("#000000")).
-				Bold(true).
-				Padding(0, 3)
+			Background(ColorPrimary).
+			Foreground(lipgloss.Color("#000000")).
+			Bold(true).
+			Padding(0, 3)
 
 	// StyleBtnSecondary is a secondary button (dim gray background).
 	StyleBtnSecondary = lipgloss.NewStyle().
