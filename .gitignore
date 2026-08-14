@@ -1,11 +1,10 @@
-# Binarios
+# Binaries
 /relm
 /relm.exe
 /bin/
-/sqlish
 *.exe~
 
-# Bases de ejemplo
+# Example databases
 /demo.db
 *.db
 *.db-shm
@@ -13,7 +12,12 @@
 *.sqlite
 *.sqlite3
 
-# Editor
+# Go test coverage
+coverage.*
+*.out
+
+# Editor / OS
 *.swp
 .idea/
 .vscode/
+.DS_Store

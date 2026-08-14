@@ -37,7 +37,7 @@ jobs:
           go-version-file: go.mod
 
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
   integration:
     name: network engine integration tests
