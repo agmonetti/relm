@@ -19,7 +19,7 @@ go build -o relm ./cmd/relm
 ./relm
 ```
 
-(Requires Go 1.26+. The SQLite driver is pure-Go `modernc.org/sqlite`, so no gcc/CGO is needed; it builds and runs on Windows, Linux and macOS.)
+(Requires Go 1.26.6+. The SQLite driver is pure-Go `modernc.org/sqlite`, so no gcc/CGO is needed; it builds and runs on Windows, Linux and macOS.)
 
 ---
 

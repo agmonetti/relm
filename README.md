@@ -23,7 +23,7 @@ Browse tables, run queries and inspect schemas — all from the keyboard, all in
 
 ## Install
 
-Requires Go 1.26+. No CGO, no gcc, no libsqlite — the SQLite driver is pure Go.
+Requires Go 1.26.6+. No CGO, no gcc, no libsqlite — the SQLite driver is pure Go.
 
 ```bash
 go install github.com/agmonetti/relm@latest
@@ -84,7 +84,7 @@ The connection screen opens. Pick the engine with `←`/`→`, fill in the field
 
 ## Stack
 
-Go 1.26+ · [bubbletea](https://github.com/charmbracelet/bubbletea) · [lipgloss](https://github.com/charmbracelet/lipgloss) · [bubbles](https://github.com/charmbracelet/bubbles)
+Go 1.26.6+ · [bubbletea](https://github.com/charmbracelet/bubbletea) · [lipgloss](https://github.com/charmbracelet/lipgloss) · [bubbles](https://github.com/charmbracelet/bubbles)
 
 Drivers: `modernc.org/sqlite` · `jackc/pgx/v5` · `go-sql-driver/mysql` · `microsoft/go-mssqldb`
 
