@@ -38,3 +38,41 @@ jobs:
 
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  integration:
+    name: network engine integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: start test databases
+        # Waits until every container reports healthy (see compose.yaml).
+        run: docker compose up -d --wait
+
+      - name: integration tests
+        env:
+          SQLISH_TEST_POSTGRES_HOST: localhost
+          SQLISH_TEST_POSTGRES_USER: postgres
+          SQLISH_TEST_POSTGRES_PASSWORD: postgres
+          SQLISH_TEST_POSTGRES_DATABASE: test
+          SQLISH_TEST_MYSQL_HOST: localhost
+          SQLISH_TEST_MYSQL_USER: root
+          SQLISH_TEST_MYSQL_PASSWORD: root
+          SQLISH_TEST_MYSQL_DATABASE: test
+          SQLISH_TEST_MARIADB_HOST: localhost
+          SQLISH_TEST_MARIADB_USER: root
+          SQLISH_TEST_MARIADB_PASSWORD: root
+          SQLISH_TEST_MARIADB_DATABASE: test
+          SQLISH_TEST_MSSQL_HOST: localhost
+          SQLISH_TEST_MSSQL_USER: sa
+          SQLISH_TEST_MSSQL_PASSWORD: "Str0ng!Passw0rd"
+          SQLISH_TEST_MSSQL_DATABASE: master
+        run: go test -timeout 300s ./internal/store/...
+
+      - name: teardown
+        if: always()
+        run: docker compose down

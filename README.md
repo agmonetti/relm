@@ -104,7 +104,7 @@ which makes layout bugs reproducible in CI without a real terminal.
 ### Integration tests (network engines)
 
 ```bash
-docker compose up -d
+docker compose up -d --wait
 
 SQLISH_TEST_POSTGRES_HOST=localhost SQLISH_TEST_POSTGRES_USER=postgres \
 SQLISH_TEST_POSTGRES_PASSWORD=postgres SQLISH_TEST_POSTGRES_DATABASE=test \
@@ -114,7 +114,10 @@ SQLISH_TEST_MARIADB_HOST=localhost SQLISH_TEST_MARIADB_USER=root \
 SQLISH_TEST_MARIADB_PASSWORD=root SQLISH_TEST_MARIADB_DATABASE=test \
 SQLISH_TEST_MSSQL_HOST=localhost SQLISH_TEST_MSSQL_USER=sa \
 SQLISH_TEST_MSSQL_PASSWORD='Str0ng!Passw0rd' SQLISH_TEST_MSSQL_DATABASE=master \
-go test ./...
+go test -timeout 300s ./internal/store/...
 ```
+
+The CI `integration` job runs exactly these against `docker compose`, so the
+network drivers are exercised on every push and pull request (not only locally).
 
 ---
