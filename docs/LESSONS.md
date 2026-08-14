@@ -20,7 +20,7 @@ This file documents crossroads and decisions the agent makes during development,
 
 **Decision:** implement in SPEC phases. Phase 1 = only `store` + `conn` + `cmd` with output to stdout. No TUI yet.
 
-**Lesson:** follow `04-implementation.md` to the letter. Each phase has a done criterion verifiable with `go test`/`go build`. Don't skip phases.
+**Lesson:** follow `design/04-implementation.md` to the letter. Each phase has a done criterion verifiable with `go test`/`go build`. Don't skip phases.
 
 ---
 
@@ -42,7 +42,7 @@ This file documents crossroads and decisions the agent makes during development,
 
 **Decision:** use `mattn` for now (the SPEC asks for it). Leave the `modernc.org/sqlite` alternative documented for CGO-less builds.
 
-**Lesson:** the cost of CGO is paid at release time. Note the escape hatch in the README and in `05-technical-decisions.md`.
+**Lesson:** the cost of CGO is paid at release time. Note the escape hatch in the README and in `design/05-technical-decisions.md`.
 
 ---
 

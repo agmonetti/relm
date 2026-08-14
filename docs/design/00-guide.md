@@ -32,8 +32,8 @@ Guides for the end user (not for the agent):
 
 | File | Contents |
 |---|---|
-| `USAGE.md` | First use step by step: whether to start servers, how to test each engine, how to run queries. |
-| `README.md` | Project summary, installation and shortcuts. |
+| `../../USAGE.md` | First use step by step: whether to start servers, how to test each engine, how to run queries. |
+| `../../README.md` | Project summary, installation and shortcuts. |
 
 ## Main instruction
 
@@ -43,7 +43,7 @@ If something is not specified, apply the principle of `01-vision.md`: the simple
 
 ## Final stack
 
-- **Language:** Go 1.22+
+- **Language:** Go 1.26.6+
 - **TUI:** bubbletea + lipgloss + bubbles (Charmbracelet)
 - **Engines:** SQLite, PostgreSQL, MySQL, MariaDB, SQL Server (drivers listed above)
 - **Testing:** stdlib `testing`, no external frameworks

@@ -48,7 +48,7 @@ The connection screen opens. Pick the engine with `←`/`→`, fill in the field
 ## What you get
 
 - **Single-window layout** — sidebar, table browser and SQL editor always visible, always in sync.
-- **Keyset pagination** — browsing a 10M-row table doesn't move the rows on refresh.
+- **Keyset pagination** — pages are anchored to the primary key, so refreshing or re-sorting a large table never moves the visible rows.
 - **Live editor** — multiline SQL with history of your last 100 queries, runs in the background, cancellable with `Esc`.
 - **Auto-refresh** — after any write query the sidebar and open table reload automatically.
 - **Table structure** — columns, constraints and indexes with `i`.
@@ -120,4 +120,36 @@ go test -timeout 300s ./internal/store/...
 The CI `integration` job runs exactly these against `docker compose`, so the
 network drivers are exercised on every push and pull request (not only locally).
 
+## Documentation
+
+- **[USAGE.md](USAGE.md)** — first steps, step by step: create a test database,
+  connect, run your first query.
+- **`docs/design/`** — the design documents behind the project: vision,
+  architecture, UX, implementation phases, technical decisions and the security
+  threat model (maintainers).
+- **`docs/LESSONS.md`** — engineering decisions and pitfalls recorded during
+  development.
+
+## Roadmap
+
+Plans documented in the design docs (`docs/design/06-security.md` and
+`docs/design/05-technical-decisions.md`), not yet implemented:
+
+- OS keychain integration for saved passwords (removes the plaintext tradeoff).
+- A global `--read-only` flag that applies to all five engines, not just SQLite.
+- TLS options for MySQL/MariaDB and SQL Server.
+- Export results to CSV/JSON.
+- Inline cell editing and SQL syntax highlighting.
+- `relm <dsn>` as a CLI shortcut to skip the connection screen.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the checks to run
+(`gofmt`, `go vet`, `go test`) and the pull request workflow.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
 ---
+

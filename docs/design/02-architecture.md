@@ -5,8 +5,10 @@
 ```
 relm/
 ├── cmd/
-│   └── relm/
-│       └── main.go          # Entry point. Launches the TUI. No business logic.
+│   ├── relm/
+│   │   └── main.go          # Entry point. Launches the TUI. No business logic.
+│   └── demo/
+│       └── main.go          # Seeder: demo.db + the 4 network engines (make demo).
 ├── internal/
 │   ├── conn/
 │   │   ├── conn.go          # ConnectionConfig: driver + per-engine fields.
@@ -33,24 +35,50 @@ relm/
 │   ├── editor/
 │   │   ├── editor.go        # SQL editor state: buffer, history, mode.
 │   │   └── history.go       # Ring buffer of executed queries (last 100).
+│   ├── prefs/
+│   │   └── prefs.go         # Persisted preferences (query timeout, etc).
+│   ├── demo/
+│   │   └── demo.go          # Reusable seeder for all five engines.
 │   └── tui/
-│       ├── app.go           # Main bubbletea model (Init/Update/View).
+│       ├── model.go         # Main bubbletea model (Init/Update/View).
 │       ├── keys.go          # Definition of all keymaps (help.KeyMap).
+│       ├── update.go        # Msg handling (connectMsg, KeyMsg, WindowSizeMsg...).
+│       ├── view.go          # Top-level render (header, screen, footer).
+│       ├── session.go       # Active session state (store + browser + editor).
+│       ├── browser_run.go   # Background table navigation with cancel.
+│       ├── editor_run.go    # Background query execution with cancel.
+│       ├── debug.go         # --print-layout: render screens as plain text.
+│       ├── detail.go        # Row detail screen (full values).
+│       ├── mouse.go         # Mouse events (resize drag, click, wheel).
 │       ├── screens/
 │       │   ├── connect.go   # Connection screen (form + saved).
 │       │   ├── browser.go   # Table and row browsing screen.
 │       │   ├── editor.go    # SQL editor + results screen.
-│       │   └── structure.go # Table structure screen.
+│       │   ├── structure.go # Table structure screen.
+│       │   ├── settings.go  # Settings screen (Ctrl+P).
+│       │   ├── workspace.go # Single-window layout: sidebar + main + editor.
+│       │   └── cursor.go    # Shared pane-cursor helpers.
 │       └── styles/
 │           └── styles.go    # All lipgloss.Style centralized here.
-├── Makefile                   # build / test / lint / clean / demo / release.
-├── compose.yaml               # Spins up the 4 network engines for testing (see USAGE).
+├── assets/
+│   └── icon.png             # Logo used in the README.
+├── docs/
+│   ├── LESSONS.md           # Agent decisions during development.
+│   └── design/              # SPEC: design documents (00-guide, 01-vision, ...).
+│       ├── 00-guide.md
+│       ├── 01-vision.md
+│       ├── 02-architecture.md
+│       ├── 03-ux-screens.md
+│       ├── 04-implementation.md
+│       ├── 05-technical-decisions.md
+│       ├── 06-security.md
+│       └── 07-user-security.md
+├── Makefile                 # build / test / lint / clean / demo / release.
+├── compose.yaml             # Spins up the 4 network engines for testing (see USAGE).
 ├── go.mod
 ├── go.sum
 ├── README.md
-├── USAGE.md                  # First-use guide (see README).
-├── LESSONS.md                # Agent decisions during development.
-└── 00..05-*.md              # SPEC: design documents (00-guide, 01-vision, ...).
+└── USAGE.md                 # First-use guide (see README).
 ```
 
 ## Layers and responsibilities
