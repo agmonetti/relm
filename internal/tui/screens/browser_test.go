@@ -160,9 +160,16 @@ func TestColWidths_ShrinksToFitManyColumns(t *testing.T) {
 
 	// with a tiny width every column reaches the floor
 	widths = colWidths(cols, rows, 40)
-	for i, w := range widths {
-		if w != 4 {
-			t.Errorf("width[%d] = %d, want 4 (floor)", i, w)
+	total = len(widths) - 1
+	for _, w := range widths {
+		total += w
+	}
+	if total > 40 {
+		t.Errorf("widths %v sum to %d, want <= 40 (must fit even below the floor)", widths, total)
+	}
+	for _, w := range widths {
+		if w < 1 {
+			t.Errorf("width %d below the 1-char minimum", w)
 		}
 	}
 }

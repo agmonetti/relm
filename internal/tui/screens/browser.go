@@ -215,6 +215,30 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 			}
 		}
 	}
+
+	// Last resort: every column is already at the floor but the table still
+	// does not fit (e.g. a wide table on a narrow pane). Shrink the columns
+	// below the floor, down to 1 cell each, so the table never overflows.
+	total = n - 1
+	for _, w := range widths {
+		total += w
+	}
+	if total > width {
+		remaining := total - width
+		for i := range widths {
+			if remaining <= 0 {
+				break
+			}
+			shrink := widths[i] - 1
+			if shrink > remaining {
+				shrink = remaining
+			}
+			if shrink > 0 {
+				widths[i] -= shrink
+				remaining -= shrink
+			}
+		}
+	}
 	return widths
 }
 
