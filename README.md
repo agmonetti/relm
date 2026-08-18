@@ -11,6 +11,10 @@
 
 ---
 
+<p align="center">
+  <img src="assets/demo.gif" alt="relm demo" width="85%">
+</p>
+
 Browse tables, run queries and inspect schemas — all from the keyboard, all in one window. No Electron, no browser tab, no mouse required.
 
 > **First time?** `relm` connects to databases that already exist — it doesn't start servers.
