@@ -37,6 +37,10 @@ var (
 	StyleError = lipgloss.NewStyle().
 			Foreground(ColorError)
 
+	// StyleSuccess is a confirmation message (e.g. a completed export).
+	StyleSuccess = lipgloss.NewStyle().
+			Foreground(ColorPrimary)
+
 	// StyleFooter is the screen footer.
 	StyleFooter = lipgloss.NewStyle().
 			Foreground(ColorMuted)

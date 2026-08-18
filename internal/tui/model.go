@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/agmonetti/relm/internal/browser"
@@ -94,17 +95,30 @@ type Model struct {
 	detailTitle  string
 	detailCols   []string
 	detailVals   []string
+
+	// export prompt ("alt+e"): a centered input for the target filename
+	exporting   bool
+	exportInput textinput.Model
+	exportErr   string
+	exportRes   *store.Result
+	exportNote  string // "N rows" description appended to the success message
+	exported    string // last success message, rendered in green
 }
 
 // New creates the initial model (connection screen).
 func New() *Model {
 	saved, _ := conn.LoadSaved()
 	p, _ := prefs.Load()
+	exportInput := textinput.New()
+	exportInput.Cursor.BlinkSpeed = screens.CursorBlink
+	exportInput.Prompt = " "
+	exportInput.Width = 40
 	return &Model{
 		connect:      screens.NewConnScreen(saved),
 		settings:     screens.NewSettingsScreen(),
 		editor:       editor.New(),
 		editorScreen: screens.NewEditorScreen(),
+		exportInput:  exportInput,
 		screen:       ScreenConnect,
 		prevScreen:   ScreenConnect,
 		focus:        screens.FocusSidebar,

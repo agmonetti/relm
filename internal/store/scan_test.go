@@ -31,6 +31,47 @@ func TestStringify(t *testing.T) {
 	}
 }
 
+func TestScanResultMax_TracksNulls(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec("CREATE TABLE t (a TEXT, b TEXT)"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := db.Exec("INSERT INTO t VALUES ('x', NULL), (NULL, 'y'), (NULL, NULL)"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	rows, err := db.QueryContext(context.Background(), "SELECT * FROM t")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer rows.Close()
+	res, err := ScanResultMax(rows, 0)
+	if err != nil {
+		t.Fatalf("ScanResultMax: %v", err)
+	}
+	want := [][]bool{
+		{false, true},
+		{true, false},
+		{true, true},
+	}
+	if len(res.Nulls) != len(want) {
+		t.Fatalf("Nulls rows = %d, want %d", len(res.Nulls), len(want))
+	}
+	for i := range want {
+		if res.Nulls[i][0] != want[i][0] || res.Nulls[i][1] != want[i][1] {
+			t.Errorf("row %d Nulls = %v, want %v", i, res.Nulls[i], want[i])
+		}
+	}
+	if res.Rows[0][1] != "" || res.Rows[1][0] != "" {
+		t.Errorf("NULL cells should stringify to empty, got %v", res.Rows)
+	}
+}
+
 func TestScanResultMaxCapsRows(t *testing.T) {
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {

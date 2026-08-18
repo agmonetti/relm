@@ -27,6 +27,8 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) tea.Cmd {
 	m.connecting = false
 	m.resizing = false
 	m.showDetail = false
+	m.exporting = false
+	m.exported = ""
 	m.editorScreen.ResetResult()
 	m.browser = nil
 	m.editor = editor.New()
@@ -107,6 +109,8 @@ func (m *Model) newSession() {
 	m.connecting = false
 	m.resizing = false
 	m.showDetail = false
+	m.exporting = false
+	m.exported = ""
 	m.editorScreen.ResetResult()
 	m.browser = nil
 	m.editor = editor.New()

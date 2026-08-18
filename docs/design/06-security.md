@@ -12,6 +12,7 @@ Document aimed at project maintainers. For the end-user guide, see `07-user-secu
 | Connection without TLS to a network database → MITM reads credentials and data | Medium-high | `SSL` field in PostgreSQL (`prefer` by default). MySQL/MariaDB and SQL Server don't expose a TLS option yet. |
 | Accidental damage to production (`DROP`, `UPDATE` without `WHERE`, mass `DELETE`) | Medium | `Read-only` mode for SQLite. `relm` doesn't ask for confirmation (design decision). |
 | Queries with sensitive data visible on screen | Low | That's the purpose of the tool; the user controls what runs. |
+| Query results exported to disk (CSV/JSON, `Alt+E`) | Low | The user chooses the destination and the data; same trust model as the screen. Files use the default umask. |
 | Logging of queries or passwords to disk | None | No logging to file. Errors are shown on screen. |
 
 ## Design decisions and accepted tradeoffs

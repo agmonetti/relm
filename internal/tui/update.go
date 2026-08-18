@@ -61,15 +61,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "ctrl+n":
-			if m.screen != ScreenSettings {
+			if !m.exporting && m.screen != ScreenSettings {
 				m.newSession()
 			}
 			return m, nil
 		case "ctrl+p":
-			if m.screen != ScreenSettings {
+			if !m.exporting && m.screen != ScreenSettings {
 				m.openSettings()
 			}
 			return m, nil
+		}
+
+		// the export prompt owns every key while it is open
+		if m.exporting {
+			return m.handleExportKeys(msg)
 		}
 
 		// the detail view only accepts scrolling and Esc
@@ -214,6 +219,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // typing reports whether the user is typing text (q/? must not quit).
 func (m *Model) typing() bool {
+	if m.exporting {
+		return true
+	}
 	switch m.screen {
 	case ScreenConnect:
 		return m.connect.FocusOnField()

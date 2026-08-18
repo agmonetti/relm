@@ -39,6 +39,9 @@ func (m *Model) handleWorkspaceKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.runBrowserOp(func(b *browser.Browser, st store.Store, ctx context.Context) error {
 			return b.Reload(ctx, st)
 		})
+	case !m.loading && !m.navigating && key.Matches(msg, m.keys.Export):
+		m.openExport()
+		return m, nil
 	}
 
 	switch m.focus {

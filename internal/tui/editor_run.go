@@ -70,6 +70,7 @@ func (m *Model) executeEditor() tea.Cmd {
 	m.cancelQuery() // release a previous cancel, if any
 	m.cancel = cancel
 	m.loading = true
+	m.exported = ""
 	return tea.Batch(
 		func() tea.Msg {
 			// The query runs on a fresh editor with a throwaway history: the

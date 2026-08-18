@@ -67,7 +67,27 @@ func (s *SQLiteStore) Tables() ([]string, error) {
   OFFSET pagination with `ORDER BY 1` (the first column).
 - `LIMIT n` uses integers (page, pageSize), safe for direct interpolation.
 - Identifiers (table/column names) are ALWAYS escaped with `QuoteIdent`, including the browser's active table: `SELECT * FROM "my table"`.
-- `Result.Rows` is `[][]string` in all engines. The engine store converts each native type to string (including `[]byte`, `time.Time`, `decimal`) and `NULL` to `""` (the UI renders it as `∅`).
+- `Result.Rows` is `[][]string` in all engines. The engine store converts each native type to string (including `[]byte`, `time.Time`, `decimal`) and `NULL` to `""` (the UI renders it as `∅`). The parallel `Result.Nulls [][]bool` marks the cells that were SQL NULL, so exporters and the UI can tell a real NULL from an empty string; it is `nil` for manually-built results.
+
+## Export to CSV/JSON
+
+- Triggered with `Alt+E` from the workspace. Data source: the last editor query
+  result when the editor is focused, the current page of the active table
+  otherwise (a note in the success message states the page when the table has
+  more rows).
+- A centered prompt (bubbles `textinput`) takes the target file name, pre-filled
+  with `relm-export-<timestamp>.csv`. The format follows the extension
+  (`.json` → JSON; anything else → CSV). `Enter` writes the file synchronously
+  (≤10k rows) and shows `exported N rows → /abs/path`; `Esc` cancels. A write
+  error keeps the prompt open so the user can fix the name.
+- `internal/export` serializes a `store.Result` that is already in memory; it
+  never touches the database or a driver. CSV is RFC 4180 (`encoding/csv`): NULL
+  and empty string both become empty fields. JSON is an array of objects in
+  column order; NULL becomes `null` (via `Result.Nulls`), everything else stays
+  a string (relm's model is strings-only). HTML escaping is disabled so values
+  like `a < b` are exported verbatim.
+- Full-table export (beyond the current page) needs a streaming `Store` method
+  and is out of scope until then.
 
 ## Connection and DSN per engine
 
@@ -240,6 +260,8 @@ Examples:
 empty table
 cannot connect to localhost:5432: connection refused
 invalid query: near "FORM": syntax error
+nothing to export — run a query that returns rows
+exported 50 of 5000 rows (current page) → /tmp/out.csv
 
 # Bad
 Error! The query could not be executed because the syntax is incorrect.
@@ -304,7 +326,6 @@ Exact versions to verify with `go get` at implementation time — use the latest
 
 So the agent knows what NOT to implement yet:
 
-- Export results to CSV / JSON.
 - New engines (Oracle, DB2, Snowflake, NoSQL). The list is closed at five.
 - Inline cell editing (too complex for v0.1).
 - SQL syntax highlighting in the editor.

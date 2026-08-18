@@ -165,6 +165,7 @@ appear below, separated by a line.
 | `?` | Toggle help panel |
 | `Tab` | Move focus to the next pane (sidebar → main → editor) |
 | `Alt+1` / `Alt+2` / `Alt+3` | Jump to sidebar / main / editor |
+| `Alt+E` | Export (prompt to save the result / current table page) |
 
 > `Alt+1..3` work on every terminal. `Ctrl+1..3` are also bound for terminals
 > with CSI-u support (kitty, wezterm), but `Ctrl+<digit>` is not distinguishable
@@ -217,6 +218,16 @@ appear below, separated by a line.
 | `Ctrl+A` | Go to start of line |
 | `Ctrl+E` | Go to end of line |
 | `Esc` | Back to the main pane |
+
+### Export prompt (`Alt+E`)
+
+`Alt+E` from the workspace opens a centered prompt with a single text input for
+the target file name, pre-filled with `relm-export-<timestamp>.csv`. The format
+is taken from the extension (`.json` → JSON, otherwise CSV). `Enter` writes the
+file and closes the prompt showing `exported N rows → /abs/path` in green;
+`Esc` cancels. Data source: the last query result when the editor is focused,
+the current page of the active table otherwise. SQL NULL is exported as JSON
+`null` (empty field in CSV).
 
 ## Styles and colors
 

@@ -39,6 +39,8 @@ relm/
 │   │   └── prefs.go         # Persisted preferences (query timeout, etc).
 │   ├── demo/
 │   │   └── demo.go          # Reusable seeder for all five engines.
+│   ├── export/
+│   │   └── export.go        # Result → CSV/JSON serializers (no DB access).
 │   └── tui/
 │       ├── model.go         # Main bubbletea model (Init/Update/View).
 │       ├── keys.go          # Definition of all keymaps (help.KeyMap).
@@ -47,6 +49,7 @@ relm/
 │       ├── session.go       # Active session state (store + browser + editor).
 │       ├── browser_run.go   # Background table navigation with cancel.
 │       ├── editor_run.go    # Background query execution with cancel.
+│       ├── export.go        # Export prompt: Alt+E, filename input, write.
 │       ├── debug.go         # --print-layout: render screens as plain text.
 │       ├── detail.go        # Row detail screen (full values).
 │       ├── mouse.go         # Mouse events (resize drag, click, wheel).
@@ -160,6 +163,7 @@ type Result struct {
     Rows    [][]string   // Everything is a string. The UI formats.
     Count   int
     Affected int64       // rows affected by an Exec; -1 if not applicable (read)
+    Nulls   [][]bool     // mirrors Rows: true where the cell was SQL NULL
 }
 
 type Index struct {
@@ -265,6 +269,14 @@ Methods:
 - `PrevHistory() / NextHistory()`
 - `Clear()`
 
+### `internal/export`
+
+Thin serializers over an in-memory `store.Result`: `WriteCSV` (RFC 4180,
+`encoding/csv`) and `WriteJSON` (array of objects in column order, NULL →
+`null` via `Result.Nulls`, HTML escaping disabled). It never touches a
+database or a driver. The TUI collects the data (`editor.Result` or the
+browser's current page) and calls it from the `Alt+E` prompt.
+
 ### `internal/tui`
 
 Implements the bubbletea loop. `app.go` holds the main `Model`:
@@ -279,6 +291,8 @@ type Model struct {
     focus   screens.WorkspaceFocus // FocusSidebar | FocusMain | FocusEditor
     structure bool              // the main pane shows the table structure
     sidebarCursor int           // table selected in the sidebar
+    exporting bool              // the Alt+E export prompt is open
+    showDetail bool             // the row detail view is open
     width   int
     height  int
     keys    KeyMap

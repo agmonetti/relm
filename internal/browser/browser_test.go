@@ -307,6 +307,41 @@ func (c *countingStore) CountTableContext(ctx context.Context, table string) (in
 	return c.Store.CountTableContext(ctx, table)
 }
 
+func TestBrowser_NullsFollowRowsAndClone(t *testing.T) {
+	st := newTestStore(t)
+	// id 1 has a NULL name; id 2 a regular name. With keyset pagination the
+	// page arrives ordered by id, so the two are distinguishable only through
+	// the Nulls mask (the string for NULL and for empty is the same).
+	if _, err := st.Exec("INSERT INTO users (name, email) VALUES (NULL, 'a@t.com'), ('x', 'b@t.com')"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	b := &Browser{PageSize: 50}
+	if err := b.SelectTable(context.Background(), "users", st); err != nil {
+		t.Fatalf("SelectTable: %v", err)
+	}
+	if len(b.Rows) != 2 || len(b.Nulls) != 2 {
+		t.Fatalf("rows/nulls = %d/%d, want 2/2", len(b.Rows), len(b.Nulls))
+	}
+	if got := b.Nulls[0][1]; !got {
+		t.Errorf("row 0 (NULL name) marked %v, want true", got)
+	}
+	if got := b.Nulls[1][1]; got {
+		t.Errorf("row 1 ('x') marked %v, want false", got)
+	}
+	if b.Nulls[0][0] || b.Nulls[1][0] {
+		t.Error("id column should not be NULL")
+	}
+
+	c := b.Clone()
+	if len(c.Nulls) != len(b.Nulls) {
+		t.Fatalf("clone nulls = %d, want %d", len(c.Nulls), len(b.Nulls))
+	}
+	if c.Nulls[0][1] != true || c.Nulls[1][1] != false {
+		t.Errorf("clone nulls = %v, want [{f t f} {f f f}]", c.Nulls)
+	}
+}
+
 func TestBrowser_CountRunsOnSelectNotOnPageNav(t *testing.T) {
 	st := newTestStore(t)
 	seedRows(t, st, 120)

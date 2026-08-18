@@ -19,6 +19,7 @@ type KeyMap struct {
 	LineStart     key.Binding
 	LineEnd       key.Binding
 	Back          key.Binding
+	Export        key.Binding
 
 	FocusSidebar key.Binding
 	FocusMain    key.Binding
@@ -50,6 +51,7 @@ func DefaultKeyMap() KeyMap {
 		LineStart:     key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "line start")),
 		LineEnd:       key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "line end")),
 		Back:          key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
+		Export:        key.NewBinding(key.WithKeys("alt+e"), key.WithHelp("alt+e", "export result")),
 
 		// Alt+1..3 works on every terminal; Ctrl+1..3 is kept for terminals
 		// with CSI-u support (kitty, wezterm, ...).
@@ -77,6 +79,6 @@ func (k KeyMap) ShortHelp() []key.Binding {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Quit, k.NewSession, k.Switch, k.Settings, k.FocusSidebar, k.FocusMain, k.FocusEditor},
-		{k.ToggleSidebar, k.Help, k.Back, k.Inspect, k.Detail, k.Refresh, k.Execute, k.ClearInput},
+		{k.ToggleSidebar, k.Help, k.Back, k.Inspect, k.Detail, k.Refresh, k.Execute, k.ClearInput, k.Export},
 	}
 }

@@ -266,6 +266,46 @@ This file documents crossroads and decisions the agent makes during development,
 
 **Lesson:** when moving a stateful operation off the UI goroutine, cancellation and supersession need a per-operation identity, not just a per-session one. Cloning the state for off-screen mutation is a simple way to keep the UI race-free without locking.
 
+---
+
+## L-26 — `SetEscapeHTML(false)` does not reach custom `MarshalJSON` output
+
+**Crossroads:** the JSON exporter promised verbatim values (`a < b` stays `a < b`), but the test found `\u003c`/`\u0026` in the output. The encoder had `SetEscapeHTML(false)` set, yet the escaping persisted.
+
+**Decision:** the row type marshals itself with a custom `MarshalJSON` that escapes each key and value with `json.Marshal` — and `json.Marshal` escapes HTML unconditionally. The encoder's `SetEscapeHTML(false)` only applies to values the encoder encodes; a value already rendered by a `Marshaler` is written verbatim. Fixed by encoding every key/value through a per-value `json.Encoder` with `SetEscapeHTML(false)` (stripping its trailing newline).
+
+**Lesson:** when combining a custom `MarshalJSON` with an encoder that has HTML escaping disabled, the escape policy is inherited from whatever produces the *bytes* — the custom marshaller must disable HTML escaping itself for every sub-value, or the global setting silently does nothing.
+
+---
+
+## L-27 — NULL and empty string are provably indistinguishable from the string value
+
+**Crossroads:** the export tests wanted to confirm that a SQL NULL is exported correctly, and the first version inferred "is null" from `cell == ""`. It failed: both a NULL and an empty string arrive as `""` in `Result.Rows`, which is exactly the ambiguity the new `Result.Nulls` mask exists to resolve.
+
+**Decision:** tests assert the `Nulls` mask directly instead of deriving it from the cell text, and fixtures use a non-empty sentinel (`'x'`) next to the NULL so the two rows differ in their string values too. Export tests then verify the mask drives JSON `null` and empty CSV fields.
+
+**Lesson:** when a model deliberately collapses two values into one representation (NULL → `""`), tests must not re-derive the original from the collapsed value — they must assert the parallel metadata (`Result.Nulls`) or the test becomes a circular tautology.
+
+---
+
+## L-28 — CSV fields are multiline; don't assert CSV by counting lines
+
+**Crossroads:** the CSV quoting test split the output on `\n` to inspect the data row, and got three lines instead of two: `encoding/csv` correctly quotes a value containing a newline, so a single logical record legitimately spans several physical lines.
+
+**Decision:** assert the header prefix and then `strings.Contains` for the expected quoted fragments (`"with, comma"`, `"with ""quotes"""`, `"line...`) instead of line counts. Counting lines is only valid when no field can contain `\n`/`\r\n`.
+
+**Lesson:** when the serialization format has quoting that can span lines (CSV), never validate it by splitting on the record terminator. Test the content the format guarantees (proper quoting around delimiters, quotes doubled), not the physical line layout.
+
+---
+
+## L-29 — Audit the existing keymap before binding a new workspace key
+
+**Crossroads:** the natural binding for "export" was `Ctrl+E`, but it was already taken: `Ctrl+E` is "go to end of line" in the SQL editor (`LineEnd`). Using it would hijack a text-editing keystroke in the editor pane.
+
+**Decision:** bound export to `Alt+E`, following the existing `Alt` prefix convention (`Alt+B` sidebar, `Alt+1..3` panes), which the `textarea`/`textinput` components do not consume. It is captured before the focus switch in `handleWorkspaceKeys`, so it works from any pane without gating on `typingEditor`.
+
+**Lesson:** before adding a binding that must work across panes (including the editor), read the full keymap and the components' own reserved keys (`Ctrl+E`, `Ctrl+A`, `Ctrl+L`, `Ctrl+R`, `Tab`...). Prefer the `Alt` prefix for cross-pane actions: it never collides with the text-editing control keys.
+
 
 
 

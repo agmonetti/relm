@@ -46,10 +46,15 @@ func ScanResultMax(rows *sql.Rows, max int) (*Result, error) {
 			return nil, err
 		}
 		row := make([]string, len(columns))
+		nulls := make([]bool, len(columns))
 		for i, v := range vals {
+			if v == nil {
+				nulls[i] = true
+			}
 			row[i] = Stringify(v)
 		}
 		res.Rows = append(res.Rows, row)
+		res.Nulls = append(res.Nulls, nulls)
 	}
 	return &res, rows.Err()
 }

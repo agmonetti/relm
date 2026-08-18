@@ -42,6 +42,8 @@ func (m *Model) render() string {
 		if m.showDetail {
 			content = screens.RenderRowDetail(m.detailTitle, m.detailCols, m.detailVals,
 				m.detailScroll, innerW, contentHeight)
+		} else if m.exporting {
+			content = m.renderExportPrompt(innerW, contentHeight)
 		} else {
 			layout := screens.ComputeLayout(innerW, contentHeight, m.showSidebar, m.sidebarW, m.editorH)
 			content = screens.RenderWorkspace(m.browser, m.editorScreen, m.editor,
@@ -52,6 +54,9 @@ func (m *Model) render() string {
 	body := content
 	if m.err != "" {
 		body = content + "\n" + styles.StyleError.Render(m.err)
+	}
+	if m.exported != "" {
+		body = body + "\n" + styles.StyleSuccess.Render(m.exported)
 	}
 	body = styles.StyleOuterMargin.Render(body)
 

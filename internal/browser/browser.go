@@ -23,6 +23,9 @@ type Browser struct {
 	TotalRows   int
 	Rows        [][]string
 	Cursor      int
+	// Nulls mirrors Rows cell by cell (true = SQL NULL), carried from the
+	// store Result so exporters can keep NULL distinct from an empty string.
+	Nulls [][]bool
 
 	// keyset pagination state (only when the active table has a single-column
 	// primary key); otherwise the browser falls back to OFFSET pagination
@@ -132,6 +135,7 @@ func (b *Browser) fetchPage(ctx context.Context, st store.Store) error {
 			return err
 		}
 		b.Rows = res.Rows
+		b.Nulls = res.Nulls
 		b.clampCursor()
 		return nil
 	}
@@ -148,6 +152,15 @@ func (b *Browser) fetchPage(ctx context.Context, st store.Store) error {
 		rows = rows[:b.PageSize]
 	}
 	b.Rows = rows
+	if res.Nulls != nil {
+		nulls := res.Nulls
+		if len(nulls) > b.PageSize {
+			nulls = nulls[:b.PageSize]
+		}
+		b.Nulls = nulls
+	} else {
+		b.Nulls = nil
+	}
 	b.clampCursor()
 	return nil
 }
@@ -168,6 +181,7 @@ func (b *Browser) Reload(ctx context.Context, st store.Store) error {
 		b.Columns = nil
 		b.Indexes = nil
 		b.Rows = nil
+		b.Nulls = nil
 		b.TotalRows = 0
 		b.Page = 0
 		b.Cursor = 0
@@ -302,6 +316,10 @@ func (b *Browser) Clone() *Browser {
 	c.Rows = make([][]string, len(b.Rows))
 	for i, r := range b.Rows {
 		c.Rows[i] = append([]string(nil), r...)
+	}
+	c.Nulls = make([][]bool, len(b.Nulls))
+	for i, r := range b.Nulls {
+		c.Nulls[i] = append([]bool(nil), r...)
 	}
 	c.cur = append([]string(nil), b.cur...)
 	return &c

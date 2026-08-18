@@ -28,6 +28,11 @@ type Result struct {
 	// Truncated is set when the scan stopped at a row limit before reaching
 	// the end of the result set (see ScanResultMax).
 	Truncated bool
+	// Nulls mirrors Rows cell by cell: true when the original value was SQL
+	// NULL (rendered as "" by the store). It lets exporters and the UI tell a
+	// real NULL apart from an empty string without re-querying. Nil means no
+	// cell is NULL (e.g. a manually-built Result).
+	Nulls [][]bool
 }
 
 // Index describes an index of a table.

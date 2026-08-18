@@ -142,6 +142,19 @@ main pane:
   open table **auto-refresh**: no need to press `r`.
 - `Esc` returns the focus to the main pane.
 
+### 1d. Export results to CSV/JSON
+
+`Alt+E` exports the data under the cursor as a file:
+
+- **Editor focused** → the last query result (up to 10k rows).
+- **Any other pane** → the current page of the open table.
+
+A small prompt asks for the file name (pre-filled with
+`relm-export-<timestamp>.csv`). The **format follows the extension**: `.csv`
+for CSV, `.json` for JSON, anything else is written as CSV. `Enter` writes the
+file and shows `exported N rows → /full/path` in green; `Esc` cancels. SQL NULL
+becomes an empty field in CSV and `null` in JSON.
+
 ---
 
 ## 2. Connecting to PostgreSQL / MySQL / MariaDB / SQL Server
@@ -288,6 +301,7 @@ with `↑↓` and press `d`.
 | `↑↓` / `j k` | Navigate rows (main) or tables (sidebar) |
 | `PgUp` / `PgDn` | Change page |
 | `r` | Refresh |
+| `Alt+E` | Export result / current table page to CSV/JSON |
 | right-click drag | Resize panes (sidebar / editor) |
 | click | Focus / select a row |
 | wheel | Scroll the pane under the pointer |

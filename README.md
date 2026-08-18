@@ -53,6 +53,7 @@ The connection screen opens. Pick the engine with `←`/`→`, fill in the field
 - **Auto-refresh** — after any write query the sidebar and open table reload automatically.
 - **Table structure** — columns, constraints and indexes with `i`.
 - **Row detail** — full values of any row with `v`, no truncation.
+- **Export** — query results or the browsed table to CSV/JSON with `Alt+E` (format from the file extension; SQL NULL becomes JSON `null`).
 - **Saved connections** — stored in `~/.config/relm/connections.json`.
 - **Read-only mode** for SQLite · **SSL** for PostgreSQL.
 - `∅` for NULL · `…` for long values · no configuration required.
@@ -69,6 +70,7 @@ The connection screen opens. Pick the engine with `←`/`→`, fill in the field
 | `i` | Table structure |
 | `v` | Row detail |
 | `r` | Refresh |
+| `Alt+E` | Export result / current table page to CSV or JSON |
 | `Alt+B` | Toggle sidebar |
 | `Ctrl+R` | Run query |
 | `Esc` | Cancel running query |
@@ -138,9 +140,10 @@ Plans documented in the design docs (`docs/design/06-security.md` and
 - OS keychain integration for saved passwords (removes the plaintext tradeoff).
 - A global `--read-only` flag that applies to all five engines, not just SQLite.
 - TLS options for MySQL/MariaDB and SQL Server.
-- Export results to CSV/JSON.
 - Inline cell editing and SQL syntax highlighting.
 - `relm <dsn>` as a CLI shortcut to skip the connection screen.
+
+Implemented: export results to CSV/JSON (`Alt+E`).
 
 ## Contributing
 
