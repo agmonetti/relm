@@ -136,13 +136,11 @@ func (m *Model) renderExportPrompt(width, height int) string {
 	if m.exportInput.Focused() {
 		style = styles.StyleInputBoxFocus
 	}
-	box := style.Width(40).Render(m.exportInput.View())
+	box := style.Width(44).Render(m.exportInput.View())
 
 	var b strings.Builder
 	b.WriteString(styles.StyleHeader.Render("Export"))
 	b.WriteString("\n\n")
-	b.WriteString(styles.StyleFieldLabel.Render("file"))
-	b.WriteString("  ")
 	b.WriteString(box)
 	b.WriteString("\n")
 	b.WriteString(styles.StyleHeaderDim.Render("  format by extension: .csv or .json"))
