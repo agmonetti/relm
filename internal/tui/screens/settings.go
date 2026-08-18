@@ -1,9 +1,9 @@
 package screens
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
-	"fmt"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
