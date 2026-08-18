@@ -9,8 +9,14 @@
 *.db
 *.db-shm
 *.db-wal
+*.db-journal
 *.sqlite
 *.sqlite3
+
+# Local configuration (optional integration env vars; copy .env.example)
+.env
+.env.*
+!.env.example
 
 # Go test coverage
 coverage.*
