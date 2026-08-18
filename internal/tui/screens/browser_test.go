@@ -26,15 +26,15 @@ func TestRenderDataTable_HighlightsOnlyCursorRow(t *testing.T) {
 	out := RenderDataTable(cols, rows, 1, 40, 10)
 	lines := strings.Split(out, "\n")
 
-	// lines[0] = header, lines[1..3] = the three rows
-	if strings.Contains(lines[1], "\x1b[") {
-		t.Errorf("row 0 must not be highlighted: %q", lines[1])
+	// lines[0] = header, lines[1] = separator, lines[2..4] = the three rows
+	if hasBackground(lines[2]) {
+		t.Errorf("row 0 must not be highlighted: %q", lines[2])
 	}
-	if !strings.Contains(lines[2], "\x1b[") {
-		t.Errorf("row 1 (cursor) must be highlighted: %q", lines[2])
+	if !hasBackground(lines[3]) {
+		t.Errorf("row 1 (cursor) must be highlighted: %q", lines[3])
 	}
-	if strings.Contains(lines[3], "\x1b[") {
-		t.Errorf("row 2 must not be highlighted: %q", lines[3])
+	if hasBackground(lines[4]) {
+		t.Errorf("row 2 must not be highlighted: %q", lines[4])
 	}
 }
 
@@ -43,16 +43,21 @@ func TestRenderDataTable_NoSelectionHighlightsNothing(t *testing.T) {
 	rows := [][]string{{"1", "2", "3"}, {"4", "5", "6"}}
 
 	out := RenderDataTable(cols, rows, -1, 40, 10)
-	// lines[0] is the column header (styled by design); the data rows must not
-	// be highlighted
+	// lines[0] is the column header (styled by design); the separator is a
+	// foreground-only line; the data rows must not carry a selection background
 	for i, line := range strings.Split(out, "\n") {
-		if i == 0 {
+		if i <= 1 {
 			continue
 		}
-		if strings.Contains(line, "\x1b[") {
+		if hasBackground(line) {
 			t.Errorf("line %d must not be highlighted with cursor=-1: %q", i, line)
 		}
 	}
+}
+
+// hasBackground reports whether an ANSI string sets a background color.
+func hasBackground(s string) bool {
+	return strings.Contains(s, "48;")
 }
 
 func TestRenderSidebar_ScrollsToCursor(t *testing.T) {
@@ -145,7 +150,7 @@ func TestColWidths_ShrinksToFitManyColumns(t *testing.T) {
 	rows := [][]string{cols} // each cell as wide as its header
 
 	widths := colWidths(cols, rows, 70)
-	total := len(widths) - 1
+	total := (len(widths) - 1) * colSepW
 	for _, w := range widths {
 		total += w
 	}
@@ -153,19 +158,21 @@ func TestColWidths_ShrinksToFitManyColumns(t *testing.T) {
 		t.Errorf("widths %v sum to %d, want <= 70", widths, total)
 	}
 	for _, w := range widths {
-		if w < 4 {
-			t.Errorf("width %d below the 4-char floor", w)
+		if w < 1 {
+			t.Errorf("width %d below the 1-char minimum", w)
 		}
 	}
 
-	// with a tiny width every column reaches the floor
+	// with a tiny width every column keeps shrinking to a 1-cell minimum; the
+	// table may still not fit when even n + (n-1)*3 separators exceeds the pane
 	widths = colWidths(cols, rows, 40)
-	total = len(widths) - 1
+	total = (len(widths) - 1) * colSepW
 	for _, w := range widths {
 		total += w
 	}
-	if total > 40 {
-		t.Errorf("widths %v sum to %d, want <= 40 (must fit even below the floor)", widths, total)
+	minTotal := len(widths) + (len(widths)-1)*colSepW
+	if total != minTotal {
+		t.Errorf("widths %v sum to %d, want the 1-cell minimum %d", widths, total, minTotal)
 	}
 	for _, w := range widths {
 		if w < 1 {
@@ -176,13 +183,10 @@ func TestColWidths_ShrinksToFitManyColumns(t *testing.T) {
 
 func dataLines(out string, height int) []string {
 	lines := ansiStripLines(strings.TrimSuffix(out, "\n"))
-	if len(lines) > height {
-		lines = lines[:height]
-	}
 	data := make([]string, 0, len(lines))
 	for i, l := range lines {
-		if i == 0 {
-			continue // header
+		if i == 0 || i == 1 {
+			continue // header + separator
 		}
 		data = append(data, strings.TrimSpace(l))
 	}
@@ -208,7 +212,7 @@ func TestColWidths_CapsAndDistributes(t *testing.T) {
 	if widths[2] > colMaxW {
 		t.Errorf("body width = %d, want <= %d", widths[2], colMaxW)
 	}
-	total := len(widths) - 1
+	total := (len(widths) - 1) * colSepW
 	for _, w := range widths {
 		total += w
 	}

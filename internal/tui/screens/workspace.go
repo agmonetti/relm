@@ -132,7 +132,15 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 	// main pane: the title (table name + count) lives inside the top border
 	mainTitle := ""
 	if b != nil && b.ActiveTable != "" {
-		mainTitle = fmt.Sprintf("%s · %d rows", b.ActiveTable, b.TotalRows)
+		if b.TotalRows > 0 {
+			noun := "rows"
+			if b.TotalRows == 1 {
+				noun = "row"
+			}
+			mainTitle = fmt.Sprintf("%s · %d %s", b.ActiveTable, b.TotalRows, noun)
+		} else {
+			mainTitle = fmt.Sprintf("%s · (empty)", b.ActiveTable)
+		}
 	}
 	mainBodyH := mainH - 2
 	var mainContent string
@@ -149,7 +157,8 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		}
 		mainContent = RenderDataTable(cols, b.Rows, b.Cursor, contentW(rightW), mainBodyH)
 		if len(b.Rows) == 0 && len(b.Columns) > 0 {
-			mainContent += "\n" + styles.StyleHeaderDim.Render("empty table")
+			mainContent = strings.TrimRight(mainContent, "\n") + "\n\n" +
+				RenderEmptyTable(cols, contentW(rightW))
 		}
 	}
 

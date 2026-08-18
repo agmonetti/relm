@@ -6,7 +6,7 @@ It is the first screen when opening the tool. lazyvim style: logo centered on to
 
 ```
 ┌─────────────────────────────────────────────┐
-│ relm · no connection                       │
+│ relm [no connection] [connect]              │
 ├─────────────────────────────────────────────┤
 │                _____  ______  _      __  __ │
 │               |  __ \|  ____|| |    |  \/  |│
@@ -66,7 +66,7 @@ The terminal is divided into fixed zones:
 ```
 ┌─────────────────────────────────────────────┐
 │ HEADER (1 line)                             │
-│ relm · postgres@localhost:5432/mydb · users · browser │
+│ relm [ postgres@localhost:5432/mydb ] [ users ] [ browser ] │
 ├──────────────┬──────────────────────────────┤
 │              │ MAIN PANE (browser/structure)│
 │  SIDEBAR     │                              │
@@ -84,13 +84,19 @@ the SQL editor are always visible, each inside its own border. `Tab` moves the
 keyboard focus between panes (sidebar → main → editor); the focused pane has an
 accent border. There is no screen switching.
 
-- The header is always visible. Format: `relm · <engine> <identification> · <active table> · <mode>`.
-  - Network: `relm · postgres@localhost:5432/mydb · users · browser`
-  - SQLite: `relm · sqlite /data/app.db · users · browser`
+- The header is always visible. Its values are bracketed **pills**: the app
+  name, then a yellow pill for the connection, a purple pill for the active
+  table and a teal pill for the current mode, all with black text on a solid
+  background:
+  - Network: `relm [ postgres@localhost:5432/mydb ] [ users ] [ browser ]`
+  - SQLite: `relm [ sqlite /data/app.db ] [ users ] [ browser ]`
+  - No connection / no open table: the pill stays muted text without a background.
 - The sidebar lists the database tables (scrolled when there are many). It can be hidden with `Alt+B` and is hidden automatically below 60 columns.
 - The main pane shows the active table (browser) or its structure.
 - The editor pane is the SQL editor with its results.
-- The footer shows the most relevant shortcuts for the focused pane.
+- The footer shows the most relevant shortcuts for the focused pane: the
+  pressing keys are bracketed (`[Tab]`) and bold, the action follows in muted
+  text.
 
 ## Pane 1: Sidebar (tables)
 
@@ -113,14 +119,18 @@ accent border. There is no screen switching.
 the ID column (if it exists) is always the first one.
 
 ```
-│ id  name        email        │
-│ ─── ─────────── ──────────── │
-│  1  Alice       a@test.com   │
-│  2  Bob         b@test.com   │
-│  3  Carol       c@test.com   │
+│ id | name        | email        │
+│ ---+-------------+------------- │
+│  1 | Alice       | a@test.com   │
+│  2 | Bob         | b@test.com   │
+│  3 | Carol       | c@test.com   │
 ```
 
-- Column widths are calculated automatically to the maximum of the visible content, without exceeding the available space.
+- Column widths are calculated automatically to the maximum of the visible content, without exceeding the available space. The columns are separated by
+  ` | ` and a dashed line connects them under the header.
+- An empty table keeps the header and the separator and draws a centered
+  empty-table ASCII box with `( 0 rows returned )` underneath; the pane title
+  shows `users · (empty)`.
 - `NULL` values are shown as `∅` in dim gray.
 - Very long values are truncated with `…` to the column width.
 - `↑↓` / `j k` navigate rows; `PgUp`/`PgDn` (or `Ctrl+U`/`Ctrl+D`) change page; `g`/`G` go to the first/last row.
@@ -147,7 +157,9 @@ Always visible. The input area occupies the upper part of the pane, the results
 appear below, separated by a line.
 
 - `Ctrl+R` runs the query under the cursor.
-- If the query returns rows, it shows the results in a table; `INSERT/UPDATE/DELETE` shows "N rows affected"; an SQL error shows the engine's literal message in red, without crashing.
+- If the query returns rows, it shows the results in a table; a write statement
+  shows `STATUS: OK (N rows affected, 1.2ms)` with the measured duration; an SQL error shows the engine's literal message in red, without crashing.
+- The input shows a styled line-number gutter (the cursor line is highlighted).
 - `↑↓` on the first/last line of an empty input navigates the history (last 100 queries, ring buffer).
 - The input supports multiple lines with `Enter`. `Ctrl+R` always runs the entire buffer.
 - `Ctrl+L` clears the input. `Esc` returns the focus to the main pane.
@@ -268,6 +280,6 @@ Never crash with `panic`. Always show the error in the footer or in the results 
 - Connection error: in footer, red. Example: `cannot connect to localhost:5432: connection refused`
 - Wrong credentials: engine's literal text: `password authentication failed for user "postgres"`
 - SQL query error: in results area, red. Engine's literal text.
-- Empty table: centered message in results area: `empty table`
+- Empty table: a centered empty-table ASCII drawing with the caption `( 0 rows returned )`
 - Database without tables: `no tables — use the editor to create one`
 - Database without permission to list: engine's literal text.

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -72,12 +73,38 @@ func (m *Model) render() string {
 }
 
 func (m *Model) renderHeader() string {
+	// every pill is bracketed: [ mysql@localhost:3306/tasks ]; the ones with
+	// something to highlight get a solid background, the rest stay dim
 	label := "no connection"
 	if m.store != nil {
 		label = m.cfgLabel
 	}
+	labelStyle := styles.StylePillDefault
+	if m.store != nil {
+		labelStyle = styles.StylePillConn
+	}
+
+	table := ""
+	if m.browser != nil && m.browser.ActiveTable != "" {
+		table = m.browser.ActiveTable
+	}
+	tableStyle := styles.StylePillDefault
+	if table != "" {
+		tableStyle = styles.StylePillTable
+	}
+
+	parts := []string{
+		styles.StyleHeader.Render("relm"),
+		" " + styles.StylePillDefault.Render("[") + labelStyle.Render(label) + styles.StylePillDefault.Render("]"),
+	}
+	if table != "" {
+		parts = append(parts, " "+styles.StylePillDefault.Render("[")+tableStyle.Render(table)+styles.StylePillDefault.Render("]"))
+	}
+
 	mode := ""
 	switch m.screen {
+	case ScreenConnect:
+		mode = "connect"
 	case ScreenSettings:
 		mode = "settings"
 	case ScreenWorkspace:
@@ -92,35 +119,85 @@ func (m *Model) renderHeader() string {
 			mode = "browser"
 		}
 	}
-	table := "—"
-	if m.browser != nil && m.browser.ActiveTable != "" {
-		table = m.browser.ActiveTable
+	modeStyle := styles.StylePillMode
+	if mode == "connect" {
+		modeStyle = styles.StylePillDefault
 	}
-	return styles.StyleHeader.Render("relm") +
-		styles.StyleHeaderDim.Render(" · "+label) +
-		styles.StyleHeaderDim.Render(" · "+table) +
-		styles.StyleHeaderDim.Render(" · "+mode)
+	parts = append(parts, " "+styles.StylePillDefault.Render("[")+modeStyle.Render(mode)+styles.StylePillDefault.Render("]"))
+
+	return strings.Join(parts, " ")
+}
+
+// binding is a footer shortcut: a pressing key and the action it triggers.
+type binding struct {
+	key    string
+	action string
+}
+
+// footerBindings renders [key] action pairs separated by a middot.
+func footerBindings(pairs []binding) string {
+	var b strings.Builder
+	for i, p := range pairs {
+		if i > 0 {
+			b.WriteString(styles.StyleFooter.Render(" · "))
+		}
+		b.WriteString(styles.StyleFooterKey.Render("[" + p.key + "]"))
+		b.WriteString(" " + p.action)
+	}
+	return b.String()
 }
 
 func (m *Model) renderFooter() string {
 	left := ""
 	switch m.screen {
 	case ScreenConnect:
-		left = "↑↓ saved · tab engine/fields · ←→ engine · enter connect · ctrl+s save · d delete · ctrl+p settings"
+		left = footerBindings([]binding{
+			{"↑↓", "saved"},
+			{"tab", "engine/fields"},
+			{"←→", "engine"},
+			{"enter", "connect"},
+			{"ctrl+s", "save"},
+			{"d", "delete"},
+			{"ctrl+p", "settings"},
+		})
 	case ScreenSettings:
-		left = "enter save · esc back"
+		left = footerBindings([]binding{
+			{"enter", "save"},
+			{"esc", "back"},
+		})
 	case ScreenWorkspace:
 		switch m.focus {
 		case screens.FocusSidebar:
-			left = "↑↓ tables · enter open · tab next · ? help · ctrl+p settings"
+			left = footerBindings([]binding{
+				{"↑↓", "tables"},
+				{"enter", "open"},
+				{"tab", "next"},
+				{"?", "help"},
+				{"ctrl+p", "settings"},
+			})
 		case screens.FocusMain:
 			if m.structure {
-				left = "esc back · tab next"
+				left = footerBindings([]binding{
+					{"esc", "back"},
+					{"tab", "next"},
+				})
 			} else {
-				left = "↑↓ rows · i structure · v detail · r refresh · pgup/pgdn page · tab next · right-click resize"
+				left = footerBindings([]binding{
+					{"↑↓", "rows"},
+					{"i", "structure"},
+					{"v", "detail"},
+					{"r", "refresh"},
+					{"pgup/pgdn", "page"},
+					{"tab", "next"},
+					{"right-click", "resize"},
+				})
 			}
 		case screens.FocusEditor:
-			left = "ctrl+r run · ctrl+l clear · esc back"
+			left = footerBindings([]binding{
+				{"ctrl+r", "run"},
+				{"ctrl+l", "clear"},
+				{"esc", "back"},
+			})
 		}
 	}
 

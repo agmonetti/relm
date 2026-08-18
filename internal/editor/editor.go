@@ -4,6 +4,7 @@ package editor
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/agmonetti/relm/internal/store"
 )
@@ -38,6 +39,8 @@ type Editor struct {
 	// rows (e.g. INSERT ... RETURNING). The UI uses it to decide whether the
 	// table list and open table need a reload.
 	Wrote bool
+	// Duration is how long the last executed statement took.
+	Duration time.Duration
 }
 
 // New creates an editor with an empty history.
@@ -62,6 +65,8 @@ func (e *Editor) ExecuteAt(ctx context.Context, st store.Store, line int) error 
 	if len(stmts) == 0 {
 		return nil // the UI shows "write a query first"
 	}
+	start := time.Now()
+	defer func() { e.Duration = time.Since(start) }()
 
 	q := stmts[0].Text
 	if len(stmts) > 1 {

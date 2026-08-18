@@ -165,7 +165,7 @@ $ go test ./internal/...
    - Input with `bubbles/textarea`.
    - Results below with the same table as the browser.
    - Errors in red.
-   - "N rows affected" for INSERT/UPDATE/DELETE (based on `Result`).
+   - "STATUS: OK (N rows affected, duration)" for INSERT/UPDATE/DELETE (based on `Result`).
 2. Add `Tab` handling in `Update()` to toggle `ScreenBrowser ↔ ScreenEditor`.
 3. Integrate history: `↑`/`↓` when the textarea is on the first/last line navigates history.
 

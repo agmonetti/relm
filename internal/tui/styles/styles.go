@@ -5,14 +5,15 @@ import "github.com/charmbracelet/lipgloss"
 
 // Colors that adapt to the terminal theme.
 var (
-	ColorPrimary = lipgloss.AdaptiveColor{Light: "#1D9E75", Dark: "#5DCAA5"} // teal
-	ColorAccent  = lipgloss.AdaptiveColor{Light: "#534AB7", Dark: "#AFA9EC"} // purple
-	ColorMuted   = lipgloss.AdaptiveColor{Light: "#888780", Dark: "#B4B2A9"} // gray
-	ColorError   = lipgloss.AdaptiveColor{Light: "#A32D2D", Dark: "#F09595"} // red
-	ColorNull    = lipgloss.AdaptiveColor{Light: "#B4B2A9", Dark: "#5F5E5A"} // gray tenue
-	ColorBorder  = lipgloss.AdaptiveColor{Light: "#D3D1C7", Dark: "#444441"} // gray borde
-	ColorHeader  = lipgloss.AdaptiveColor{Light: "#4A4A4A", Dark: "#DDDDDD"} // texto
-	ColorWarn    = lipgloss.AdaptiveColor{Light: "#B9932E", Dark: "#E0C568"} // amber
+	ColorPrimary  = lipgloss.AdaptiveColor{Light: "#1D9E75", Dark: "#5DCAA5"} // teal
+	ColorAccent   = lipgloss.AdaptiveColor{Light: "#534AB7", Dark: "#AFA9EC"} // purple
+	ColorMuted    = lipgloss.AdaptiveColor{Light: "#888780", Dark: "#B4B2A9"} // gray
+	ColorError    = lipgloss.AdaptiveColor{Light: "#A32D2D", Dark: "#F09595"} // red
+	ColorNull     = lipgloss.AdaptiveColor{Light: "#B4B2A9", Dark: "#5F5E5A"} // gray tenue
+	ColorBorder   = lipgloss.AdaptiveColor{Light: "#D3D1C7", Dark: "#444441"} // gray borde
+	ColorHeader   = lipgloss.AdaptiveColor{Light: "#4A4A4A", Dark: "#DDDDDD"} // texto
+	ColorWarn     = lipgloss.AdaptiveColor{Light: "#B9932E", Dark: "#E0C568"} // amber
+	ColorPillConn = lipgloss.AdaptiveColor{Light: "#B58900", Dark: "#F2C94A"} // yellow
 )
 
 // Precomputed package-level styles. Do not create styles in every View().
@@ -49,6 +50,45 @@ var (
 	// StyleFooter is the screen footer.
 	StyleFooter = lipgloss.NewStyle().
 			Foreground(ColorMuted)
+
+	// StyleFooterKey is a pressing shortcut shown in the footer brackets.
+	StyleFooterKey = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(ColorHeader)
+
+	// StylePill is the shared base of the bracketed header pills: black text
+	// on a solid background.
+	StylePill = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#000000")).
+			Padding(0, 1)
+
+	// StylePillConn is the connection pill (yellow).
+	StylePillConn = StylePill.Background(ColorPillConn)
+
+	// StylePillTable is the active-table pill (purple).
+	StylePillTable = StylePill.Background(ColorAccent)
+
+	// StylePillMode is the current-mode pill (teal).
+	StylePillMode = StylePill.Background(ColorPrimary)
+
+	// StylePillDefault is a neutral pill used when there is nothing to show
+	// (no connection, no table).
+	StylePillDefault = lipgloss.NewStyle().
+				Foreground(ColorMuted)
+
+	// StyleEditorLineNo is the line-number gutter of the SQL editor.
+	StyleEditorLineNo = lipgloss.NewStyle().
+				Foreground(ColorHeader).
+				Background(ColorBorder).
+				Padding(0, 1)
+
+	// StyleEditorLineNoCursor is the gutter of the cursor line.
+	StyleEditorLineNoCursor = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#000000")).
+				Background(ColorAccent).
+				Bold(true).
+				Padding(0, 1)
 
 	// StyleNull is the NULL value marker.
 	StyleNull = lipgloss.NewStyle().

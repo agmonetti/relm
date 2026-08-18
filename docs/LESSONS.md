@@ -352,3 +352,42 @@ This file documents crossroads and decisions the agent makes during development,
 
 
 
+
+## L-34 — A cosmetic change to the table separator rewrites the column-width contract
+
+**Crossroads:** restyling the data table from `id  name  email` (one space) to
+`id | name | email` (three chars per separator) looked like a trivial string
+change, but `colWidths` had the separator cost hardcoded as `n-1` cells and the
+tests asserted the widths against that contract. Two tests broke in a subtle
+way: the "must fit below the floor" one became **physically impossible** (12
+columns at 1 cell each + 11 separators of 3 cells = 45 > 40).
+
+**Decision:** made the separator an explicit `colSep`/`colSepW` constant used by
+the width math, added the underline line under the header, and updated the
+geometry tests to the new contract: tables shrink to a 1-cell minimum and the
+hard physical floor is now `n + (n-1)*3` — a table wider than that simply
+cannot fit and the last-resort loop stops there instead of overflowing.
+
+**Lesson:** any change that touches *visual width* (separators, padding, border
+runes) is a change to the layout contract — grep for the hardcoded `n-1` and the
+tests that recompute totals, and keep a single source of truth (the `colSepW`
+constant) so the renderer and the tests can never disagree again.
+
+## L-35 — Styling a third-party component: read its exported Style struct before hacking
+
+**Crossroads:** the SQL editor needs a line-number gutter with a background
+chip and a highlighted cursor line. The natural instinct was to render the
+editor view ourselves — but `bubbles/textarea` already exposes `FocusedStyle`
+/ `BlurredStyle` with `LineNumber` and `CursorLineNumber` fields that it applies
+in its own `View()`. Reading the dependency's source paid for itself.
+
+**Decision:** set `ta.FocusedStyle.LineNumber`, `.CursorLineNumber` and the
+blurred counterparts to the project's styles instead of reimplementing the
+textarea rendering. `lipgloss.Style.Inline(true)` (applied by the library) keeps
+the width math correct even with padding.
+
+**Lesson:** before overriding or reimplementing a third-party widget's
+rendering, check whether it exposes its internal styles — the library's exported
+`Style` struct is the extension point, keeps the renderer agreement intact
+(View-width math, hit-testing), and avoids the distracting "syntax highlighter"
+rabbit hole for a component that deliberately renders plain text.

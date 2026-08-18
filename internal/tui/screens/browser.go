@@ -72,6 +72,10 @@ func TableWindow(rows, cursor, height int) (start, visible int) {
 	return
 }
 
+// colSep is the separator between columns; colSepW is its display width.
+const colSep = " | "
+const colSepW = 3 // len of " | " in cells
+
 // RenderDataTable renders columns + rows with the cursor row highlighted. The
 // rows scroll vertically so the cursor row always stays visible.
 func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) string {
@@ -85,6 +89,8 @@ func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) 
 	var sb strings.Builder
 	// header
 	sb.WriteString(renderHeader(cols, widths) + "\n")
+	// underline under the header, connecting the columns
+	sb.WriteString(renderSep(cols, widths) + "\n")
 
 	for i := 0; i < visible; i++ {
 		row := start + i
@@ -105,10 +111,25 @@ func renderHeader(cells []string, widths []int) string {
 		}
 		sb.WriteString(styles.StyleColHeader.Render(pad(truncate(c, widths[i]), widths[i])))
 		if i < len(cells)-1 {
-			sb.WriteString(" ")
+			sb.WriteString(styles.StyleBorder.Render(colSep))
 		}
 	}
 	return sb.String()
+}
+
+// renderSep renders the dashed line under the header (e.g. ---+----+---).
+func renderSep(cells []string, widths []int) string {
+	var sb strings.Builder
+	for i, w := range widths {
+		if i >= len(cells) {
+			break
+		}
+		sb.WriteString(strings.Repeat("-", w))
+		if i < len(cells)-1 {
+			sb.WriteString("-+-")
+		}
+	}
+	return styles.StyleBorder.Render(sb.String())
 }
 
 // colMaxW caps the width of any single column so one very long value does not
@@ -150,7 +171,7 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 		}
 	}
 
-	total := n - 1 // separators
+	total := (n - 1) * colSepW // column separators
 	for _, w := range widths {
 		total += w
 	}
@@ -218,8 +239,10 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 
 	// Last resort: every column is already at the floor but the table still
 	// does not fit (e.g. a wide table on a narrow pane). Shrink the columns
-	// below the floor, down to 1 cell each, so the table never overflows.
-	total = n - 1
+	// below the floor, down to 1 cell each. The absolute minimum for n columns
+	// is n + (n-1)*3 (the separators); a table wider than the pane at that
+	// point simply cannot fit.
+	total = (n - 1) * colSepW
 	for _, w := range widths {
 		total += w
 	}
@@ -249,22 +272,31 @@ func renderRow(cells []string, widths []int, selected bool) string {
 		if i >= len(widths) {
 			break
 		}
-		text := cell
-		if text == "" {
-			text = styles.NullCell()
-		} else {
-			text = truncate(text, widths[i])
-		}
-		text = pad(text, widths[i])
-		if selected {
-			text = styles.StyleCursor.Render(text)
-		}
-		sb.WriteString(text)
+		sb.WriteString(renderCellText(cell, widths[i], selected))
 		if i < len(cells)-1 {
-			sb.WriteString(" ")
+			if selected {
+				sb.WriteString(styles.StyleCursor.Render(colSep))
+			} else {
+				sb.WriteString(styles.StyleBorder.Render(colSep))
+			}
 		}
 	}
 	return sb.String()
+}
+
+// renderCellText renders a single padded cell, highlighting it when selected.
+func renderCellText(cell string, width int, selected bool) string {
+	text := cell
+	if text == "" {
+		text = styles.NullCell()
+	} else {
+		text = truncate(text, width)
+	}
+	text = pad(text, width)
+	if selected {
+		text = styles.StyleCursor.Render(text)
+	}
+	return text
 }
 
 func truncate(s string, max int) string {
@@ -294,6 +326,35 @@ func pad(s string, w int) string {
 		return s + strings.Repeat(" ", d)
 	}
 	return s
+}
+
+// RenderEmptyTable renders the centered ASCII-art drawing shown when the open
+// table has no rows, with the "( 0 rows returned )" caption underneath.
+func RenderEmptyTable(cols []string, width int) string {
+	if width < 12 {
+		width = 12
+	}
+	caption := "( 0 rows returned )"
+	inner := runewidth.StringWidth(caption)
+	if inner > width-3 {
+		inner = width - 3
+	}
+	if inner < 6 {
+		inner = 6
+	}
+	center := func(s string) string {
+		pad := (width - runewidth.StringWidth(s)) / 2
+		if pad < 0 {
+			pad = 0
+		}
+		return strings.Repeat(" ", pad) + s
+	}
+	head := "+" + strings.Repeat("-", inner) + "+"
+	mid := "|" + strings.Repeat(" ", inner) + "|"
+	return styles.StyleBorder.Render(center(head)) + "\n" +
+		styles.StyleBorder.Render(center(mid)) + "\n" +
+		styles.StyleBorder.Render(center(head)) + "\n\n" +
+		styles.StyleHeaderDim.Render(center(caption))
 }
 
 // RenderRowDetail renders a single row with every column and its full value,

@@ -3,6 +3,7 @@ package screens
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -29,7 +30,26 @@ func NewEditorScreen() *EditorScreen {
 	ta.ShowLineNumbers = true
 	ta.Prompt = ""
 	ta.CharLimit = 0
+	// the line-number gutter is styled like a chip: a tinted background that
+	// highlights the cursor line
+	ta.FocusedStyle.LineNumber = styles.StyleEditorLineNo
+	ta.FocusedStyle.CursorLineNumber = styles.StyleEditorLineNoCursor
+	ta.BlurredStyle.LineNumber = styles.StyleEditorLineNo
+	ta.BlurredStyle.CursorLineNumber = styles.StyleEditorLineNo
 	return &EditorScreen{ta: ta}
+}
+
+// formatDuration renders a query duration compactly (e.g. 42µs, 1.2ms, 3s).
+func formatDuration(d time.Duration) string {
+	switch {
+	case d <= 0:
+		return "0s"
+	case d < time.Millisecond:
+		return fmt.Sprintf("%dµs", d.Microseconds())
+	case d < time.Second:
+		return fmt.Sprintf("%.1fms", float64(d.Microseconds())/1000)
+	}
+	return d.Round(time.Millisecond).String()
 }
 
 // SetResultScroll sets the scroll offset of the query results table.
@@ -174,10 +194,16 @@ func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 		b.WriteString(RenderDataTable(e.Result.Columns, view, cursor, width-2, resH))
 		if e.Result.Truncated {
 			b.WriteString(styles.StyleHeaderDim.Render(
-				fmt.Sprintf("  showing first %d rows", editor.MaxResultRows)) + "\n")
+				fmt.Sprintf("  showing first %d rows (%s)", editor.MaxResultRows, formatDuration(e.Duration))) + "\n")
 		}
 	} else if e.Result.Affected >= 0 {
-		b.WriteString(fmt.Sprintf("  %d rows affected", e.Result.Affected))
+		noun := "rows"
+		if e.Result.Affected == 1 {
+			noun = "row"
+		}
+		b.WriteString(styles.StyleHeader.Render("STATUS: OK") +
+			styles.StyleHeaderDim.Render(fmt.Sprintf(" (%d %s affected, %s)",
+				e.Result.Affected, noun, formatDuration(e.Duration))))
 	}
 	return b.String()
 }

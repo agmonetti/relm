@@ -62,7 +62,7 @@ func TestRenderWorkspace_EmptyTableShowsColumns(t *testing.T) {
 		if strings.Contains(s, "id") && strings.Contains(s, "name") && strings.Contains(s, "email") {
 			foundHeader = true
 		}
-		if strings.Contains(s, "empty table") {
+		if strings.Contains(s, "0 rows returned") {
 			foundHint = true
 		}
 	}
@@ -70,7 +70,7 @@ func TestRenderWorkspace_EmptyTableShowsColumns(t *testing.T) {
 		t.Error("empty table must still show the column headers")
 	}
 	if !foundHint {
-		t.Error("empty table must show the 'empty table' hint")
+		t.Error("empty table must show the '( 0 rows returned )' hint")
 	}
 }
 
