@@ -101,30 +101,6 @@ func (m *Model) renderHeader() string {
 		parts = append(parts, " "+styles.StylePillDefault.Render("[")+tableStyle.Render(table)+styles.StylePillDefault.Render("]"))
 	}
 
-	mode := ""
-	switch m.screen {
-	case ScreenConnect:
-		mode = "connect"
-	case ScreenSettings:
-		mode = "settings"
-	case ScreenWorkspace:
-		switch {
-		case m.focus == screens.FocusEditor:
-			mode = "editor"
-		case m.focus == screens.FocusSidebar:
-			mode = "tables"
-		case m.structure:
-			mode = "structure"
-		default:
-			mode = "browser"
-		}
-	}
-	modeStyle := styles.StylePillMode
-	if mode == "connect" {
-		modeStyle = styles.StylePillDefault
-	}
-	parts = append(parts, " "+styles.StylePillDefault.Render("[")+modeStyle.Render(mode)+styles.StylePillDefault.Render("]"))
-
 	return strings.Join(parts, " ")
 }
 
@@ -235,15 +211,19 @@ func (m *Model) renderHelp() string {
 	var out string
 	for _, group := range m.keys.FullHelp() {
 		for _, b := range group {
-			out += fmt.Sprintf("  %-18s %s\n", b.Help().Key, b.Help().Desc)
+			// align the keys cleanly
+			key := fmt.Sprintf("[%s]", b.Help().Key)
+			out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render(key), styles.StyleHeaderDim.Render(b.Help().Desc))
 		}
 		out += "\n"
 	}
-	out += fmt.Sprintf("  %-18s %s\n", "right-click drag", "resize panes")
-	out += fmt.Sprintf("  %-18s %s\n", "click", "focus / select row")
-	out += fmt.Sprintf("  %-18s %s\n", "wheel", "scroll pane")
+	out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render("[right-click drag]"), styles.StyleHeaderDim.Render("resize panes"))
+	out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render("[click]"), styles.StyleHeaderDim.Render("focus / select row"))
+	out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render("[wheel]"), styles.StyleHeaderDim.Render("scroll pane"))
+
 	return lipgloss.JoinVertical(lipgloss.Left,
 		styles.StyleHeader.Render("Help"),
+		"",
 		out,
 		styles.StyleHeaderDim.Render("? to close"),
 	)

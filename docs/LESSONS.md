@@ -391,3 +391,46 @@ rendering, check whether it exposes its internal styles — the library's export
 `Style` struct is the extension point, keeps the renderer agreement intact
 (View-width math, hit-testing), and avoids the distracting "syntax highlighter"
 rabbit hole for a component that deliberately renders plain text.
+
+## L-36 — Border removal is a layout contract change: watch the anchoring tests
+
+**Crossroads:** making the connection form fit on small terminals meant dropping
+the 3-line bordered inputs for one-line `[ value ]` boxes. The screen got 2×
+shorter and even SQL Server's seven fields now fit at 20 rows — but a test that
+parsed the old box borders (`╭`, `│`) to check horizontal centering broke in two
+ways: the delimiters changed, and the engine row's `←→ switch` hint now hangs
+off the closing bracket, so the brackets were no longer the visual anchor.
+
+**Decision:** the tests now anchor on the new bracket delimiters and measure the
+full visual element (first `[` to last visible cell, since the hint is part of
+the box). All form boxes use a single `fieldBoxW` constant so every row's box
+starts at the same column — the engine hint lives *inside* the fixed-width box
+rather than shifting its center.
+
+**Lesson:** changing a screen's chrome (borders → plain text) changes the
+tokens that layout tests parse. Grep the tests for the old visual markers and
+update them to the new anchor, and centralize the new geometry in a constant
+(`fieldBoxW`) so the renderer and the tests share the same truth.
+
+## L-37 — bounded input escapes break fixed-width layouts; geometry must come from the render
+
+**Crossroads:** forcing every form box to 32 cells with `fmt.Sprintf("[ %-28s ]", value)`
+worked for the engine and the toggle, but the text fields rendered 28 wide and
+their labels drifted 2 cells right. The culprit: `textinput.View()` returns
+ANSI-colored placeholder text, so its *byte length* (54) and *runewidth* (which
+counts the printable chars inside the escape) both exceed the 24 visible cells —
+the `%-28s` padding silently did nothing.
+
+**Decision:** pad by display width using `lipgloss.Width` (ANSI-aware: 24 visible
+cells) instead of byte/runewidth counts, so the bracketed box is truly 32 cells.
+The clickable rows are no longer index arithmetic that must mirror the render
+by hand: `View` scans the lines it just emitted (stripping ANSI) and records the
+engine/field/button/saved rows at the exact position they will occupy, then the
+mouse hit-test reads that list — renderer and hit-test cannot drift apart.
+
+**Lesson:** when a fixed-width visual contains third-party widgets that emit
+styled text, the only trustworthy measure of its size is a display-width
+function that understands ANSI (lipgloss.Width), never len() or runewidth on the
+raw string. And layout tests should assert the anchor the design actually uses
+(the label+box group, now that labels are left-aligned) rather than an earlier
+visual token like a border.

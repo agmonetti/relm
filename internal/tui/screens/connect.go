@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 
 	"github.com/agmonetti/relm/internal/conn"
@@ -59,6 +60,10 @@ type ConnScreen struct {
 
 	width  int
 	height int
+
+	// clicks holds the clickable rows of the last View render, so the mouse
+	// handler and the renderer agree on the same geometry
+	clicks []clickable
 }
 
 // NewConnScreen creates the screen with the saved connections loaded.
@@ -164,13 +169,13 @@ func (c *ConnScreen) applyFocus() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (c *ConnScreen) nextFocus() {
+func (c *ConnScreen) nextFocus() tea.Cmd {
 	total := c.savedFocus() + 1 // +1 to return to the engine
 	c.focus = (c.focus + 1) % total
-	c.applyFocus()
+	return c.applyFocus()
 }
 
-func (c *ConnScreen) cycleDriver(right bool) {
+func (c *ConnScreen) cycleDriver(right bool) tea.Cmd {
 	prevDefault := conn.DefaultPort(c.driver())
 	n := len(conn.Drivers)
 	if right {
@@ -188,7 +193,7 @@ func (c *ConnScreen) cycleDriver(right bool) {
 		}
 	}
 	c.focus = 0
-	c.applyFocus()
+	return c.applyFocus()
 }
 
 func (c *ConnScreen) moveSaved(up bool) {
@@ -306,7 +311,7 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "tab":
-			c.nextFocus()
+			cmds = append(cmds, c.nextFocus())
 			handled = true
 		case "enter":
 			if idx := c.focus - 1; idx >= 0 {
@@ -327,7 +332,7 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 			handled = true
 		case "left", "right":
 			if c.focus == 0 {
-				c.cycleDriver(msg.String() == "right")
+				cmds = append(cmds, c.cycleDriver(msg.String() == "right"))
 				handled = true
 			}
 		case "up", "down":
@@ -420,6 +425,29 @@ func (c *ConnScreen) FocusOnField() bool {
 	return c.focus >= 1 && c.focus < c.savedFocus()
 }
 
+// FocusIndex returns the current focus index: 0 = engine, 1..N = form fields,
+// N+1 = the saved list.
+func (c *ConnScreen) FocusIndex() int { return c.focus }
+
+// clickKind identifies what a clickable zone of the connection screen does.
+type clickKind int
+
+const (
+	clickNone    clickKind = iota
+	clickEngine            // the engine selector
+	clickField             // a form field (idx = field index, 0-based)
+	clickConnect           // the "Enter · Connect" button
+	clickSaved             // a saved connection (idx = saved index)
+)
+
+// clickable is a row of the connection screen that reacts to a mouse click.
+// y is the row in the final rendered space (after vertical centering).
+type clickable struct {
+	kind clickKind
+	idx  int
+	y    int
+}
+
 // View renders the lazyvim-style centered menu: logo on top and below the form
 // and the saved connections, all centered in the available area.
 func (c *ConnScreen) View(width, height int) string {
@@ -430,42 +458,150 @@ func (c *ConnScreen) View(width, height int) string {
 		c.height = height
 	}
 
-	var b strings.Builder
-	b.WriteString(renderLogo(c.width))
-	b.WriteString("\n\n")
-	b.WriteString(c.renderForm())
-	content := b.String()
+	// the layout is built as plain lines here so the clickable rows can be
+	// recorded with the exact same geometry the renderer uses
+	var lines []string
+	var clicks []clickable
+	base := 0
+	// hide the big ASCII logo if the terminal is too short to show the form
+	if c.height >= 22 {
+		lines = append(lines, strings.Split(renderLogo(c.width), "\n")...)
+		lines = append(lines, "", "") // the \n\n after the logo
+		base = 8
+	}
+
+	vis := c.fieldsVisible()
+	form := strings.Split(c.renderForm(), "\n")
+
+	// record the clickable rows by scanning the lines the form actually emits,
+	// so the hit-test always agrees with the render no matter how the layout
+	// of the form evolves
+	for i, line := range form {
+		trim := strings.TrimSpace(ansi.Strip(line))
+		y := base + i
+		switch {
+		case strings.HasPrefix(trim, "Engine"):
+			clicks = append(clicks, clickable{kind: clickEngine, y: y})
+		case strings.HasPrefix(trim, "Enter · Connect"):
+			clicks = append(clicks, clickable{kind: clickConnect, y: y})
+		default:
+			for fi, f := range vis {
+				if strings.HasPrefix(trim, f.label) {
+					clicks = append(clicks, clickable{kind: clickField, idx: fi, y: y})
+					break
+				}
+			}
+		}
+	}
+	lines = append(lines, form...)
 
 	// Saved connections are only shown if there is room next to the form;
 	// otherwise they are omitted so they don't hide it.
 	if len(c.saved) > 0 {
-		saved := c.renderSaved()
-		if lipgloss.Height(content)+2+lipgloss.Height(saved) <= c.height {
-			content += "\n\n" + saved
+		saved := strings.Split(c.renderSaved(), "\n")
+		if len(lines)+2+len(saved) <= c.height {
+			lines = append(lines, "", "")
+			savedY := len(lines) // items start 2 lines down, after "Saved"+blank
+			for i, l := range saved {
+				lines = append(lines, l)
+				if i >= 2 && strings.TrimSpace(ansi.Strip(l)) != "" {
+					clicks = append(clicks, clickable{kind: clickSaved, idx: i - 2, y: savedY + i})
+				}
+			}
 		}
 	}
 
 	if c.err != "" {
-		content += "\n\n" + styles.StyleError.Render(c.err)
+		lines = append(lines, "", "")
+		lines = append(lines, strings.Split(styles.StyleError.Render(c.err), "\n")...)
 	}
 
-	// Center every line horizontally so logo and form share the center axis,
-	// then center vertically (a no-op horizontally once all lines are the
-	// terminal width).
-	content = lipgloss.NewStyle().Width(c.width).Align(lipgloss.Center).Render(content)
-
-	if lipgloss.Height(content) > c.height {
-		content = lipgloss.Place(c.width, c.height, lipgloss.Center, lipgloss.Top, content)
-	} else {
-		content = lipgloss.Place(c.width, c.height, lipgloss.Center, lipgloss.Center, content)
+	// horizontal centering: every line that is not already the full width gets
+	// an equal pad on both sides
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		if w := lipgloss.Width(l); w < c.width {
+			out[i] = strings.Repeat(" ", (c.width-w)/2) + l
+		} else {
+			out[i] = l
+		}
 	}
 
-	// bubbletea expects exactly c.height lines: trim if needed.
-	lines := strings.Split(content, "\n")
-	if len(lines) > c.height {
-		content = strings.Join(lines[:c.height], "\n")
+	// vertical centering with a deterministic offset (matching the mouse hit-test)
+	vpad := 0
+	if len(out) < c.height {
+		vpad = (c.height - len(out)) / 2
 	}
-	return content
+
+	final := make([]string, 0, c.height)
+	for i := 0; i < vpad; i++ {
+		final = append(final, strings.Repeat(" ", c.width))
+	}
+	final = append(final, out...)
+	for len(final) < c.height {
+		final = append(final, strings.Repeat(" ", c.width))
+	}
+	if len(final) > c.height {
+		final = final[:c.height]
+	}
+
+	for i := range clicks {
+		clicks[i].y += vpad
+	}
+	c.clicks = clicks
+	return strings.Join(final, "\n")
+}
+
+// HitTest returns the clickable under the given cell of the screen space, or
+// clickNone when the click lands on nothing (empty rows, title, hints, ...).
+func (c *ConnScreen) HitTest(x, y int) clickable {
+	if x < 0 || x >= c.width || y < 0 || y >= c.height {
+		return clickable{kind: clickNone, y: y}
+	}
+	for _, cl := range c.clicks {
+		if cl.y == y {
+			return cl
+		}
+	}
+	return clickable{kind: clickNone, y: y}
+}
+
+// Activate applies a mouse click on the connection screen: it focuses the
+// clicked field or engine, toggles a checkbox, or runs the connect command.
+// It returns the tea.Cmd to run (connecting), or nil.
+func (c *ConnScreen) Activate(k clickable) tea.Cmd {
+	switch k.kind {
+	case clickEngine:
+		c.focus = 0
+		return c.applyFocus()
+	case clickField:
+		c.focus = k.idx + 1
+		cmd := c.applyFocus()
+		if k.idx < len(c.fieldsVisible()) && c.fieldsVisible()[k.idx].isToggle {
+			c.fieldsVisible()[k.idx].checked = !c.fieldsVisible()[k.idx].checked
+		}
+		return cmd
+	case clickConnect:
+		cmd, err := c.connect()
+		if err != nil {
+			c.err = err.Error()
+			return nil
+		}
+		return cmd
+	case clickSaved:
+		c.savedIdx = k.idx
+		return c.savedCmd()
+	}
+	return nil
+}
+
+// savedCmd connects to the currently selected saved connection.
+func (c *ConnScreen) savedCmd() tea.Cmd {
+	if c.savedIdx < 0 || c.savedIdx >= len(c.saved) {
+		return nil
+	}
+	cfg := c.saved[c.savedIdx].ToConfig()
+	return func() tea.Msg { return ConnectMsg{Cfg: cfg} }
 }
 
 // renderLogo renders the ASCII logo centered on the given width. The lines are
@@ -487,8 +623,35 @@ func renderLogo(width int) string {
 // Fixed form widths: label on the left + input box.
 const (
 	fieldLabelW = 14
-	fieldBoxW   = 32
+	fieldBoxW   = 32 // total width of every bracketed box, so the rows align
 )
+
+// boxInner is the content width inside the [ and ] delimiters of a field box.
+const boxInner = fieldBoxW - 4
+
+// renderField renders a single form field as a one-line bracketed box of a
+// fixed width, so every row starts its box at the same column.
+func (c *ConnScreen) renderField(f *field, focused bool) string {
+	style := styles.StyleInputBox
+	if focused {
+		style = styles.StyleInputBoxFocus
+	}
+	if f.isToggle {
+		mark := "[ ]"
+		if f.checked {
+			mark = "[x]"
+		}
+		return style.Render(fmt.Sprintf("%-*s", fieldBoxW, mark+" open read-only"))
+	}
+	// the textinput view carries ANSI (placeholder colors) that would inflate
+	// a byte count; pad by display width so the bracketed box always ends up
+	// exactly fieldBoxW wide
+	content := f.input.View()
+	if w := lipgloss.Width(content); w < boxInner {
+		content += strings.Repeat(" ", boxInner-w)
+	}
+	return style.Render(fmt.Sprintf("[ %s ]", content))
+}
 
 func (c *ConnScreen) renderForm() string {
 	var b strings.Builder
@@ -502,21 +665,8 @@ func (c *ConnScreen) renderForm() string {
 	// fields, stacked without blank lines so they don't overflow on small terminals
 	for i := range c.fieldsVisible() {
 		f := c.fieldsVisible()[i]
-		style := styles.StyleInputBox
-		if c.focus == i+1 {
-			style = styles.StyleInputBoxFocus
-		}
-		var box string
-		if f.isToggle {
-			t := " [ ] "
-			if f.checked {
-				t = " [x] "
-			}
-			box = style.Width(fieldBoxW).Render(t + styles.StyleHeaderDim.Render("open read-only"))
-		} else {
-			box = style.Width(fieldBoxW).Render(f.input.View())
-		}
-		b.WriteString(fieldRow(f.label, box, c.width))
+		focused := c.focus == i+1
+		b.WriteString(fieldRow(f.label, c.renderField(f, focused), c.width))
 		b.WriteString("\n")
 	}
 
@@ -532,35 +682,23 @@ func (c *ConnScreen) renderForm() string {
 	return b.String()
 }
 
-// fieldRow centers the input box on the terminal axis and places the label to
-// its left. Centering the whole label+box group would visibly shift the box
-// right by half the label width.
+// fieldRow renders a form row with the label left-aligned in a fixed column
+// and the box right after it, so every label starts at the same cell and every
+// box starts at the same cell. The whole label+box group is centered on the
+// terminal width, keeping the form visually centered.
 func fieldRow(label, box string, width int) string {
-	lbl := styles.StyleFieldLabel.Width(fieldLabelW).Align(lipgloss.Right).Render(label)
+	lbl := styles.StyleFieldLabel.Width(fieldLabelW).Align(lipgloss.Left).Render(label)
 	boxW := lipgloss.Width(box)
-	boxLeft := (width - boxW) / 2
-	if boxLeft < 0 {
-		boxLeft = 0
+	total := fieldLabelW + 1 + boxW
+	left := (width - total) / 2
+	if left < 0 {
+		left = 0
 	}
-	prefix := boxLeft - fieldLabelW - 1
-	if prefix < 0 {
-		prefix = 0
-	}
-	right := width - boxLeft - boxW
+	right := width - left - total
 	if right < 0 {
 		right = 0
 	}
-
-	lines := strings.Split(box, "\n")
-	middle := len(lines) / 2
-	for i, line := range lines {
-		if i == middle {
-			lines[i] = strings.Repeat(" ", prefix) + lbl + " " + line + strings.Repeat(" ", right)
-		} else {
-			lines[i] = strings.Repeat(" ", boxLeft) + line + strings.Repeat(" ", right)
-		}
-	}
-	return strings.Join(lines, "\n")
+	return strings.Repeat(" ", left) + lbl + " " + box + strings.Repeat(" ", right)
 }
 
 // renderMotorSelector draws the engine selector as a focusable box.
@@ -569,12 +707,10 @@ func (c *ConnScreen) renderMotorSelector() string {
 	if c.focus == 0 {
 		style = styles.StyleInputBoxFocus
 	}
-	content := lipgloss.JoinHorizontal(lipgloss.Bottom,
-		styles.StyleHeader.Render(" "+string(c.driver())),
-		strings.Repeat(" ", 4),
-		styles.StyleHeaderDim.Render("←→ switch"),
-	)
-	return style.Width(fieldBoxW).Render(content)
+	// the hint lives inside the fixed-width box so its [ aligns with the
+	// other fields' brackets
+	content := fmt.Sprintf("%-17s ←→ switch", string(c.driver()))
+	return style.Render(fmt.Sprintf("[ %-*s ]", boxInner, content))
 }
 
 func (c *ConnScreen) renderSaved() string {

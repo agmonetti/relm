@@ -2,11 +2,11 @@
 
 ## Screen 0: Connection
 
-It is the first screen when opening the tool. lazyvim style: logo centered on top, and below it the form and the saved connections, all centered in the available area. Each field is a row `label (left) + bordered box`, and there is a bottom button bar with distinguishable actions.
+It is the first screen when opening the tool. lazyvim style: logo centered on top, and below it the form and the saved connections, all centered in the available area. Each field is a row `label (left) + one-line bracketed box`, and there is a bottom button bar with distinguishable actions.
 
 ```
 ┌─────────────────────────────────────────────┐
-│ relm [no connection] [connect]              │
+│ relm [no connection]                        │
 ├─────────────────────────────────────────────┤
 │                _____  ______  _      __  __ │
 │               |  __ \|  ____|| |    |  \/  |│
@@ -17,17 +17,14 @@ It is the first screen when opening the tool. lazyvim style: logo centered on to
 │                                             │
 │                    Connect                  │
 │                                             │
-│            Engine │ sqlite      ←→ switch  │
-│                   └─────────────────────────│
-│            File   │ /data/app.db            │
-│                   └─────────────────────────│
-│            Read-only │ [ ] open in read mode│
-│                      │                      │
+│            Engine [ sqlite   ←→ switch  ]  │
+│            File   [ /data/app.db         ]  │
+│            Read-only [ ] open read-only     │
 │                                             │
 │                Enter · Connect              │
 │          ctrl+s save   r clear              │
 ├─────────────────────────────────────────────┤
-│ ↑↓ list  Tab engine  Enter connect  ? help │
+│ [↑↓] list  [tab] engine  [enter] connect    │
 └─────────────────────────────────────────────┘
 ```
 
@@ -48,6 +45,10 @@ When choosing another engine, the form changes:
 
 **Behavior:**
 - The engine selector offers exactly: **SQLite, PostgreSQL, MySQL, MariaDB, SQL Server**. No others.
+- The form fields are one-line bracketed boxes (`[ localhost ]`) of a fixed
+  width, so every engine — even SQL Server with its seven fields — fits on a
+  standard 24-row terminal. On very short terminals (< 22 rows) the ASCII logo
+  is hidden and only the form is drawn.
 - SQLite shows the `File` field and the `Read-only` toggle (toggled with `Enter`/`Space`; opens the file in `mode=ro`).
 - The other engines show `Host`, `Port`, `User`, `Password`, `Database`.
 - All network engines show the `SSL` field (`prefer`, `require`, `disable`;
@@ -56,6 +57,11 @@ When choosing another engine, the form changes:
 - `Enter` connects. Connection errors are shown in the footer in red, without crashing.
 - `Ctrl+S` saves the current connection to the local history (see `05-technical-decisions.md`).
 - Saved connections are listed below the form (only if there are any); `Enter` on one loads and connects it.
+- All labels are left-aligned in a fixed column and every box starts at the
+  same cell, so the whole form reads as aligned columns.
+- The mouse works on the form: a left click focuses the clicked field / engine
+  selector, toggles the `Read-only` checkbox, triggers Connect from the button
+  or opens the clicked saved connection.
 - Connecting resets the previous session: it closes the previous store, creates the new one, and loads the browser.
 - `Ctrl+N` on any screen returns to connection (new session).
 
@@ -85,18 +91,19 @@ keyboard focus between panes (sidebar → main → editor); the focused pane has
 accent border. There is no screen switching.
 
 - The header is always visible. Its values are bracketed **pills**: the app
-  name, then a yellow pill for the connection, a purple pill for the active
-  table and a teal pill for the current mode, all with black text on a solid
-  background:
-  - Network: `relm [ postgres@localhost:5432/mydb ] [ users ] [ browser ]`
-  - SQLite: `relm [ sqlite /data/app.db ] [ users ] [ browser ]`
+  name, then a yellow pill for the connection and a purple pill for the active
+  table, with black text on a solid background:
+  - Network: `relm [ postgres@localhost:5432/mydb ] [ users ]`
+  - SQLite: `relm [ sqlite /data/app.db ] [ users ]`
   - No connection / no open table: the pill stays muted text without a background.
+  - There is no mode pill: the focused pane already marks itself with its accent
+    border, so `[ browser ]` / `[ tables ]` / `[ editor ]` would be redundant.
 - The sidebar lists the database tables (scrolled when there are many). It can be hidden with `Alt+B` and is hidden automatically below 60 columns.
 - The main pane shows the active table (browser) or its structure.
 - The editor pane is the SQL editor with its results.
 - The footer shows the most relevant shortcuts for the focused pane: the
   pressing keys are bracketed (`[Tab]`) and bold, the action follows in muted
-  text.
+  text. The `?` help cheatsheet uses the same bracket format, tab-aligned.
 
 ## Pane 1: Sidebar (tables)
 

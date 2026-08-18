@@ -119,13 +119,12 @@ var (
 
 	// StyleInputBox is the visible box of a form input.
 	StyleInputBox = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(ColorBorder).
-			Padding(0, 1)
+			Foreground(ColorMuted)
 
 	// StyleInputBoxFocus is the box of the focused input.
-	StyleInputBoxFocus = StyleInputBox.
-				BorderForeground(ColorAccent)
+	StyleInputBoxFocus = lipgloss.NewStyle().
+				Foreground(ColorPrimary).
+				Bold(true)
 
 	// StyleBtnPrimary is the primary button (solid teal background).
 	StyleBtnPrimary = lipgloss.NewStyle().

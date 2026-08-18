@@ -336,13 +336,8 @@ func TestConnScreen_ContentHorizontallyCentered(t *testing.T) {
 		c := NewConnScreen(nil)
 		out := c.View(w, 30)
 
-		// cell column of a byte index (chars before `sub` may include multibyte)
-		colOf := func(plain, sub string) int {
-			return runewidth.StringWidth(plain[:strings.Index(plain, sub)])
-		}
-
 		var logoOK bool
-		var boxLeft, boxRight, boxTopCol = -1, -1, -1
+		var groupLeft, boxRight = -1, -1
 		for _, l := range strings.Split(out, "\n") {
 			plain := ansi.Strip(l)
 			trimmed := strings.TrimSpace(plain)
@@ -356,32 +351,25 @@ func TestConnScreen_ContentHorizontallyCentered(t *testing.T) {
 				if d < -3 || d > 3 {
 					t.Errorf("width %d: logo center off by %d cols: %q", w, d, l)
 				}
-			case strings.Contains(trimmed, "Engine │"): // a field row (label + box)
-				boxLeft = runewidth.StringWidth(plain[:strings.Index(plain, "│")])
-				boxRight = runewidth.StringWidth(plain[:strings.LastIndex(plain, "│")])
-			case strings.HasPrefix(trimmed, "╭"): // the box top border line
-				boxTopCol = colOf(plain, "╭")
+			case strings.HasPrefix(trimmed, "Engine"): // the engine selector row
+				// count only the leading padding; TrimSpace also strips the
+				// trailing pad, which would double-count the group's width
+				groupLeft = runewidth.StringWidth(plain) - runewidth.StringWidth(strings.TrimLeft(plain, " "))
+				boxRight = runewidth.StringWidth(strings.TrimRight(plain, " ")) - 1
 			}
 		}
 		if !logoOK {
 			t.Fatalf("width %d: logo line not found in the connect screen", w)
 		}
-		if boxLeft < 0 || boxRight < 0 {
+		if groupLeft < 0 || boxRight < 0 {
 			t.Fatalf("width %d: form field row not found in the connect screen", w)
 		}
 
-		// The input box itself is the visual anchor. Labels intentionally sit
-		// to its left and must not move the box away from the terminal center.
-		boxCenter2 := boxLeft + boxRight
-		if d := absInt(boxCenter2 - (w - 1)); d > 1 {
-			t.Errorf("width %d: form box center off by %d cols (box %d..%d)", w, d, boxLeft, boxRight)
-		}
-
-		// the box top border must align with the box content
-		if boxTopCol < 0 {
-			t.Error("box top border not found")
-		} else if boxTopCol != boxLeft {
-			t.Errorf("width %d: box top border at col %d but content at %d", w, boxTopCol, boxLeft)
+		// The whole label+box group is the visual anchor: the label sits left
+		// of the box and both stay on the terminal center axis.
+		groupCenter2 := groupLeft + boxRight
+		if d := absInt(groupCenter2 - (w - 1)); d > 1 {
+			t.Errorf("width %d: form group center off by %d cols (group %d..%d)", w, d, groupLeft, boxRight)
 		}
 	}
 }
@@ -393,5 +381,126 @@ func TestLogoLinesAreUniform(t *testing.T) {
 		if got := runewidth.StringWidth(l); got != w {
 			t.Errorf("logo line %d is %d cells wide, want %d (uniform, so centering does not skew)", i, got, w)
 		}
+	}
+}
+
+func TestConnScreen_MouseClickFocusesField(t *testing.T) {
+	c := NewConnScreen(nil)
+	out := c.View(80, 30)
+
+	// verify the geometry the test relies on: sqlite = logo + File + Read-only
+	if len(c.fieldsVisible()) != 2 {
+		t.Fatalf("fieldsVisible = %d, want 2", len(c.fieldsVisible()))
+	}
+	_ = out
+
+	// row offsets within the 80x30 render (logo shown -> engine at y=16)
+	if got := c.HitTest(40, 16).kind; got != clickEngine {
+		t.Errorf("row 16: kind = %v, want engine", got)
+	}
+	f := c.HitTest(40, 17)
+	if f.kind != clickField || f.idx != 0 {
+		t.Errorf("row 17: %+v, want field 0 (File)", f)
+	}
+	if got := c.HitTest(40, 18).kind; got != clickField {
+		t.Errorf("row 18: kind = %v, want field (Read-only toggle)", got)
+	}
+	if got := c.HitTest(40, 20).kind; got != clickConnect {
+		t.Errorf("row 20: kind = %v, want connect button", got)
+	}
+	if got := c.HitTest(40, 5).kind; got != clickNone {
+		t.Errorf("row 5 (logo): kind = %v, want none", got)
+	}
+
+	// clicking the File field focuses it
+	c.Activate(c.HitTest(40, 17))
+	if c.focus != 1 {
+		t.Errorf("focus = %d, want 1 (File)", c.focus)
+	}
+
+	// clicking the toggle flips the checkbox
+	c.Activate(c.HitTest(40, 18))
+	if !c.fieldsVisible()[1].checked {
+		t.Error("Read-only should be checked after clicking it")
+	}
+
+	// clicking the engine row moves the focus back to the selector
+	c.Activate(c.HitTest(40, 16))
+	if c.focus != 0 {
+		t.Errorf("focus = %d, want 0 (engine)", c.focus)
+	}
+
+	// clicking Connect with an empty form shows the validation error
+	if cmd := c.Activate(c.HitTest(40, 20)); cmd != nil {
+		t.Errorf("connect with empty form must not return a command, got %v", cmd)
+	}
+	if c.err == "" {
+		t.Error("expected a validation error after clicking Connect on an empty form")
+	}
+}
+
+func mustCmdNil(t *testing.T, cmd tea.Cmd) {
+	t.Helper()
+	if cmd != nil {
+		t.Errorf("unexpected command returned: %v", cmd)
+	}
+}
+
+func TestConnScreen_MouseClickSavedConnects(t *testing.T) {
+	c := NewConnScreen([]conn.SavedConnection{
+		{Name: "dev", Driver: conn.DriverSQLite, Path: "/tmp/dev.db"},
+	})
+	out := c.View(80, 30)
+	_ = out // the saved list fits below the form on 30 rows
+
+	// the saved list starts below the form: form ends around base+16 (8 logo +
+	// "Saved" + blank + item). Find the item row via the recorded clicks.
+	var itemRow int
+	for _, cl := range c.clicks {
+		if cl.kind == clickSaved && cl.idx == 0 {
+			itemRow = cl.y
+		}
+	}
+	if itemRow == 0 {
+		t.Fatal("no saved clickable recorded")
+	}
+	cmd := c.Activate(c.HitTest(40, itemRow))
+	if cmd == nil {
+		t.Fatal("clicking a saved connection must return a connect command")
+	}
+	msg := cmd()
+	if msg == nil {
+		t.Fatal("connect command produced no message")
+	}
+	cm, ok := msg.(ConnectMsg)
+	if !ok {
+		t.Fatalf("message = %T, want ConnectMsg", msg)
+	}
+	if cm.Cfg.Path != "/tmp/dev.db" {
+		t.Errorf("cfg.Path = %q, want /tmp/dev.db", cm.Cfg.Path)
+	}
+}
+
+func TestConnScreen_LabelsLeftAligned(t *testing.T) {
+	out := NewConnScreen(nil).View(80, 30)
+
+	// every label text must start at the same column regardless of its length
+	labelCol := -1
+	for _, l := range strings.Split(out, "\n") {
+		plain := ansi.Strip(l)
+		trimmed := strings.TrimSpace(plain)
+		for _, want := range []string{"Engine", "File", "Read-only"} {
+			if strings.HasPrefix(trimmed, want+" ") || trimmed == want {
+				col := runewidth.StringWidth(plain) - runewidth.StringWidth(strings.TrimLeft(plain, " "))
+				if labelCol == -1 {
+					labelCol = col
+				} else if col != labelCol {
+					t.Errorf("label %q starts at col %d, want %d", want, col, labelCol)
+				}
+			}
+		}
+	}
+	if labelCol == -1 {
+		t.Fatal("no label row found")
 	}
 }

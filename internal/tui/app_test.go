@@ -480,6 +480,31 @@ func TestModel_DetailViewShowsLongValue(t *testing.T) {
 	}
 }
 
+func TestModel_ClickFocusesConnectField(t *testing.T) {
+	m := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30}) // innerW=98, contentHeight=26
+	_ = m.View()                                        // establish the geometry (c.width/c.height + click rows)
+
+	// the connect content starts at terminal cell (1,2). Within the 26-row
+	// content area the File row sits at content y=15 -> terminal y=17.
+	step(t, m, mouseMsg(50, 17, tea.MouseButtonLeft, tea.MouseActionPress))
+	if m.connect.FocusIndex() != 1 {
+		t.Fatalf("focus = %d, want 1 (File)", m.connect.FocusIndex())
+	}
+	if !m.connect.FocusOnField() {
+		t.Error("the model must be in typing mode after clicking a field")
+	}
+
+	// a right-click or wheel must not disturb the form
+	step(t, m, mouseMsg(50, 17, tea.MouseButtonRight, tea.MouseActionPress))
+	if m.resizing {
+		t.Error("right-click on the connect screen must not start a resize")
+	}
+	if m.connect.FocusIndex() != 1 {
+		t.Errorf("focus changed to %d after a right-click", m.connect.FocusIndex())
+	}
+}
+
 func TestModel_MouseIgnoredOnConnectScreen(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir()) // don't depend on the user's prefs
 	m := newModel(t)                         // starts on the connect screen

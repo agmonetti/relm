@@ -10,14 +10,39 @@ import (
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
-// handleMouse handles mouse events in the workspace: a left click focuses and
-// selects the clicked row, a right-click drag resizes the nearest pane divider
-// and the wheel scrolls the pane under the pointer. Page changes from the
-// wheel run in the background; the returned cmd carries the navigation.
+// handleMouse handles mouse events. On the connection screen a left click
+// focuses the clicked field / engine, toggles a checkbox, connects or opens a
+// saved connection. In the workspace a left click focuses and selects the
+// clicked row, a right-click drag resizes the nearest pane divider and the
+// wheel scrolls the pane under the pointer. Page changes from the wheel run in
+// the background; the returned cmd carries the navigation.
 func (m *Model) handleMouse(msg tea.MouseMsg) tea.Cmd {
-	if m.screen != ScreenWorkspace || m.showHelp {
+	if m.showHelp {
 		return nil
 	}
+	switch m.screen {
+	case ScreenConnect:
+		return m.handleConnectMouse(msg)
+	case ScreenSettings:
+		return nil
+	case ScreenWorkspace:
+		return m.handleWorkspaceMouse(msg)
+	}
+	return nil
+}
+
+// handleConnectMouse handles left clicks on the connection screen. The screen
+// content starts at terminal cell (1,2): the frame adds a blank line, the
+// header and a one-column left margin.
+func (m *Model) handleConnectMouse(msg tea.MouseMsg) tea.Cmd {
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return nil
+	}
+	return m.connect.Activate(m.connect.HitTest(msg.X-1, msg.Y-2))
+}
+
+// handleWorkspaceMouse handles mouse events inside the workspace.
+func (m *Model) handleWorkspaceMouse(msg tea.MouseMsg) tea.Cmd {
 	if m.showDetail {
 		switch msg.Button {
 		case tea.MouseButtonWheelUp:
