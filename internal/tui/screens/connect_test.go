@@ -33,8 +33,13 @@ func TestConnScreen_NetworkShowsAllFields(t *testing.T) {
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	c.cycleDriver(true) // sqlite -> postgres
 
-	if len(c.fieldsVisible()) != 6 {
-		t.Fatalf("fieldsVisible = %d, want 6 (Host..Database + SSL)", len(c.fieldsVisible()))
+	if len(c.fieldsVisible()) != 7 {
+		t.Fatalf("fieldsVisible = %d, want 7 (Host..Database + Read-only + SSL)", len(c.fieldsVisible()))
+	}
+	// the Read-only toggle is now available for every engine
+	ro := c.fieldsVisible()[5]
+	if ro.label != "Read-only" || !ro.isToggle {
+		t.Errorf("field 5 = %+v, want Read-only toggle", ro)
 	}
 	// password masked
 	if c.fields[4].input.EchoMode != textinput.EchoPassword {
@@ -62,12 +67,12 @@ func TestConnScreen_SSLModeInConfig(t *testing.T) {
 	c := NewConnScreen(nil)
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	c.cycleDriver(true) // postgres
-	// SSL field is the last of postgres (index 5 in fieldsVisible)
+	// SSL field is the last of postgres (index 6 in fieldsVisible)
 	vis := c.fieldsVisible()
-	if len(vis) != 6 || vis[5].label != "SSL" {
-		t.Fatalf("expected SSL as sixth field, got %+v", vis)
+	if len(vis) != 7 || vis[6].label != "SSL" {
+		t.Fatalf("expected SSL as seventh field, got %+v", vis)
 	}
-	vis[5].input.SetValue("require")
+	vis[6].input.SetValue("require")
 	if cfg := c.cfg(); cfg.SSLMode != "require" {
 		t.Errorf("SSLMode = %q, want require", cfg.SSLMode)
 	}
@@ -79,11 +84,11 @@ func TestConnScreen_ValidateSSLMode(t *testing.T) {
 	c.cycleDriver(true)                     // postgres
 	c.fields[1].input.SetValue("localhost") // required host
 	vis := c.fieldsVisible()
-	vis[5].input.SetValue("bogus")
+	vis[6].input.SetValue("bogus")
 	if err := c.validate(); err == nil {
 		t.Error("expected error for invalid sslmode")
 	}
-	vis[5].input.SetValue("verify-full")
+	vis[6].input.SetValue("verify-full")
 	if err := c.validate(); err != nil {
 		t.Errorf("validate = %v, want nil", err)
 	}
@@ -117,6 +122,24 @@ func TestConnScreen_FieldHelper(t *testing.T) {
 		if c.field("Password").input.EchoMode != textinput.EchoPassword {
 			t.Error("Password should be masked for network engines")
 		}
+	}
+}
+
+func TestConnScreen_SSLAvailableForAllNetworkEngines(t *testing.T) {
+	c := NewConnScreen(nil)
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	// cycle from sqlite to each network engine and check the SSL field is there
+	for range conn.Drivers {
+		if c.driver() != conn.DriverSQLite {
+			for _, f := range c.fieldsVisible() {
+				if f.label == "SSL" {
+					goto ok
+				}
+			}
+			t.Errorf("%s: SSL field missing", c.driver())
+		ok:
+		}
+		c.cycleDriver(true)
 	}
 }
 

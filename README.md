@@ -45,17 +45,29 @@ relm
 
 The connection screen opens. Pick the engine with `←`/`→`, fill in the fields and press `Enter`. For SQLite you only need the file path.
 
+To skip the connection screen, pass a DSN directly:
+
+```bash
+relm ./app.db                                # SQLite file
+relm postgres://user:pass@host:5432/mydb     # or mysql://, mariadb://, sqlserver://…?tls=…
+relm --read-only postgres://user:pass@host:5432/mydb   # block every write
+```
+
 ## What you get
 
 - **Single-window layout** — sidebar, table browser and SQL editor always visible, always in sync.
 - **Keyset pagination** — pages are anchored to the primary key, so refreshing or re-sorting a large table never moves the visible rows.
-- **Live editor** — multiline SQL with history of your last 100 queries, runs in the background, cancellable with `Esc`.
+- **Live editor** — multiline SQL with history of your last 100 queries, runs in the background, cancellable with `Esc`. The history survives restarts (`~/.config/relm/history.json`).
 - **Auto-refresh** — after any write query the sidebar and open table reload automatically.
 - **Table structure** — columns, constraints and indexes with `i`.
 - **Row detail** — full values of any row with `v`, no truncation.
 - **Export** — query results or the browsed table to CSV/JSON with `Alt+E` (format from the file extension; SQL NULL becomes JSON `null`).
 - **Saved connections** — stored in `~/.config/relm/connections.json`.
-- **Read-only mode** for SQLite · **SSL** for PostgreSQL.
+- **Read-only mode** for all five engines (SQLite via `mode=ro`, the rest at
+  session level): toggle in the form or `--read-only` on the command line.
+- **SSL/TLS** for every network engine: PostgreSQL (`prefer`/`require`/
+  `verify-full`/`disable`), MySQL/MariaDB and SQL Server (`prefer`/`require`/
+  `disable`).
 - `∅` for NULL · `…` for long values · no configuration required.
 
 ## Shortcuts
@@ -138,12 +150,15 @@ Plans documented in the design docs (`docs/design/06-security.md` and
 `docs/design/05-technical-decisions.md`), not yet implemented:
 
 - OS keychain integration for saved passwords (removes the plaintext tradeoff).
-- A global `--read-only` flag that applies to all five engines, not just SQLite.
-- TLS options for MySQL/MariaDB and SQL Server.
 - Inline cell editing and SQL syntax highlighting.
-- `relm <dsn>` as a CLI shortcut to skip the connection screen.
 
-Implemented: export results to CSV/JSON (`Alt+E`).
+Implemented:
+- Export results to CSV/JSON (`Alt+E`).
+- `relm <dsn>` to skip the connection screen.
+- Global `--read-only` for all five engines (SQL Server: connect with a
+  read-only user — see USAGE).
+- TLS options for MySQL/MariaDB and SQL Server.
+- Persistent query history across sessions.
 
 ## Contributing
 

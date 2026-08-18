@@ -12,6 +12,7 @@ var (
 	ColorNull    = lipgloss.AdaptiveColor{Light: "#B4B2A9", Dark: "#5F5E5A"} // gray tenue
 	ColorBorder  = lipgloss.AdaptiveColor{Light: "#D3D1C7", Dark: "#444441"} // gray borde
 	ColorHeader  = lipgloss.AdaptiveColor{Light: "#4A4A4A", Dark: "#DDDDDD"} // texto
+	ColorWarn    = lipgloss.AdaptiveColor{Light: "#B9932E", Dark: "#E0C568"} // amber
 )
 
 // Precomputed package-level styles. Do not create styles in every View().
@@ -40,6 +41,10 @@ var (
 	// StyleSuccess is a confirmation message (e.g. a completed export).
 	StyleSuccess = lipgloss.NewStyle().
 			Foreground(ColorPrimary)
+
+	// StyleWarn is an advisory notice (e.g. a limitation of the connection).
+	StyleWarn = lipgloss.NewStyle().
+			Foreground(ColorWarn)
 
 	// StyleFooter is the screen footer.
 	StyleFooter = lipgloss.NewStyle().

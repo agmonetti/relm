@@ -10,6 +10,24 @@ opens a window to look at it and query it.
 There is no prior configuration or server installation done by `relm`.
 You only need the binary and access to the database.
 
+### 0b. Skip the connection screen with a DSN
+
+If you already know where you want to connect, pass it as an argument and `relm`
+opens the workspace directly (the connection screen is still available with
+`Ctrl+N`):
+
+```bash
+relm ./db.sqlite                                  # SQLite file
+relm postgres://postgres:postgres@localhost:5432/test
+relm mysql://root:root@localhost:3306/test
+relm mariadb://root:root@localhost:3307/test
+relm 'sqlserver://sa:Str0ng!Passw0rd@localhost:1433?database=master'
+relm --read-only postgres://postgres:postgres@localhost:5432/test   # block every write
+```
+
+Any engine accepts `?sslmode=`/`?tls=` in the URL (e.g. `?sslmode=require`),
+and a bad DSN exits with an error before the TUI starts.
+
 ---
 
 ## 0. Build the binary
@@ -82,7 +100,12 @@ INSERT INTO users (name, email) VALUES ('Alice','alice@test.com'), ('Bob','bob@t
 └─────────────────────────────────────────────┘
 ```
 
-- `Read-only` opens the file in `mode=ro` mode: any write fails. Useful for production databases. Toggle it with `Enter` or `Space` when the focus is on the toggle.
+- `Read-only` is available for **every** engine: SQLite opens the file in
+  `mode=ro`, PostgreSQL sets `default_transaction_read_only`, MySQL/MariaDB set
+  the session read-only — any write fails. Toggle it with `Enter` or `Space`
+  when the focus is on the toggle, or pass `--read-only` on the command line.
+  > SQL Server has no per-session read-only; `relm` shows a warning and you
+  > should connect with a read-only user instead.
 
 2. With `Tab` move to the `File` field, type `test.db` (or the full path) and press `Enter`.
 
@@ -229,7 +252,9 @@ point the `SSL` field at `disable` for the local container.
 ### 2c. Connect from the connection screen
 
 1. With `←`/`→` on the **Engine** selector, pick the engine (SQLite, PostgreSQL, MySQL, MariaDB, SQL Server).
-2. The form changes to `Host · Port · User · Password · Database` (PostgreSQL adds `SSL`):
+2. The form changes to `Host · Port · User · Password · Database`, plus
+   `Read-only` and `SSL` (shown for every network engine; PostgreSQL adds
+   `verify-ca`/`verify-full` to the SSL values):
 
 ```
 │  Engine  [ PostgreSQL ▾ ]                  │
@@ -242,8 +267,13 @@ point the `SSL` field at `disable` for the local container.
 │  SSL      [ prefer ]                        │
 ```
 
-> The `SSL` field controls TLS: `prefer` (default), `require`, `verify-full` (validates
-> the certificate) or `disable`. For production use `require` or `verify-full`.
+> The `SSL` field controls TLS for every network engine: `prefer` (default)
+> negotiates TLS when the server supports it, `require` demands it and
+> `disable` turns it off. PostgreSQL also accepts `verify-full` (validates the
+> certificate). For production use `require` or `verify-full`. On SQL Server,
+> `prefer` keeps the driver default, which encrypts when possible without
+> requiring a trusted certificate (so local dev servers with self-signed certs
+> still connect).
 
 3. Fill in the server data. With the containers above:
 

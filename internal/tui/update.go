@@ -9,6 +9,7 @@ import (
 	term "github.com/charmbracelet/x/term"
 
 	"github.com/agmonetti/relm/internal/browser"
+	"github.com/agmonetti/relm/internal/editor"
 	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
@@ -151,6 +152,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if msg.err == nil && msg.ed.LastQuery != "" {
 			hist.Push(msg.ed.LastQuery)
+			// persist across sessions; a failed write is not worth a message
+			editor.SaveHistory(hist.Items())
 		}
 
 		// A write query (INSERT/UPDATE/DELETE/CREATE/DROP/...) may have changed

@@ -50,7 +50,9 @@ When choosing another engine, the form changes:
 - The engine selector offers exactly: **SQLite, PostgreSQL, MySQL, MariaDB, SQL Server**. No others.
 - SQLite shows the `File` field and the `Read-only` toggle (toggled with `Enter`/`Space`; opens the file in `mode=ro`).
 - The other engines show `Host`, `Port`, `User`, `Password`, `Database`.
-- PostgreSQL adds the `SSL` field (`prefer`, `require`, `verify-full`, `disable`; default `prefer`). Invalid values block the connection with an error.
+- All network engines show the `SSL` field (`prefer`, `require`, `disable`;
+  PostgreSQL adds `verify-ca`/`verify-full`). Invalid values block the
+  connection with an error.
 - `Enter` connects. Connection errors are shown in the footer in red, without crashing.
 - `Ctrl+S` saves the current connection to the local history (see `05-technical-decisions.md`).
 - Saved connections are listed below the form (only if there are any); `Enter` on one loads and connects it.

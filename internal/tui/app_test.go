@@ -30,6 +30,19 @@ func init() {
 	screens.CursorBlink = time.Millisecond
 }
 
+// TestMain isolates every test from the real user configuration: saved
+// connections, prefs and the query history all read/write a throwaway dir.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "relm-tui-test")
+	if err != nil {
+		panic(err)
+	}
+	os.Setenv("RELM_CONFIG_DIR", dir)
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}
+
 // createTestDB creates a temporary sqlite with users and orders tables.
 func createTestDB(t *testing.T) string {
 	t.Helper()

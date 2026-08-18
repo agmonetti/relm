@@ -37,6 +37,11 @@ func New(cfg conn.ConnectionConfig) (*Store, error) {
 		sslmode = "prefer"
 	}
 	q.Set("sslmode", sslmode)
+	if cfg.ReadOnly {
+		// every transaction in the session starts read-only, so any write
+		// fails at the server ("cannot execute ... in a read-only transaction")
+		q.Set("options", "-cdefault_transaction_read_only=on")
+	}
 	u.RawQuery = q.Encode()
 
 	db, err := sql.Open("pgx", u.String())

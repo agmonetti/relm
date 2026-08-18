@@ -306,6 +306,48 @@ This file documents crossroads and decisions the agent makes during development,
 
 **Lesson:** before adding a binding that must work across panes (including the editor), read the full keymap and the components' own reserved keys (`Ctrl+E`, `Ctrl+A`, `Ctrl+L`, `Ctrl+R`, `Tab`...). Prefer the `Alt` prefix for cross-pane actions: it never collides with the text-editing control keys.
 
+---
+
+## L-30 — A DSN parser can't guess the scheme by "://"
+
+**Crossroads:** `relm <dsn>` had to tell a SQLite path (`./app.db`, `/abs/db.sqlite`) apart from a network URL (`postgres://...`). The obvious heuristic — `strings.Contains(dsn, "://")` — misclassifies `sqlite:relm.db` and `file:relm.db` (no `://`), and would glue a `?mode=ro` query onto a `file:/path?mode=ro` path.
+
+**Decision:** parse every argument with `net/url` and switch on `u.Scheme`: `postgres`/`mysql`/`mariadb`/`sqlserver` → network engines, `sqlite`/`file` → SQLite, and **empty scheme** → a plain SQLite path. For relative URIs (`sqlite:relm.db`) the path lives in `u.Opaque`, not `u.Path`; absolute ones use `u.Path`. And the database location differs per engine: SQL Server puts it in the `?database=` query (its URL format has no path database), the rest in the path.
+
+**Lesson:** URL-ish strings lie on the edge cases between "has a scheme" and "is a path"; write the parser against the actual `net/url` fields (Scheme/Path/Opaque) and per-engine quirks, tested with the exact strings you document, instead of a substring heuristic.
+
+---
+
+## L-31 — "Read-only" exists per driver, not as a portable DSN flag
+
+**Crossroads:** the global `--read-only` had to work for all five engines. SQLite has `mode=ro`, PostgreSQL has `default_transaction_read_only` in the DSN, MySQL/MariaDB have **nothing** at the DSN level, and SQL Server has no per-session read-only toggle at all.
+
+**Decision:** enforce where each driver allows it and be honest where it does not:
+- MySQL/MariaDB: `SET SESSION TRANSACTION READ ONLY` is per-connection, and the `database/sql` pool hands statements to arbitrary connections. `Exec`/`ExecContext` in read-only mode pin one connection (`db.Conn`), set the session var there, and run the statement on it — the server rejects the write. Reads stay on the normal pool.
+- SQL Server: no equivalent exists. The TUI shows an amber warning ("read-only is not enforced on mssql — connect with a read-only user") instead of pretending the flag protects the database.
+
+**Lesson:** a feature named the same across engines is really per-engine behavior; map it to each driver's actual mechanism and surface the gap visibly (warning) rather than failing silently — a silent no-op on MSSQL would defeat the entire purpose of the flag.
+
+---
+
+## L-32 — `encrypt=optional` is NOT "TLS if available"; prefer ≠ optional in mssql
+
+**Crossroads:** mapping the form's `prefer` to go-mssqldb's `encrypt=optional` sounded right, but the integration test against the compose SQL Server failed: the handshake tried TLS (the container supports it), then failed cert verification (self-signed, invalid for `localhost`) and **did not fall back**.
+
+**Decision:** `prefer` keeps the driver default for SQL Server instead of setting `encrypt=optional` — the default encrypts when the server supports it without demanding a trusted certificate, so local/dev servers with self-signed certs connect, and it still uses TLS against servers that require it. Only `require` (encrypt=mandatory, verified) and `disable` (encrypt=disable) set explicit params. MySQL's driver makes the three-way split honest (`preferred`/`true`/`false`), and the README/05 table documents the per-engine meaning.
+
+**Lesson:** behind a portable value like `prefer`, each driver has a subtly different "try TLS" behavior — optional-with-fallback, default-without-validation, negotiate-if-supported. When the mapping is a guess, the real-container integration test is the arbiter: it caught a mapping that "compiled correctly" but broke local dev connections.
+
+---
+
+## L-33 — A new persisted file turns existing tests into config writers
+
+**Crossroads:** adding the persistent query history (writes to `~/.config/relm/history.json`) meant any test that ran a query silently wrote to the **real user config dir** — until then the TUI tests only *read* `RELM_CONFIG_DIR` and scattered `t.Setenv` per test was enough.
+
+**Decision:** added a package-level `TestMain` that points `RELM_CONFIG_DIR` at a throwaway `os.MkdirTemp` dir for the whole tui test binary. It is hermetic (saved connections, prefs and history are all isolated) and it removes the per-test `Setenv` noise going forward. The file is written only on the UI goroutine, immediately next to the `History.Push` it mirrors, so there is no file race with the query goroutines.
+
+**Lesson:** when a feature starts *writing* a user file that tests previously only read, the fix is to isolate the config root once for the entire test binary — not to sprinkle more `t.Setenv` lines in individual tests (a future test author will forget one).
+
 
 
 

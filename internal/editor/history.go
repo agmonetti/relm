@@ -66,3 +66,11 @@ func (h *History) InNavigation() bool { return h.pos >= 0 }
 
 // Len returns the number of stored queries.
 func (h *History) Len() int { return len(h.items) }
+
+// Items returns a copy of the stored queries in order (oldest first).
+func (h *History) Items() []string {
+	return append([]string(nil), h.items...)
+}
+
+// Max returns the ring capacity.
+func (h *History) Max() int { return h.max }

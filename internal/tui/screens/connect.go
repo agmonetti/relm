@@ -81,11 +81,11 @@ func (c *ConnScreen) fieldsVisible() []*field {
 				out = append(out, f)
 			}
 		case "Read-only":
-			if drv == conn.DriverSQLite {
-				out = append(out, f)
-			}
+			// available for every engine: SQLite opens mode=ro, the network
+			// engines enforce it at the session level (see the stores)
+			out = append(out, f)
 		case "SSL":
-			if drv == conn.DriverPostgres {
+			if drv != conn.DriverSQLite {
 				out = append(out, f)
 			}
 		default: // Host, Port, User, Password, Database
@@ -262,10 +262,20 @@ func (c *ConnScreen) validate() error {
 		}
 	}
 	if cfg.SSLMode != "" {
-		switch cfg.SSLMode {
-		case "prefer", "require", "verify-ca", "verify-full", "disable":
+		switch cfg.Driver {
+		case conn.DriverPostgres:
+			switch cfg.SSLMode {
+			case "prefer", "require", "verify-ca", "verify-full", "disable":
+			default:
+				return fmt.Errorf("ssl: use prefer, require, verify-ca, verify-full or disable")
+			}
 		default:
-			return fmt.Errorf("ssl: use prefer, require, verify-ca, verify-full or disable")
+			// MySQL/MariaDB/SQL Server expose a simpler set
+			switch cfg.SSLMode {
+			case "prefer", "require", "disable":
+			default:
+				return fmt.Errorf("ssl: use prefer, require or disable")
+			}
 		}
 	}
 	return nil

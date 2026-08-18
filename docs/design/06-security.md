@@ -50,8 +50,8 @@ Table/column names are escaped with each engine's `QuoteIdent` dialect (`"x"`, `
 
 ## Hardening implemented (v0.1.0)
 
-- **`ConnectionConfig.ReadOnly`** — opens SQLite with `mode=ro` (no WAL or `busy_timeout`). A write returns a driver error. Persisted in saved connections.
-- **`ConnectionConfig.SSLMode`** — PostgreSQL sets `sslmode` (`prefer` by default; `require`, `verify-ca`, `verify-full`, `disable`). Persisted in saved connections.
+- **`ConnectionConfig.ReadOnly`** — opens SQLite with `mode=ro` (no WAL or `busy_timeout`). A write returns a driver error. Persisted in saved connections. A global `--read-only` flag and a per-connection toggle now apply it to all engines (PostgreSQL via `default_transaction_read_only`, MySQL/MariaDB via a pinned `SET SESSION TRANSACTION READ ONLY`; SQL Server has no per-session toggle, so it shows a warning and relies on a read-only user).
+- **`ConnectionConfig.SSLMode`** — PostgreSQL sets `sslmode` (`prefer` by default; `require`, `verify-ca`, `verify-full`, `disable`). MySQL/MariaDB and SQL Server expose the same field (`prefer`/`require`/`disable`) mapped to their driver TLS options, so connections that need encryption are no longer stuck with the driver default. Persisted in saved connections, and settable per invocation with `?sslmode=`/`?tls=` in a DSN.
 - Validation of the `SSL` field in the form: invalid values prevent connecting.
 - **Query timeout and cancellation** — queries run with a `context.WithTimeout`
   (configurable in the settings screen, `Ctrl+P`, persisted in `prefs.json`;
@@ -63,9 +63,12 @@ Table/column names are escaped with each engine's `QuoteIdent` dialect (`"x"`, `
 Ordered by impact:
 
 1. **OS keychain** for saved passwords (removes the plaintext tradeoff).
-2. **Global `read-only` flag/option** that applies to all five engines, not just SQLite.
-3. **TLS options for MySQL/MariaDB and SQL Server** (not exposed today; they use the driver default).
-4. **Persisted query history** — if added, make sure it doesn't include passwords (risk of queries with inline credentials).
+2. **Persisted query history** — persisted since v0.2: queries are stored
+   plaintext in `~/.config/relm/history.json` (0600). A query may contain an
+   inline credential (`USE ... PASSWORD`, `IDENTIFY BY`); the risk is
+   documented and the file permissions mitigate it, but the user must not run
+   queries with secrets in them if they share the machine. A future heuristic
+   filter was deliberately rejected (fragile, see LESSONS L-09).
 
 ## What `relm` is NOT
 

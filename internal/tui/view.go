@@ -55,6 +55,9 @@ func (m *Model) render() string {
 	if m.err != "" {
 		body = content + "\n" + styles.StyleError.Render(m.err)
 	}
+	if m.warn != "" {
+		body = body + "\n" + styles.StyleWarn.Render(m.warn)
+	}
 	if m.exported != "" {
 		body = body + "\n" + styles.StyleSuccess.Render(m.exported)
 	}

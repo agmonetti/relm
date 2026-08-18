@@ -43,8 +43,19 @@ type editorDoneMsg struct {
 	token int
 }
 
+// NewOpts configures the initial model. A zero value is a plain start.
+type NewOpts struct {
+	// InitialCfg connects immediately on startup, skipping the connection
+	// screen (used by `relm <dsn>`). A connection error lands on the form.
+	InitialCfg *conn.ConnectionConfig
+	// GlobalReadOnly forces read-only connections for every engine, even those
+	// made from the form or saved connections (used by `--read-only`).
+	GlobalReadOnly bool
+}
+
 // Model is the main bubbletea model.
 type Model struct {
+	opts         NewOpts
 	store        store.Store
 	connect      *screens.ConnScreen
 	settings     *screens.SettingsScreen
@@ -88,6 +99,7 @@ type Model struct {
 	showSidebar bool
 	showHelp    bool
 	err         string
+	warn        string // advisory notice, rendered in amber below the content
 
 	// detail view ("v"): a snapshot of the selected row with full values
 	showDetail   bool
@@ -106,17 +118,22 @@ type Model struct {
 }
 
 // New creates the initial model (connection screen).
-func New() *Model {
+func New(opts ...NewOpts) *Model {
+	var o NewOpts
+	if len(opts) > 0 {
+		o = opts[0]
+	}
 	saved, _ := conn.LoadSaved()
 	p, _ := prefs.Load()
 	exportInput := textinput.New()
 	exportInput.Cursor.BlinkSpeed = screens.CursorBlink
 	exportInput.Prompt = " "
 	exportInput.Width = 40
-	return &Model{
+	m := &Model{
+		opts:         o,
 		connect:      screens.NewConnScreen(saved),
 		settings:     screens.NewSettingsScreen(),
-		editor:       editor.New(),
+		editor:       newEditorWithPersistedHistory(),
 		editorScreen: screens.NewEditorScreen(),
 		exportInput:  exportInput,
 		screen:       ScreenConnect,
@@ -129,9 +146,19 @@ func New() *Model {
 		sidebarW:     p.SidebarWidth,
 		editorH:      p.EditorHeight,
 	}
+	if o.InitialCfg != nil {
+		// show the workspace (with its connecting spinner) instead of flashing
+		// the form for a single frame
+		m.screen = ScreenWorkspace
+	}
+	return m
 }
 
-// Init implements tea.Model.
+// Init implements tea.Model. With an initial DSN it connects immediately,
+// skipping the connection screen.
 func (m *Model) Init() tea.Cmd {
+	if m.opts.InitialCfg != nil {
+		return m.doConnect(*m.opts.InitialCfg)
+	}
 	return nil
 }

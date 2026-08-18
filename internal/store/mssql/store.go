@@ -33,6 +33,16 @@ func New(cfg conn.ConnectionConfig) (*Store, error) {
 		q.Set("database", cfg.Database)
 	}
 	q.Set("connection+timeout", "5")
+	// TLS: "require" mandates encryption with certificate verification,
+	// "disable" sends nothing. "prefer" (and empty) keep the driver default,
+	// which encrypts when the server supports it without demanding a trusted
+	// certificate — so local/dev servers with self-signed certs still connect.
+	switch cfg.SSLMode {
+	case "require":
+		q.Set("encrypt", "mandatory")
+	case "disable":
+		q.Set("encrypt", "disable")
+	}
 	u.RawQuery = q.Encode()
 
 	db, err := sql.Open("sqlserver", u.String())

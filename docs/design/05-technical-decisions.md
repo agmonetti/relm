@@ -142,6 +142,7 @@ dsn := fmt.Sprintf(
 - `parseTime=true` so `time.Time` doesn't arrive as `[]byte`.
 - `timeout=5s` to avoid hanging on unreachable hosts.
 - Don't use `multiStatements=true` (security).
+- TLS via `mc.TLSConfig`: `"preferred"` (prefer), `"true"` (require, verifies the server hostname+CA) or `"false"` (disable). Empty keeps the driver default (no TLS unless the server asks).
 
 ### SQL Server (microsoft/go-mssqldb)
 
@@ -155,6 +156,26 @@ dsn := fmt.Sprintf(
 
 - `connection+timeout=5` seconds.
 - Identifiers are escaped with `[...]`.
+- TLS via the URL params: `encrypt=mandatory` (require) or `encrypt=disable`.
+  `prefer` (and the default) keep the driver default, which encrypts when the
+  server supports it **without demanding a trusted certificate** — so local
+  dev servers with self-signed certificates still connect, which the compose
+  container is one of.
+
+## TLS per engine
+
+The `SSL` field of the form (all network engines) and `?sslmode=`/`?tls=` in a
+DSN feed `cfg.SSLMode`, persisted in `ssl_mode`:
+
+| Engine | prefer | require | disable | extra |
+|---|---|---|---|---|
+| PostgreSQL | `sslmode=prefer` | `sslmode=require` | `sslmode=disable` | `verify-ca`, `verify-full` |
+| MySQL / MariaDB | `mc.TLSConfig="preferred"` | `mc.TLSConfig="true"` | `mc.TLSConfig="false"` | — |
+| SQL Server | driver default (encrypts without cert validation) | `encrypt=mandatory` | `encrypt=disable` | — |
+
+The form validates the accepted values per engine, and a connection against a
+server with an untrusted certificate fails with the driver's literal error
+(shown in the footer), so the user knows TLS did not verify.
 
 ## Edge cases to handle
 
@@ -208,6 +229,19 @@ dsn := fmt.Sprintf(
 | Mouse | Enabled with cell motion (drag-only reporting). A left click focuses a pane; a right-click drag resizes the nearest divider (sidebar width or editor height), persisted in `prefs.json`. Only active on the workspace screen. |
 | Terminal without color support | lipgloss detects it automatically. Render without colors if `TERM=dumb` or similar. |
 | `SIGTERM` / `Ctrl+C` | Exit cleanly: `store.Close()` before terminating. |
+
+## Read-only mode
+
+Available for all five engines via the `Read-only` toggle in the form, the
+persisted `read_only` field of a saved connection, or the global `--read-only`
+flag (merged as `cfg.ReadOnly = cfg.ReadOnly || globalReadOnly` before opening).
+
+| Engine | Enforcement |
+|---|---|
+| SQLite | DSN `mode=ro` (no WAL). Writes fail with `attempt to write a readonly database`. |
+| PostgreSQL | `options=-cdefault_transaction_read_only=on` in the DSN. Every transaction starts read-only. |
+| MySQL / MariaDB | No DSN parameter exists. `Exec`/`ExecContext` pin a connection (`sql.DB.Conn`), run `SET SESSION TRANSACTION READ ONLY` on it and execute the statement there, so a write fails at the server. Reads still use the normal pool. |
+| SQL Server | No per-session read-only toggle exists in T-SQL. Not enforced; the TUI shows an advisory warning and the docs recommend connecting with a read-only user. |
 
 ## Saved connections
 
@@ -330,8 +364,40 @@ So the agent knows what NOT to implement yet:
 - Inline cell editing (too complex for v0.1).
 - SQL syntax highlighting in the editor.
 - Saving passwords to the OS keychain.
-- Persistent query history across sessions.
-- `relm <dsn>` as a CLI shortcut to skip the connection screen.
 - Plugin system.
 
 If any of these features seems necessary to get something basic working, check before implementing.
+
+## Persistent query history
+
+- The in-memory ring buffer (100 entries) is mirrored to
+  `~/.config/relm/history.json` (0600, `RELM_CONFIG_DIR` override like the
+  other files). `editor.SaveHistory` writes the whole list after each query;
+  the ring already caps and dedupes, so the file is always the truth of the
+  in-memory history. `editor.LoadHistory` seeds the editor on startup and on
+  every new session.
+- Written from the UI goroutine only (inside `editorDoneMsg`, next to
+  `History.Push`), never from a query goroutine, so there is no file race.
+  Read/write errors are ignored: a missing or corrupt history just starts empty.
+- **Plaintext by design:** a query can carry inline credentials (e.g.
+  `SET ROLE`/`USE` with a password), and nothing is filtered. The file is 0600
+  and that risk is documented in `06-security.md`; the user controls what they
+  run and store.
+
+## DSN shortcut (`relm <dsn>`)
+
+- `conn.ParseDSN` converts one command-line argument into a `ConnectionConfig`:
+  a bare path (no scheme) is a SQLite file; `sqlite:`/`file:` URIs work too for
+  absolute paths; `postgres://`, `mysql://`, `mariadb://` and `sqlserver://`
+  parse user/password/host/port/database with the engine default port and
+  `localhost` as fallbacks. Anything else is an error reported before the TUI
+  starts (`relm: ...` on stderr, exit 1).
+- The database comes from the URL path (`postgres://h/dbname`), except SQL Server
+  where the standard `?database=` query parameter is used (its URL format has no
+  path database).
+- `?sslmode=` or `?tls=` in the query maps to `ConnectionConfig.SSLMode`, so TLS
+  can be selected per invocation without the form.
+- `main.go` puts the parsed config in `tui.NewOpts.InitialCfg`; `Model.Init()`
+  runs `doConnect` immediately, landing on the workspace with the connecting
+  spinner. A failed initial connection falls back to the connection screen with
+  the error shown, so `Ctrl+N`/the form remain the escape hatch.

@@ -103,6 +103,24 @@ func TestIntegration(t *testing.T) {
 	}
 }
 
+// TestIntegrationTLSOptions verifies the TLS field values that open a
+// connection against the compose container (prefer keeps the driver default,
+// disable sends plaintext; "require" needs a trusted certificate).
+func TestIntegrationTLSOptions(t *testing.T) {
+	for _, ssl := range []string{"prefer", "disable"} {
+		cfg := envCfg(t)
+		cfg.SSLMode = ssl
+		s, err := New(cfg)
+		if err != nil {
+			t.Fatalf("New(tls=%s): %v", ssl, err)
+		}
+		if _, err := s.Query("SELECT @@VERSION"); err != nil {
+			t.Errorf("query tls=%s: %v", ssl, err)
+		}
+		s.Close()
+	}
+}
+
 func contains(list []string, s string) bool {
 	for _, x := range list {
 		if x == s {

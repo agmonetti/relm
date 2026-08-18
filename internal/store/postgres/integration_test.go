@@ -112,3 +112,24 @@ func contains(list []string, s string) bool {
 	}
 	return false
 }
+
+// TestIntegrationReadOnly verifies that a read-only connection rejects writes
+// (via default_transaction_read_only) while reads keep working.
+func TestIntegrationReadOnly(t *testing.T) {
+	cfg := envCfg(t, "SQLISH_TEST_POSTGRES")
+
+	rc := cfg
+	rc.ReadOnly = true
+	ro, err := New(rc)
+	if err != nil {
+		t.Fatalf("New read-only: %v", err)
+	}
+	defer ro.Close()
+
+	if _, err := ro.Exec("CREATE TABLE relm_ro_test (id INT)"); err == nil {
+		t.Error("write must fail in read-only mode")
+	}
+	if _, err := ro.Query("SELECT 1"); err != nil {
+		t.Errorf("read in read-only mode failed: %v", err)
+	}
+}

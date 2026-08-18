@@ -1,0 +1,89 @@
+package conn
+
+import "testing"
+
+func TestParseDSN_SQLite(t *testing.T) {
+	cases := map[string]string{
+		"./app.db":       "./app.db",
+		"/data/app.db":   "/data/app.db",
+		"relm.db":        "relm.db",
+		"sqlite:relm.db": "relm.db",
+		"sqlite:/a/b.db": "/a/b.db",
+		"file:/a/b.db":   "/a/b.db",
+	}
+	for dsn, want := range cases {
+		cfg, err := ParseDSN(dsn)
+		if err != nil {
+			t.Fatalf("ParseDSN(%q): %v", dsn, err)
+		}
+		if cfg.Driver != DriverSQLite {
+			t.Errorf("ParseDSN(%q) Driver = %s, want sqlite", dsn, cfg.Driver)
+		}
+		if cfg.Path != want {
+			t.Errorf("ParseDSN(%q) Path = %q, want %q", dsn, cfg.Path, want)
+		}
+	}
+}
+
+func TestParseDSN_Postgres(t *testing.T) {
+	cfg, err := ParseDSN("postgres://alice:secret@db.example.com:5444/myapp?sslmode=require")
+	if err != nil {
+		t.Fatalf("ParseDSN: %v", err)
+	}
+	if cfg.Driver != DriverPostgres || cfg.User != "alice" || cfg.Password != "secret" ||
+		cfg.Host != "db.example.com" || cfg.Port != 5444 || cfg.Database != "myapp" ||
+		cfg.SSLMode != "require" {
+		t.Errorf("cfg = %+v", cfg)
+	}
+}
+
+func TestParseDSN_Defaults(t *testing.T) {
+	cfg, err := ParseDSN("postgres://host/db")
+	if err != nil {
+		t.Fatalf("ParseDSN: %v", err)
+	}
+	if cfg.Host != "host" || cfg.Port != 5432 || cfg.Database != "db" {
+		t.Errorf("cfg = %+v, want host/localhost default port 5432", cfg)
+	}
+	if cfg.SSLMode != "" {
+		t.Errorf("SSLModes = %q, want empty (engine default)", cfg.SSLMode)
+	}
+}
+
+func TestParseDSN_MySQLMaria(t *testing.T) {
+	for _, scheme := range []string{"mysql", "mariadb"} {
+		cfg, err := ParseDSN(scheme + "://root@h:3307/test?tls=prefer")
+		if err != nil {
+			t.Fatalf("ParseDSN(%s): %v", scheme, err)
+		}
+		if cfg.Driver != Driver(scheme) || cfg.User != "root" || cfg.Port != 3307 ||
+			cfg.Database != "test" || cfg.SSLMode != "prefer" {
+			t.Errorf("%s: cfg = %+v", scheme, cfg)
+		}
+	}
+}
+
+func TestParseDSN_MSSQL(t *testing.T) {
+	cfg, err := ParseDSN("sqlserver://sa:pw@h:1433?database=master&tls=disable")
+	if err != nil {
+		t.Fatalf("ParseDSN: %v", err)
+	}
+	if cfg.Driver != DriverMSSQL || cfg.User != "sa" || cfg.Password != "pw" ||
+		cfg.Database != "master" || cfg.SSLMode != "disable" {
+		t.Errorf("cfg = %+v", cfg)
+	}
+}
+
+func TestParseDSN_Errors(t *testing.T) {
+	bad := []string{
+		"",
+		"oracle://h/db",               // unsupported scheme
+		"postgres://host:notaport/db", // bad port
+		"postgres://host:99999/db",    // port out of range
+	}
+	for _, dsn := range bad {
+		if _, err := ParseDSN(dsn); err == nil {
+			t.Errorf("ParseDSN(%q) expected an error", dsn)
+		}
+	}
+}

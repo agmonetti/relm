@@ -123,6 +123,44 @@ func testStore(t *testing.T, cfg conn.ConnectionConfig) {
 	}
 }
 
+// TestIntegrationTLSOptions verifies the TLS field values that open a
+// connection against the compose containers (prefer and disable; "require"
+// needs a server with a trusted certificate, out of scope here).
+func TestIntegrationTLSOptions(t *testing.T) {
+	drivers := []struct {
+		driver conn.Driver
+		prefix string
+	}{
+		{conn.DriverMySQL, "SQLISH_TEST_MYSQL"},
+		{conn.DriverMariaDB, "SQLISH_TEST_MARIADB"},
+	}
+	for _, d := range drivers {
+		t.Run(string(d.driver), func(t *testing.T) {
+			for _, ssl := range []string{"prefer", "disable"} {
+				cfg := envCfg(t, d.prefix)
+				cfg.Driver = d.driver
+				cfg.SSLMode = ssl
+				var (
+					s   *Store
+					err error
+				)
+				if d.driver == conn.DriverMariaDB {
+					s, err = NewMariaDB(cfg)
+				} else {
+					s, err = NewMySQL(cfg)
+				}
+				if err != nil {
+					t.Fatalf("New(tls=%s): %v", ssl, err)
+				}
+				if _, err := s.Query("SELECT 1"); err != nil {
+					t.Errorf("query tls=%s: %v", ssl, err)
+				}
+				s.Close()
+			}
+		})
+	}
+}
+
 func contains(list []string, s string) bool {
 	for _, x := range list {
 		if x == s {
@@ -130,4 +168,56 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// TestIntegrationReadOnly verifies that a read-only connection rejects writes
+// (via an pinned connection with SET SESSION TRANSACTION READ ONLY) while reads
+// keep working. A writable connection prepares the table first.
+func TestIntegrationReadOnly(t *testing.T) {
+	for _, driver := range []conn.Driver{conn.DriverMySQL, conn.DriverMariaDB} {
+		t.Run(string(driver), func(t *testing.T) {
+			prefix := "SQLISH_TEST_MYSQL"
+			if driver == conn.DriverMariaDB {
+				prefix = "SQLISH_TEST_MARIADB"
+			}
+			cfg := envCfg(t, prefix)
+			cfg.Driver = driver
+
+			var open = func(c conn.ConnectionConfig) (*Store, error) {
+				if c.Driver == conn.DriverMariaDB {
+					return NewMariaDB(c)
+				}
+				return NewMySQL(c)
+			}
+			w, err := open(cfg)
+			if err != nil {
+				t.Fatalf("New: %v", err)
+			}
+			if _, err := w.Exec("DROP TABLE IF EXISTS relm_ro_test"); err != nil {
+				t.Fatalf("drop: %v", err)
+			}
+			if _, err := w.Exec("CREATE TABLE relm_ro_test (id INT)"); err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			if n, err := w.Exec("INSERT INTO relm_ro_test VALUES (1)"); err != nil || n != 1 {
+				t.Fatalf("seed insert: n=%d err=%v", n, err)
+			}
+			w.Close()
+
+			rc := cfg
+			rc.ReadOnly = true
+			ro, err := open(rc)
+			if err != nil {
+				t.Fatalf("New read-only: %v", err)
+			}
+			defer ro.Close()
+
+			if _, err := ro.Exec("INSERT INTO relm_ro_test VALUES (2)"); err == nil {
+				t.Error("write must fail in read-only mode")
+			}
+			if n, err := ro.CountTable("relm_ro_test"); err != nil || n != 1 {
+				t.Errorf("read in read-only mode: n=%d err=%v, want 1", n, err)
+			}
+		})
+	}
 }

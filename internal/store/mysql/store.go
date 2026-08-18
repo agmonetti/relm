@@ -14,8 +14,9 @@ import (
 
 // Store is the MySQL/MariaDB implementation of store.Store.
 type Store struct {
-	db     *sql.DB
-	driver conn.Driver
+	db       *sql.DB
+	driver   conn.Driver
+	readOnly bool
 }
 
 // NewMySQL opens a MySQL connection.
@@ -40,6 +41,17 @@ func newStore(cfg conn.ConnectionConfig, drv conn.Driver) (*Store, error) {
 	mc.DBName = cfg.Database
 	mc.ParseTime = true
 	mc.Timeout = 5 * time.Second
+	// TLS: "prefer" negotiates when the server supports it, "require" demands
+	// it with hostname+CA verification (driver "true"), "disable" forbids it.
+	// An empty value keeps the driver default (no TLS unless the server asks).
+	switch cfg.SSLMode {
+	case "prefer":
+		mc.TLSConfig = "preferred"
+	case "require":
+		mc.TLSConfig = "true"
+	case "disable":
+		mc.TLSConfig = "false"
+	}
 
 	db, err := sql.Open("mysql", mc.FormatDSN())
 	if err != nil {
@@ -49,7 +61,7 @@ func newStore(cfg conn.ConnectionConfig, drv conn.Driver) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("%w: %v", store.ErrConnection, err)
 	}
-	return &Store{db: db, driver: drv}, nil
+	return &Store{db: db, driver: drv, readOnly: cfg.ReadOnly}, nil
 }
 
 func init() {
@@ -190,8 +202,27 @@ func (s *Store) Exec(sql string) (int64, error) {
 	return s.ExecContext(context.Background(), sql)
 }
 
-// ExecContext runs SQL without a result with a context.
+// ExecContext runs SQL without a result with a context. In read-only mode the
+// statement runs on a pinned connection after SET SESSION TRANSACTION READ
+// ONLY, so a write fails at the server instead of silently succeeding. The
+// driver has no DSN parameter for this, and the pool would otherwise recycle
+// connections with the setting lost.
 func (s *Store) ExecContext(ctx context.Context, sql string) (int64, error) {
+	if s.readOnly {
+		conn, err := s.db.Conn(ctx)
+		if err != nil {
+			return 0, err
+		}
+		defer conn.Close()
+		if _, err := conn.ExecContext(ctx, "SET SESSION TRANSACTION READ ONLY"); err != nil {
+			return 0, err
+		}
+		res, err := conn.ExecContext(ctx, sql)
+		if err != nil {
+			return 0, err
+		}
+		return res.RowsAffected()
+	}
 	res, err := s.db.ExecContext(ctx, sql)
 	if err != nil {
 		return 0, err

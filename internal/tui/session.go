@@ -11,11 +11,25 @@ import (
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
+// newEditorWithPersistedHistory creates an editor whose history is preloaded
+// from the previous sessions, so the last queries survive a restart.
+func newEditorWithPersistedHistory() *editor.Editor {
+	e := editor.New()
+	if items := editor.LoadHistory(); items != nil {
+		for _, q := range items {
+			e.History.Push(q)
+		}
+	}
+	return e
+}
+
 // doConnect opens the store and starts loading the browser. The store opening
 // (with the engine's connection timeout) is synchronous; the schema and first
 // page are loaded in the background so connecting to a big or slow database
 // shows a spinner instead of freezing the UI.
 func (m *Model) doConnect(cfg conn.ConnectionConfig) tea.Cmd {
+	// a global --read-only forces every connection, including saved ones
+	cfg.ReadOnly = cfg.ReadOnly || m.opts.GlobalReadOnly
 	m.cancelNav()
 	m.cancelConnect()
 	m.cancelQuery()
@@ -29,9 +43,10 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) tea.Cmd {
 	m.showDetail = false
 	m.exporting = false
 	m.exported = ""
+	m.warn = ""
 	m.editorScreen.ResetResult()
 	m.browser = nil
-	m.editor = editor.New()
+	m.editor = newEditorWithPersistedHistory()
 	m.editorScreen.SetValue("")
 	m.cfgLabel = cfg.Label()
 	m.err = ""
@@ -46,6 +61,11 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) tea.Cmd {
 		return nil
 	}
 	m.store = st
+	// read-only is not enforce-able per session on SQL Server: say so instead
+	// of pretending the flag protects the database.
+	if cfg.ReadOnly && cfg.Driver == conn.DriverMSSQL {
+		m.warn = "read-only is not enforced on mssql — connect with a read-only user"
+	}
 	return m.loadBrowserCmd(st)
 }
 
@@ -111,9 +131,10 @@ func (m *Model) newSession() {
 	m.showDetail = false
 	m.exporting = false
 	m.exported = ""
+	m.warn = ""
 	m.editorScreen.ResetResult()
 	m.browser = nil
-	m.editor = editor.New()
+	m.editor = newEditorWithPersistedHistory()
 	m.editorScreen.SetValue("")
 	m.cfgLabel = ""
 	m.err = ""
