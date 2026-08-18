@@ -622,7 +622,7 @@ func renderLogo(width int) string {
 
 // Fixed form widths: label on the left + input box.
 const (
-	fieldLabelW = 14
+	fieldLabelW = 18
 	fieldBoxW   = 32 // total width of every bracketed box, so the rows align
 )
 

@@ -3,6 +3,7 @@ package screens
 import (
 	"strconv"
 	"strings"
+	"fmt"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -86,7 +87,11 @@ func (s *SettingsScreen) View(width, height int) string {
 	if s.input.Focused() {
 		style = styles.StyleInputBoxFocus
 	}
-	box := style.Width(fieldBoxW).Render(s.input.View())
+	contentView := s.input.View()
+	if w := lipgloss.Width(contentView); w < boxInner {
+		contentView += strings.Repeat(" ", boxInner-w)
+	}
+	box := style.Render(fmt.Sprintf("[ %s ]", contentView))
 
 	var b strings.Builder
 	b.WriteString(styles.StyleHeader.Render("Settings"))
