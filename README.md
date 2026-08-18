@@ -68,7 +68,7 @@ relm --read-only postgres://user:pass@host:5432/mydb   # block every write
 - **SSL/TLS** for every network engine: PostgreSQL (`prefer`/`require`/
   `verify-full`/`disable`), MySQL/MariaDB and SQL Server (`prefer`/`require`/
   `disable`).
-- `∅` for NULL · `…` for long values · no configuration required.
+- `∅` for NULL · `…` for long values · no setup required.
 
 ## Shortcuts
 
@@ -133,6 +133,10 @@ go test -timeout 300s ./internal/store/...
 
 The CI `integration` job runs exactly these against `docker compose`, so the
 network drivers are exercised on every push and pull request (not only locally).
+
+A copy of these variables (with the same defaults) is in
+[`.env.example`](.env.example); Go does not load `.env` files, so export them
+by hand as shown above.
 
 ## Documentation
 
