@@ -142,14 +142,15 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		mainContent = RenderStructure(b, contentW(rightW), mainBodyH)
 	} else if len(b.Tables) == 0 {
 		mainContent = styles.StyleHeaderDim.Render("no tables — use the editor to create one")
-	} else if b.ActiveTable != "" && len(b.Rows) == 0 {
-		mainContent = styles.StyleHeaderDim.Render("empty table")
 	} else {
 		cols := make([]string, len(b.Columns))
 		for i, c := range b.Columns {
 			cols[i] = c.Name
 		}
 		mainContent = RenderDataTable(cols, b.Rows, b.Cursor, contentW(rightW), mainBodyH)
+		if len(b.Rows) == 0 && len(b.Columns) > 0 {
+			mainContent += "\n" + styles.StyleHeaderDim.Render("empty table")
+		}
 	}
 
 	// editor pane: title + editor

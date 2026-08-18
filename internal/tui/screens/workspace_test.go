@@ -39,6 +39,41 @@ func TestRenderWorkspace_ShowsPaneTitles(t *testing.T) {
 	}
 }
 
+func TestRenderWorkspace_EmptyTableShowsColumns(t *testing.T) {
+	b := &browser.Browser{
+		Tables:      []string{"orders", "users"},
+		ActiveTable: "users",
+		Columns: []store.Column{
+			{Name: "id", Type: "INTEGER", PK: true},
+			{Name: "name", Type: "TEXT"},
+			{Name: "email", Type: "TEXT"},
+		},
+		Rows:      nil,
+		TotalRows: 0,
+		PageSize:  50,
+	}
+	out := RenderWorkspace(b, NewEditorScreen(), sampleTestEditor(),
+		FocusMain, false, ComputeLayout(100, 24, true, 0, 0), 0, 100, 24)
+
+	foundHeader := false
+	foundHint := false
+	for _, l := range strings.Split(out, "\n") {
+		s := ansi.Strip(l)
+		if strings.Contains(s, "id") && strings.Contains(s, "name") && strings.Contains(s, "email") {
+			foundHeader = true
+		}
+		if strings.Contains(s, "empty table") {
+			foundHint = true
+		}
+	}
+	if !foundHeader {
+		t.Error("empty table must still show the column headers")
+	}
+	if !foundHint {
+		t.Error("empty table must show the 'empty table' hint")
+	}
+}
+
 func TestRenderWorkspace_ExactHeight(t *testing.T) {
 	for _, h := range []int{12, 20, 30} {
 		out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
