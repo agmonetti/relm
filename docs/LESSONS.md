@@ -164,7 +164,7 @@ This file documents crossroads and decisions the agent makes during development,
 
 **Crossroads:** the engines compiled and the unit-tested dialects passed, but real syntax and introspection bugs only appeared against real servers (docker) — the mssql case above.
 
-**Decision:** per-engine integration tests triggered by env vars (`SQLISH_TEST_<MOTOR>_HOST`, etc.) that exercise the whole `Store` interface: tables, columns, constraints, indexes, count, pagination, version. They skip with `t.Skip` if there's no env var, so `go test ./...` always passes.
+**Decision:** per-engine integration tests triggered by env vars (`RELM_TEST_<MOTOR>_HOST`, etc.) that exercise the whole `Store` interface: tables, columns, constraints, indexes, count, pagination, version. They skip with `t.Skip` if there's no env var, so `go test ./...` always passes.
 
 **Lesson:** the phase-7 done criterion ("connect to each engine in docker") is what really validates the work. Docker is available in this environment: use ephemeral containers (`--rm`) with standard ports.
 

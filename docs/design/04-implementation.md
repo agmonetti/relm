@@ -232,7 +232,7 @@ $ ./relm
    docker compose up -d
    docker compose ps   # all 4 must be healthy
    ```
-   Tests skip (`t.Skip`) if the env var is not set. Env vars: `SQLISH_TEST_POSTGRES_HOST` / `_USER` / `_PASSWORD` / `_DATABASE` (same for `MYSQL`, `MARIADB`, `MSSQL`).
+   Tests skip (`t.Skip`) if the env var is not set. Env vars: `RELM_TEST_POSTGRES_HOST` / `_USER` / `_PASSWORD` / `_DATABASE` (same for `MYSQL`, `MARIADB`, `MSSQL`).
 
 ### Done criteria
 

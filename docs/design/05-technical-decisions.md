@@ -308,10 +308,10 @@ ERROR: PERMISSION DENIED
 - **SQLite:** use `":memory:"` as path for store, browser and editor tests — creates no files and is the reference engine for all UI tests.
 - **Other engines:** integration tests inside `internal/store/<engine>/`, triggered by separate env vars. If the var isn't set, `t.Skip`:
   ```go
-  // SQLISH_TEST_POSTGRES_HOST=localhost
-  // SQLISH_TEST_POSTGRES_USER=postgres
-  // SQLISH_TEST_POSTGRES_PASSWORD=postgres
-  // SQLISH_TEST_POSTGRES_DATABASE=test
+  // RELM_TEST_POSTGRES_HOST=localhost
+  // RELM_TEST_POSTGRES_USER=postgres
+  // RELM_TEST_POSTGRES_PASSWORD=postgres
+  // RELM_TEST_POSTGRES_DATABASE=test
   // (same pattern with MYSQL, MARIADB, MSSQL)
   ```
   - The setup creates a test table `relm_test`, runs the same assertions as the SQLite test.

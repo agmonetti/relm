@@ -26,7 +26,7 @@ func envCfg(t *testing.T, prefix string) conn.ConnectionConfig {
 
 // TestIntegration exercises the Store interface against a real server.
 func TestIntegration(t *testing.T) {
-	cfg := envCfg(t, "SQLISH_TEST_POSTGRES")
+	cfg := envCfg(t, "RELM_TEST_POSTGRES")
 
 	s, err := New(cfg)
 	if err != nil {
@@ -116,7 +116,7 @@ func contains(list []string, s string) bool {
 // TestIntegrationReadOnly verifies that a read-only connection rejects writes
 // (via default_transaction_read_only) while reads keep working.
 func TestIntegrationReadOnly(t *testing.T) {
-	cfg := envCfg(t, "SQLISH_TEST_POSTGRES")
+	cfg := envCfg(t, "RELM_TEST_POSTGRES")
 
 	rc := cfg
 	rc.ReadOnly = true

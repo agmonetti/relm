@@ -892,9 +892,9 @@ func TestDefaultName(t *testing.T) {
 }
 
 func TestModel_ConnectToPostgres(t *testing.T) {
-	host := os.Getenv("SQLISH_TEST_POSTGRES_HOST")
+	host := os.Getenv("RELM_TEST_POSTGRES_HOST")
 	if host == "" {
-		t.Skip("SQLISH_TEST_POSTGRES_HOST not set")
+		t.Skip("RELM_TEST_POSTGRES_HOST not set")
 	}
 
 	m := newModel(t)
@@ -906,11 +906,11 @@ func TestModel_ConnectToPostgres(t *testing.T) {
 	press(t, m, host)
 	pressKey(t, m, "tab") // Port
 	pressKey(t, m, "tab") // User
-	press(t, m, os.Getenv("SQLISH_TEST_POSTGRES_USER"))
+	press(t, m, os.Getenv("RELM_TEST_POSTGRES_USER"))
 	pressKey(t, m, "tab") // Password
-	press(t, m, os.Getenv("SQLISH_TEST_POSTGRES_PASSWORD"))
+	press(t, m, os.Getenv("RELM_TEST_POSTGRES_PASSWORD"))
 	pressKey(t, m, "tab") // Database
-	press(t, m, os.Getenv("SQLISH_TEST_POSTGRES_DATABASE"))
+	press(t, m, os.Getenv("RELM_TEST_POSTGRES_DATABASE"))
 	pressKey(t, m, "enter")
 
 	if m.screen != ScreenWorkspace {

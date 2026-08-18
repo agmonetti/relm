@@ -9,17 +9,17 @@ import (
 
 func envCfg(t *testing.T) conn.ConnectionConfig {
 	t.Helper()
-	host := os.Getenv("SQLISH_TEST_MSSQL_HOST")
+	host := os.Getenv("RELM_TEST_MSSQL_HOST")
 	if host == "" {
-		t.Skip("env SQLISH_TEST_MSSQL_HOST not set; skipping integration test")
+		t.Skip("env RELM_TEST_MSSQL_HOST not set; skipping integration test")
 	}
 	return conn.ConnectionConfig{
 		Driver:   conn.DriverMSSQL,
 		Host:     host,
 		Port:     1433,
-		User:     os.Getenv("SQLISH_TEST_MSSQL_USER"),
-		Password: os.Getenv("SQLISH_TEST_MSSQL_PASSWORD"),
-		Database: os.Getenv("SQLISH_TEST_MSSQL_DATABASE"),
+		User:     os.Getenv("RELM_TEST_MSSQL_USER"),
+		Password: os.Getenv("RELM_TEST_MSSQL_PASSWORD"),
+		Database: os.Getenv("RELM_TEST_MSSQL_DATABASE"),
 	}
 }
 

@@ -26,14 +26,14 @@ func envCfg(t *testing.T, prefix string) conn.ConnectionConfig {
 
 // TestIntegrationMySQL exercises the engine against a real MySQL.
 func TestIntegrationMySQL(t *testing.T) {
-	cfg := envCfg(t, "SQLISH_TEST_MYSQL")
+	cfg := envCfg(t, "RELM_TEST_MYSQL")
 	cfg.Driver = conn.DriverMySQL
 	testStore(t, cfg)
 }
 
 // TestIntegrationMariaDB exercises the engine against a real MariaDB.
 func TestIntegrationMariaDB(t *testing.T) {
-	cfg := envCfg(t, "SQLISH_TEST_MARIADB")
+	cfg := envCfg(t, "RELM_TEST_MARIADB")
 	cfg.Driver = conn.DriverMariaDB
 	testStore(t, cfg)
 }
@@ -131,8 +131,8 @@ func TestIntegrationTLSOptions(t *testing.T) {
 		driver conn.Driver
 		prefix string
 	}{
-		{conn.DriverMySQL, "SQLISH_TEST_MYSQL"},
-		{conn.DriverMariaDB, "SQLISH_TEST_MARIADB"},
+		{conn.DriverMySQL, "RELM_TEST_MYSQL"},
+		{conn.DriverMariaDB, "RELM_TEST_MARIADB"},
 	}
 	for _, d := range drivers {
 		t.Run(string(d.driver), func(t *testing.T) {
@@ -176,9 +176,9 @@ func contains(list []string, s string) bool {
 func TestIntegrationReadOnly(t *testing.T) {
 	for _, driver := range []conn.Driver{conn.DriverMySQL, conn.DriverMariaDB} {
 		t.Run(string(driver), func(t *testing.T) {
-			prefix := "SQLISH_TEST_MYSQL"
+			prefix := "RELM_TEST_MYSQL"
 			if driver == conn.DriverMariaDB {
-				prefix = "SQLISH_TEST_MARIADB"
+				prefix = "RELM_TEST_MARIADB"
 			}
 			cfg := envCfg(t, prefix)
 			cfg.Driver = driver

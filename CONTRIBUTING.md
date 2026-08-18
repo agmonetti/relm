@@ -43,14 +43,14 @@ drivers:
 ```bash
 docker compose up -d --wait
 
-SQLISH_TEST_POSTGRES_HOST=localhost SQLISH_TEST_POSTGRES_USER=postgres \
-SQLISH_TEST_POSTGRES_PASSWORD=postgres SQLISH_TEST_POSTGRES_DATABASE=test \
-SQLISH_TEST_MYSQL_HOST=localhost SQLISH_TEST_MYSQL_USER=root \
-SQLISH_TEST_MYSQL_PASSWORD=root SQLISH_TEST_MYSQL_DATABASE=test \
-SQLISH_TEST_MARIADB_HOST=localhost SQLISH_TEST_MARIADB_USER=root \
-SQLISH_TEST_MARIADB_PASSWORD=root SQLISH_TEST_MARIADB_DATABASE=test \
-SQLISH_TEST_MSSQL_HOST=localhost SQLISH_TEST_MSSQL_USER=sa \
-SQLISH_TEST_MSSQL_PASSWORD='Str0ng!Passw0rd' SQLISH_TEST_MSSQL_DATABASE=master \
+RELM_TEST_POSTGRES_HOST=localhost RELM_TEST_POSTGRES_USER=postgres \
+RELM_TEST_POSTGRES_PASSWORD=postgres RELM_TEST_POSTGRES_DATABASE=test \
+RELM_TEST_MYSQL_HOST=localhost RELM_TEST_MYSQL_USER=root \
+RELM_TEST_MYSQL_PASSWORD=root RELM_TEST_MYSQL_DATABASE=test \
+RELM_TEST_MARIADB_HOST=localhost RELM_TEST_MARIADB_USER=root \
+RELM_TEST_MARIADB_PASSWORD=root RELM_TEST_MARIADB_DATABASE=test \
+RELM_TEST_MSSQL_HOST=localhost RELM_TEST_MSSQL_USER=sa \
+RELM_TEST_MSSQL_PASSWORD='Str0ng!Passw0rd' RELM_TEST_MSSQL_DATABASE=master \
 go test -timeout 300s ./internal/store/...
 
 docker compose down
@@ -76,7 +76,7 @@ The same command set runs in CI on every push and pull request.
   `testing` package, matching the rest of the repo.
 - Table-driven tests are the norm where inputs vary.
 - New engine-level behavior should be covered by an integration test guarded by
-  its `SQLISH_TEST_<ENGINE>_HOST` env var (they skip when unset).
+  its `RELM_TEST_<ENGINE>_HOST` env var (they skip when unset).
 
 ## Commit messages
 
