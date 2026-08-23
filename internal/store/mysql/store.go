@@ -178,17 +178,30 @@ func (s *Store) Query(sql string) (*store.Result, error) {
 // QueryContext runs arbitrary SQL with a context, so it can be cancelled or
 // bounded by a timeout.
 func (s *Store) QueryContext(ctx context.Context, sql string) (*store.Result, error) {
-	rows, err := s.db.QueryContext(ctx, sql)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return store.ScanResult(rows)
+	return s.QueryContextMax(ctx, sql, 0)
 }
 
 // QueryContextMax runs a query that returns rows, stopping after max rows
-// (0 = unlimited) and marking Result.Truncated when the result is longer.
+// (0 = unlimited) and marking Result.Truncated when the result is longer. In
+// read-only mode it pins a connection and enforces READ ONLY so stored procedures
+// or expressions cannot write.
 func (s *Store) QueryContextMax(ctx context.Context, sql string, max int) (*store.Result, error) {
+	if s.readOnly {
+		conn, err := s.db.Conn(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		if _, err := conn.ExecContext(ctx, "SET SESSION TRANSACTION READ ONLY"); err != nil {
+			return nil, err
+		}
+		rows, err := conn.QueryContext(ctx, sql)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		return store.ScanResultMax(rows, max)
+	}
 	rows, err := s.db.QueryContext(ctx, sql)
 	if err != nil {
 		return nil, err
