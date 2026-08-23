@@ -280,9 +280,9 @@ func (s *Store) SelectTableKeysetPageContext(ctx context.Context, table, key str
 	return store.ScanResult(rows)
 }
 
-// keyType returns the information_schema data_type of a column (e.g.
-// "integer", "uuid", "character varying"), which doubles as a valid PostgreSQL
-// cast target. The result is cached per table+column.
+// keyType returns the PostgreSQL data type of a column formatted for casting
+// (e.g. "integer", "uuid", "text", "public.my_enum", "integer[]"). The result
+// is cached per table+column.
 func (s *Store) keyType(table, key string) (string, error) {
 	cacheKey := table + "\x00" + key
 	if v, ok := s.keyTypes.Load(cacheKey); ok {
@@ -290,8 +290,11 @@ func (s *Store) keyType(table, key string) (string, error) {
 	}
 	var dt string
 	if err := s.db.QueryRow(`
-		SELECT data_type FROM information_schema.columns
-		WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`,
+		SELECT format_type(a.atttypid, a.atttypmod)
+		FROM pg_attribute a
+		JOIN pg_class t ON a.attrelid = t.oid
+		JOIN pg_namespace n ON t.relnamespace = n.oid
+		WHERE n.nspname = current_schema() AND t.relname = $1 AND a.attname = $2`,
 		table, key).Scan(&dt); err != nil {
 		return "", fmt.Errorf("store.keyType(%s.%s): %w", table, key, err)
 	}
