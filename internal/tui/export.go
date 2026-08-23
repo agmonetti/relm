@@ -119,6 +119,11 @@ func writeExport(res *store.Result, name string) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
+	if dir := filepath.Dir(name); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "", 0, err
+		}
+	}
 	if err := os.WriteFile(name, buf.Bytes(), 0o644); err != nil {
 		return "", 0, err
 	}

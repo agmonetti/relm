@@ -122,6 +122,25 @@ func TestExport_BrowserPageToCSV(t *testing.T) {
 	}
 }
 
+func TestExport_CreatesParentDirectories(t *testing.T) {
+	m := connect(t)
+	pressAlt(t, m, "3")
+	press(t, m, "SELECT 1")
+	pressKey(t, m, "ctrl+r")
+
+	pressAlt(t, m, "e")
+	out := filepath.Join(t.TempDir(), "nested", "sub", "dir", "out.csv")
+	m.exportInput.SetValue(out)
+	pressKey(t, m, "enter")
+
+	if m.exporting {
+		t.Fatal("prompt should close after successful export with directory creation")
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Fatalf("expected file to exist: %v", err)
+	}
+}
+
 func TestExport_WriteErrorKeepsPromptOpen(t *testing.T) {
 	m := connect(t)
 	pressAlt(t, m, "3")
@@ -129,7 +148,8 @@ func TestExport_WriteErrorKeepsPromptOpen(t *testing.T) {
 	pressKey(t, m, "ctrl+r")
 
 	pressAlt(t, m, "e")
-	m.exportInput.SetValue(filepath.Join(t.TempDir(), "no-such-dir", "out.csv"))
+	// /dev/null/cannot-be-a-dir/out.csv will fail to create directory
+	m.exportInput.SetValue("/dev/null/cannot-be-a-dir/out.csv")
 	pressKey(t, m, "enter")
 
 	if !m.exporting {

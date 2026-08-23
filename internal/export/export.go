@@ -78,7 +78,11 @@ func (r orderedRow) MarshalJSON() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		vb, err := jsonNoEscape(r.values[i])
+		var val any
+		if i < len(r.values) {
+			val = r.values[i]
+		}
+		vb, err := jsonNoEscape(val)
 		if err != nil {
 			return nil, err
 		}
