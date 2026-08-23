@@ -60,13 +60,16 @@ func (m *Model) loadBrowserCmd(st store.Store) tea.Cmd {
 	m.cancelConnect()
 	m.connectCancel = cancel
 	m.connecting = true
-	return func() tea.Msg {
-		b, err := browser.New(ctx, st)
-		if err != nil {
-			return browserDoneMsg{token: token, err: err, load: true}
-		}
-		return browserDoneMsg{token: token, b: b, load: true}
-	}
+	return tea.Batch(
+		func() tea.Msg {
+			b, err := browser.New(ctx, st)
+			if err != nil {
+				return browserDoneMsg{token: token, err: err, load: true}
+			}
+			return browserDoneMsg{token: token, b: b, load: true}
+		},
+		m.spinner.Tick,
+	)
 }
 
 // cancelNav cancels a running browser navigation, if any.

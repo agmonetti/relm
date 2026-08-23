@@ -140,6 +140,17 @@ func pressAlt(t *testing.T, m *Model, digit string) {
 // the messages it produces (like the bubbletea program does at runtime).
 func step(t *testing.T, m *Model, msg tea.Msg) {
 	t.Helper()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, sub := range batch {
+			if sub == nil {
+				continue
+			}
+			if subMsg := sub(); subMsg != nil {
+				step(t, m, subMsg)
+			}
+		}
+		return
+	}
 	updated, cmd := m.Update(msg)
 	m2, ok := updated.(*Model)
 	if !ok {
