@@ -127,8 +127,10 @@ func splitStatements(sql string) []Statement {
 		started = false
 	}
 
-	// 0 = code, 1 = single-quoted string, 2 = line comment, 3 = block comment
+	// 0 = code, 1 = single-quoted string, 2 = line comment, 3 = block comment,
+	// 4 = double-quoted ident, 5 = backtick ident, 6 = bracket ident, 7 = dollar-quoted string
 	mode := 0
+	dollarTag := ""
 	for i := 0; i < len(sql); i++ {
 		c := sql[i]
 		if c == '\n' {
@@ -162,11 +164,98 @@ func splitStatements(sql string) []Statement {
 				i++
 				mode = 0
 			}
+		case 4: // double-quoted identifier "..."
+			b.WriteByte(c)
+			if c == '"' {
+				if i+1 < len(sql) && sql[i+1] == '"' { // "" escaped
+					b.WriteByte(sql[i+1])
+					i++
+				} else {
+					mode = 0
+				}
+			}
+		case 5: // backtick-quoted identifier `...`
+			b.WriteByte(c)
+			if c == '`' {
+				if i+1 < len(sql) && sql[i+1] == '`' { // `` escaped
+					b.WriteByte(sql[i+1])
+					i++
+				} else {
+					mode = 0
+				}
+			}
+		case 6: // bracket-quoted identifier [...]
+			b.WriteByte(c)
+			if c == ']' {
+				if i+1 < len(sql) && sql[i+1] == ']' { // ]] escaped
+					b.WriteByte(sql[i+1])
+					i++
+				} else {
+					mode = 0
+				}
+			}
+		case 7: // dollar-quoted string $tag$...$tag$
+			if strings.HasPrefix(sql[i:], dollarTag) {
+				b.WriteString(dollarTag)
+				// add line counts if dollarTag has newlines (unlikely but safe)
+				for k := 0; k < len(dollarTag); k++ {
+					if dollarTag[k] == '\n' {
+						line++
+					}
+				}
+				i += len(dollarTag) - 1
+				mode = 0
+			} else {
+				b.WriteByte(c)
+			}
 		default: // code
 			switch {
 			case c == '\'':
 				mode = 1
 				if !started {
+					startLine = line
+					started = true
+				}
+				b.WriteByte(c)
+			case c == '"':
+				mode = 4
+				if !started {
+					startLine = line
+					started = true
+				}
+				b.WriteByte(c)
+			case c == '`':
+				mode = 5
+				if !started {
+					startLine = line
+					started = true
+				}
+				b.WriteByte(c)
+			case c == '[':
+				mode = 6
+				if !started {
+					startLine = line
+					started = true
+				}
+				b.WriteByte(c)
+			case c == '$':
+				if j := i + 1; j < len(sql) {
+					for j < len(sql) && isTagChar(sql[j]) {
+						j++
+					}
+					if j < len(sql) && sql[j] == '$' {
+						dollarTag = sql[i : j+1]
+						mode = 7
+						if !started {
+							startLine = line
+							started = true
+						}
+						b.WriteString(dollarTag)
+						i = j
+						break
+					}
+				}
+				if !started && !isSpace(c) {
 					startLine = line
 					started = true
 				}
@@ -204,6 +293,17 @@ func isIdentChar(c byte) bool {
 	case c >= 'A' && c <= 'Z', c >= 'a' && c <= 'z', c >= '0' && c <= '9':
 		return true
 	case c == '_', c == '$':
+		return true
+	}
+	return false
+}
+
+// isTagChar reports whether c can be part of a PostgreSQL dollar-quote tag (letters, digits, underscore).
+func isTagChar(c byte) bool {
+	switch {
+	case c >= 'A' && c <= 'Z', c >= 'a' && c <= 'z', c >= '0' && c <= '9':
+		return true
+	case c == '_':
 		return true
 	}
 	return false
@@ -281,15 +381,15 @@ func isWrite(q string) bool {
 }
 
 // firstKeyword returns the first keyword of the SQL, skipping leading
-// whitespace and comments, so a leading "-- note" or a bare "SELECT;" are
-// recognized.
+// whitespace, parentheses and comments, so a leading "-- note", "(SELECT...)"
+// or a bare "SELECT;" are recognized.
 func firstKeyword(q string) string {
 	s := strings.ToUpper(q)
 	i := 0
 	for i < len(s) {
 		c := s[i]
 		switch {
-		case c == ' ' || c == '\t' || c == '\r' || c == '\n':
+		case c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '(':
 			i++
 		case c == '-' && i+1 < len(s) && s[i+1] == '-':
 			i += 2

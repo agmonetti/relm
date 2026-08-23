@@ -331,6 +331,8 @@ func TestEditor_ReturnsRows(t *testing.T) {
 		{"UPDATE t SET x = 1", false},
 		{"DELETE FROM t", false},
 		{"SELECT * FROM #temp", true},
+		{"(SELECT 1)", true},
+		{"((SELECT 1) UNION (SELECT 2))", true},
 	}
 	for _, tc := range cases {
 		if got := e.returnsRows(tc.sql); got != tc.want {
@@ -338,3 +340,56 @@ func TestEditor_ReturnsRows(t *testing.T) {
 		}
 	}
 }
+
+func TestEditor_SplitStatementsSpecialQuotes(t *testing.T) {
+	// Double-quoted identifier with semicolon
+	stmt, multiple := firstStatement(`SELECT * FROM "users;backup"; SELECT 2`)
+	if !multiple {
+		t.Error("expected multiple statements")
+	}
+	if stmt != `SELECT * FROM "users;backup"` {
+		t.Errorf("stmt = %q", stmt)
+	}
+
+	// Backtick identifier with semicolon
+	stmt, multiple = firstStatement("SELECT * FROM `users;backup`; SELECT 2")
+	if !multiple {
+		t.Error("expected multiple statements")
+	}
+	if stmt != "SELECT * FROM `users;backup`" {
+		t.Errorf("stmt = %q", stmt)
+	}
+
+	// Bracket identifier with semicolon
+	stmt, multiple = firstStatement("SELECT * FROM [users;backup]; SELECT 2")
+	if !multiple {
+		t.Error("expected multiple statements")
+	}
+	if stmt != "SELECT * FROM [users;backup]" {
+		t.Errorf("stmt = %q", stmt)
+	}
+
+	// PostgreSQL dollar quotes with semicolon inside
+	sql := "CREATE FUNCTION foo() RETURNS void AS $$ BEGIN SELECT 1; END; $$ LANGUAGE plpgsql; SELECT 2"
+	stmt, multiple = firstStatement(sql)
+	if !multiple {
+		t.Error("expected multiple statements")
+	}
+	if stmt != "CREATE FUNCTION foo() RETURNS void AS $$ BEGIN SELECT 1; END; $$ LANGUAGE plpgsql" {
+		t.Errorf("stmt = %q", stmt)
+	}
+}
+
+func TestEditor_ExecuteValuesQuery(t *testing.T) {
+	st := newTestStore(t)
+	e := New()
+	e.Buffer = "VALUES (1), (2)"
+	if err := e.Execute(st); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if e.Result == nil || len(e.Result.Rows) != 2 {
+		t.Fatalf("Result = %+v, want 2 rows", e.Result)
+	}
+}
+
+
