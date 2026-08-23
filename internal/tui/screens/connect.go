@@ -314,7 +314,14 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 			cmds = append(cmds, c.nextFocus())
 			handled = true
 		case "enter":
-			if idx := c.focus - 1; idx >= 0 {
+			if c.focus == 0 {
+				cmd, err := c.connect()
+				if err != nil {
+					c.err = err.Error()
+				} else if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+			} else if idx := c.focus - 1; idx >= 0 {
 				if vis := c.fieldsVisible(); idx < len(vis) && vis[idx].isToggle {
 					vis[idx].checked = !vis[idx].checked
 				} else if c.focus == c.savedFocus() && len(c.saved) > 0 {

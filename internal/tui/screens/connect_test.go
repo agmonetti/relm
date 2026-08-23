@@ -504,3 +504,22 @@ func TestConnScreen_LabelsLeftAligned(t *testing.T) {
 		t.Fatal("no label row found")
 	}
 }
+
+func TestConnScreen_EnterAtEngineSelectorConnects(t *testing.T) {
+	c := NewConnScreen(nil)
+	c.fields[0].input.SetValue("/tmp/test.db")
+	c.focus = 0 // focus on engine selector
+	_, cmd := c.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("pressing Enter at focus=0 should return a connect cmd")
+	}
+	msg := cmd()
+	cm, ok := msg.(ConnectMsg)
+	if !ok {
+		t.Fatalf("expected ConnectMsg, got %T", msg)
+	}
+	if cm.Cfg.Path != "/tmp/test.db" {
+		t.Errorf("Path = %q, want /tmp/test.db", cm.Cfg.Path)
+	}
+}
+
