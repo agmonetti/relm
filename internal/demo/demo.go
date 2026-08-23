@@ -116,7 +116,13 @@ func Seed(db *sql.DB, driver string) error {
 		}
 	}()
 
-	s := seeder{tx: tx, driver: driver, rng: rand.New(rand.NewSource(42))}
+	s := seeder{
+		tx:     tx,
+		driver: driver,
+		rng:    rand.New(rand.NewSource(42)),
+		stmts:  make(map[string]*sql.Stmt),
+	}
+	defer s.closeStmts()
 	if err := s.data(); err != nil {
 		return err
 	}
@@ -325,6 +331,13 @@ type seeder struct {
 	tx     *sql.Tx
 	driver string
 	rng    *rand.Rand
+	stmts  map[string]*sql.Stmt
+}
+
+func (s *seeder) closeStmts() {
+	for _, stmt := range s.stmts {
+		stmt.Close()
+	}
 }
 
 func (s *seeder) placeholder(i int) string {
@@ -339,19 +352,28 @@ func (s *seeder) placeholder(i int) string {
 }
 
 // exec runs an INSERT with positional values using the engine's placeholder
-// syntax and quoted identifiers.
+// syntax and quoted identifiers, reusing prepared statements per table.
 func (s *seeder) exec(table string, cols []string, vals ...any) error {
-	names := make([]string, len(cols))
-	for i, c := range cols {
-		names[i] = q(s.driver, c)
+	stmt, ok := s.stmts[table]
+	if !ok {
+		names := make([]string, len(cols))
+		for i, c := range cols {
+			names[i] = q(s.driver, c)
+		}
+		phs := make([]string, len(cols))
+		for i := range cols {
+			phs[i] = s.placeholder(i)
+		}
+		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+			q(s.driver, table), strings.Join(names, ", "), strings.Join(phs, ", "))
+		var err error
+		stmt, err = s.tx.Prepare(query)
+		if err != nil {
+			return err
+		}
+		s.stmts[table] = stmt
 	}
-	phs := make([]string, len(cols))
-	for i := range cols {
-		phs[i] = s.placeholder(i)
-	}
-	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-		q(s.driver, table), strings.Join(names, ", "), strings.Join(phs, ", "))
-	_, err := s.tx.Exec(query, vals...)
+	_, err := stmt.Exec(vals...)
 	return err
 }
 
