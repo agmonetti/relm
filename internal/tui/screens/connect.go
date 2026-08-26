@@ -177,8 +177,25 @@ func (c *ConnScreen) field(label string) *field {
 // driver returns the selected engine.
 func (c *ConnScreen) driver() conn.Driver { return conn.Drivers[c.driverIdx] }
 
-// savedFocus is the focus index of the saved list.
+// savedFocus is the focus index of the first saved connection.
 func (c *ConnScreen) savedFocus() int { return len(c.fieldsVisible()) + 1 }
+
+func (c *ConnScreen) isSavedFocus() bool {
+	vis := len(c.fieldsVisible())
+	return len(c.saved) > 0 && c.focus > vis && c.focus <= vis+len(c.saved)
+}
+
+func (c *ConnScreen) currentSavedIdx() int {
+	vis := len(c.fieldsVisible())
+	idx := c.focus - (vis + 1)
+	if idx < 0 {
+		return 0
+	}
+	if idx >= len(c.saved) {
+		return len(c.saved) - 1
+	}
+	return idx
+}
 
 // applyFocus focuses the active input and blurs the rest.
 func (c *ConnScreen) applyFocus() tea.Cmd {
@@ -190,12 +207,31 @@ func (c *ConnScreen) applyFocus() tea.Cmd {
 	if idx := c.focus - 1; idx >= 0 && idx < len(vis) && !vis[idx].isToggle {
 		cmds = append(cmds, vis[idx].input.Focus())
 	}
+	if c.isSavedFocus() {
+		c.savedIdx = c.currentSavedIdx()
+	}
 	return tea.Batch(cmds...)
 }
 
+func (c *ConnScreen) totalFocus() int {
+	return 1 + len(c.fieldsVisible()) + len(c.saved)
+}
+
 func (c *ConnScreen) nextFocus() tea.Cmd {
-	total := c.savedFocus() + 1 // +1 to return to the engine
+	total := c.totalFocus()
+	if total == 0 {
+		return nil
+	}
 	c.focus = (c.focus + 1) % total
+	return c.applyFocus()
+}
+
+func (c *ConnScreen) prevFocus() tea.Cmd {
+	total := c.totalFocus()
+	if total == 0 {
+		return nil
+	}
+	c.focus = (c.focus - 1 + total) % total
 	return c.applyFocus()
 }
 
@@ -267,11 +303,15 @@ func (c *ConnScreen) moveSaved(up bool) {
 	if n == 0 {
 		return
 	}
+	vis := len(c.fieldsVisible())
+	curr := c.currentSavedIdx()
 	if up {
-		c.savedIdx = (c.savedIdx - 1 + n) % n
+		curr = (curr - 1 + n) % n
 	} else {
-		c.savedIdx = (c.savedIdx + 1) % n
+		curr = (curr + 1) % n
 	}
+	c.savedIdx = curr
+	c.focus = vis + 1 + curr
 }
 
 // cfg builds the current config of the form.
@@ -375,11 +415,14 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 		c.width, c.height = msg.Width, msg.Height
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "tab":
+		switch {
+		case msg.Type == tea.KeyTab || msg.String() == "tab":
 			cmds = append(cmds, c.nextFocus())
 			handled = true
-		case "enter":
+		case msg.Type == tea.KeyShiftTab || msg.String() == "shift+tab" || msg.String() == "backtab":
+			cmds = append(cmds, c.prevFocus())
+			handled = true
+		case msg.Type == tea.KeyEnter || msg.String() == "enter":
 			if c.focus == 0 {
 				cmd, err := c.connect()
 				if err != nil {
@@ -387,12 +430,13 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 				} else if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
+			} else if c.isSavedFocus() && len(c.saved) > 0 {
+				cfg := c.saved[c.currentSavedIdx()].ToConfig()
+				cmds = append(cmds, func() tea.Msg { return ConnectMsg{Cfg: cfg} })
 			} else if idx := c.focus - 1; idx >= 0 {
-				if vis := c.fieldsVisible(); idx < len(vis) && vis[idx].isToggle {
+				vis := c.fieldsVisible()
+				if idx < len(vis) && vis[idx].isToggle {
 					vis[idx].checked = !vis[idx].checked
-				} else if c.focus == c.savedFocus() && len(c.saved) > 0 {
-					cfg := c.saved[c.savedIdx].ToConfig()
-					cmds = append(cmds, func() tea.Msg { return ConnectMsg{Cfg: cfg} })
 				} else {
 					cmd, err := c.connect()
 					if err != nil {
@@ -403,22 +447,29 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 				}
 			}
 			handled = true
-		case "left", "right":
+		case msg.String() == "left" || msg.String() == "right":
 			if c.focus == 0 {
 				cmds = append(cmds, c.cycleDriver(msg.String() == "right"))
 				handled = true
 			}
-		case " ", "p", "t":
+		case msg.String() == " " || msg.String() == "p" || msg.String() == "t":
 			if c.focus == 0 {
 				cmds = append(cmds, c.toggleParadigm())
 				handled = true
 			}
-		case "up", "down":
-			if c.focus == c.savedFocus() {
+		case msg.String() == "up" || msg.String() == "down":
+			if c.isSavedFocus() {
 				c.moveSaved(msg.String() == "up")
 				handled = true
+			} else {
+				if msg.String() == "up" {
+					cmds = append(cmds, c.prevFocus())
+				} else {
+					cmds = append(cmds, c.nextFocus())
+				}
+				handled = true
 			}
-		case "ctrl+s":
+		case msg.Type == tea.KeyCtrlS || msg.String() == "ctrl+s":
 			if err := c.validate(); err != nil {
 				c.err = err.Error()
 			} else {
@@ -426,14 +477,14 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 				cmds = append(cmds, func() tea.Msg { return SaveConnectionMsg{Cfg: cfg} })
 			}
 			handled = true
-		case "d":
-			if c.focus == c.savedFocus() && len(c.saved) > 0 {
+		case msg.String() == "d":
+			if c.isSavedFocus() && len(c.saved) > 0 {
 				cmds = append(cmds, func() tea.Msg {
-					return DeleteConnectionMsg{Name: c.saved[c.savedIdx].Name}
+					return DeleteConnectionMsg{Name: c.saved[c.currentSavedIdx()].Name}
 				})
 				handled = true
 			}
-		case "r":
+		case msg.String() == "r":
 			if c.focus == 0 {
 				c.reset()
 				handled = true
@@ -475,9 +526,22 @@ func (c *ConnScreen) ResetForm() { c.reset() }
 
 // SetSaved updates the list of saved connections.
 func (c *ConnScreen) SetSaved(saved []conn.SavedConnection) {
+	wasSaved := c.isSavedFocus()
 	c.saved = saved
-	if c.savedIdx >= len(c.saved) {
+	vis := len(c.fieldsVisible())
+	if len(c.saved) == 0 {
 		c.savedIdx = 0
+		if wasSaved || c.focus > vis {
+			c.focus = 0
+			c.applyFocus()
+		}
+		return
+	}
+	if c.savedIdx >= len(c.saved) {
+		c.savedIdx = len(c.saved) - 1
+	}
+	if wasSaved {
+		c.focus = vis + 1 + c.savedIdx
 	}
 }
 
@@ -497,10 +561,12 @@ func (c *ConnScreen) FieldValue(label string) string {
 	return ""
 }
 
-// FocusOnField reports whether the focus is on a text input (not the engine or
-// the saved list).
+// FocusOnField reports whether the focus is on a text input (not the engine,
+// a toggle checkbox, or the saved list).
 func (c *ConnScreen) FocusOnField() bool {
-	return c.focus >= 1 && c.focus < c.savedFocus()
+	vis := c.fieldsVisible()
+	idx := c.focus - 1
+	return idx >= 0 && idx < len(vis) && !vis[idx].isToggle
 }
 
 // FocusIndex returns the current focus index: 0 = engine, 1..N = form fields,
@@ -671,6 +737,8 @@ func (c *ConnScreen) Activate(k clickable) tea.Cmd {
 		return cmd
 	case clickSaved:
 		c.savedIdx = k.idx
+		vis := len(c.fieldsVisible())
+		c.focus = vis + 1 + k.idx
 		return c.savedCmd()
 	}
 	return nil
@@ -800,9 +868,10 @@ func (c *ConnScreen) renderSaved() string {
 	var b strings.Builder
 	b.WriteString(styles.StyleHeader.Render("Saved"))
 	b.WriteString("\n\n")
+	vis := len(c.fieldsVisible())
 	for i, s := range c.saved {
 		line := fmt.Sprintf("%s  %s", s.Name, s.ToConfig().Label())
-		if c.focus == c.savedFocus() && i == c.savedIdx {
+		if c.isSavedFocus() && c.focus == vis+1+i {
 			b.WriteString(styles.StyleSidebarActive.Render("> " + line))
 		} else {
 			b.WriteString(styles.StyleSidebarItem.Render(line))

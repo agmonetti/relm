@@ -566,3 +566,147 @@ func TestConnScreen_EnterAtEngineSelectorConnects(t *testing.T) {
 		t.Errorf("Path = %q, want /tmp/test.db", cm.Cfg.Path)
 	}
 }
+
+func TestConnScreen_MultipleSavedConnectionsTabNavigation(t *testing.T) {
+	c := NewConnScreen([]conn.SavedConnection{
+		{Name: "local", Driver: conn.DriverSQLite, Path: "/data/local.db"},
+		{Name: "remote", Driver: conn.DriverSQLite, Path: "/data/remote.db"},
+	})
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// SQLite has 2 fields (File, Read-only). Focus sequence:
+	// 0: Engine, 1: File, 2: Read-only, 3: "local", 4: "remote", then wrap to 0.
+	if c.focus != 0 {
+		t.Fatalf("initial focus = %d, want 0", c.focus)
+	}
+
+	// Tab through form to 1st saved
+	c.Update(tea.KeyMsg{Type: tea.KeyTab}) // -> 1: File
+	c.Update(tea.KeyMsg{Type: tea.KeyTab}) // -> 2: Read-only
+	c.Update(tea.KeyMsg{Type: tea.KeyTab}) // -> 3: "local"
+
+	if c.focus != 3 || !c.isSavedFocus() || c.currentSavedIdx() != 0 {
+		t.Fatalf("focus = %d, isSaved = %v, savedIdx = %d; want focus=3, isSaved=true, savedIdx=0",
+			c.focus, c.isSavedFocus(), c.currentSavedIdx())
+	}
+
+	// Tab from 1st saved to 2nd saved
+	c.Update(tea.KeyMsg{Type: tea.KeyTab}) // -> 4: "remote"
+	if c.focus != 4 || !c.isSavedFocus() || c.currentSavedIdx() != 1 {
+		t.Fatalf("focus after Tab from 1st saved = %d, savedIdx = %d; want focus=4, savedIdx=1",
+			c.focus, c.currentSavedIdx())
+	}
+
+	// View output should highlight "> remote"
+	out := ansi.Strip(c.View(100, 30))
+	if !strings.Contains(out, "> remote") {
+		t.Errorf("expected view to contain '> remote', got:\n%s", out)
+	}
+	if strings.Contains(out, "> local") {
+		t.Errorf("expected view not to highlight '> local' when remote is selected, got:\n%s", out)
+	}
+
+	// Pressing Enter on the 2nd saved connection must connect to "remote"
+	_, cmd := c.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected connect cmd on enter for 2nd saved connection")
+	}
+	msg := cmd()
+	cm, ok := msg.(ConnectMsg)
+	if !ok || cm.Cfg.Path != "/data/remote.db" {
+		t.Fatalf("ConnectMsg = %#v, want path /data/remote.db", msg)
+	}
+
+	// Pressing 'd' on 2nd saved connection must emit DeleteConnectionMsg for "remote"
+	_, delCmd := c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	if delCmd == nil {
+		t.Fatal("expected delete cmd on 'd'")
+	}
+	delMsg, ok := delCmd().(DeleteConnectionMsg)
+	if !ok || delMsg.Name != "remote" {
+		t.Fatalf("DeleteConnectionMsg = %#v, want Name: remote", delMsg)
+	}
+
+	// Up arrow moves back to 1st saved ("local")
+	c.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if c.focus != 3 || c.currentSavedIdx() != 0 {
+		t.Fatalf("focus after Up = %d, savedIdx = %d; want focus=3, savedIdx=0",
+			c.focus, c.currentSavedIdx())
+	}
+
+	// Down arrow moves to 2nd saved ("remote")
+	c.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if c.focus != 4 || c.currentSavedIdx() != 1 {
+		t.Fatalf("focus after Down = %d, savedIdx = %d; want focus=4, savedIdx=1",
+			c.focus, c.currentSavedIdx())
+	}
+
+	// Tab wraps back to 0 (Engine)
+	c.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if c.focus != 0 {
+		t.Fatalf("focus after Tab from last saved = %d, want 0", c.focus)
+	}
+
+	// Shift+Tab from Engine goes to last saved ("remote")
+	c.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	if c.focus != 4 || c.currentSavedIdx() != 1 {
+		t.Fatalf("focus after Shift+Tab from Engine = %d, want 4", c.focus)
+	}
+
+	// Shift+Tab again goes to 1st saved ("local")
+	c.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	if c.focus != 3 || c.currentSavedIdx() != 0 {
+		t.Fatalf("focus after Shift+Tab from 2nd saved = %d, want 3", c.focus)
+	}
+}
+
+func TestConnScreen_SetSavedClampsFocus(t *testing.T) {
+	c := NewConnScreen([]conn.SavedConnection{
+		{Name: "c1", Driver: conn.DriverSQLite, Path: "/data/c1.db"},
+		{Name: "c2", Driver: conn.DriverSQLite, Path: "/data/c2.db"},
+	})
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// Focus on 2nd saved ("c2")
+	c.focus = 4
+	c.savedIdx = 1
+
+	// Delete "c2", 1 item remains
+	c.SetSaved([]conn.SavedConnection{
+		{Name: "c1", Driver: conn.DriverSQLite, Path: "/data/c1.db"},
+	})
+	if c.focus != 3 || c.currentSavedIdx() != 0 {
+		t.Fatalf("after deleting c2: focus = %d, savedIdx = %d; want focus=3, savedIdx=0",
+			c.focus, c.currentSavedIdx())
+	}
+
+	// Delete "c1", 0 items remain
+	c.SetSaved(nil)
+	if c.focus != 0 || c.isSavedFocus() {
+		t.Fatalf("after deleting all saved: focus = %d, isSaved = %v; want focus=0, isSaved=false",
+			c.focus, c.isSavedFocus())
+	}
+}
+
+func TestConnScreen_UpDownNavigatesFormFields(t *testing.T) {
+	c := NewConnScreen(nil)
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// 0: Engine -> Down -> 1: File -> Down -> 2: Read-only -> Up -> 1: File -> Up -> 0: Engine
+	c.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if c.focus != 1 {
+		t.Fatalf("focus after Down from Engine = %d, want 1", c.focus)
+	}
+	c.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if c.focus != 2 {
+		t.Fatalf("focus after Down from File = %d, want 2", c.focus)
+	}
+	c.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if c.focus != 1 {
+		t.Fatalf("focus after Up from Read-only = %d, want 1", c.focus)
+	}
+	c.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if c.focus != 0 {
+		t.Fatalf("focus after Up from File = %d, want 0", c.focus)
+	}
+}
