@@ -277,3 +277,108 @@ func TestEditor_SplitStatementsSpecialQuotes(t *testing.T) {
 		t.Errorf("stmts = %+v", stmts)
 	}
 }
+
+// recordingStore is a fake DataSource whose QueryExecutor records the exact
+// buffer/line it receives. It emulates the non-relational engines (Cassandra,
+// Neo4j, ...) that treat their input as a single statement and fail on
+// multi-statement buffers.
+type recordingStore struct {
+	buffer string
+	line   int
+	max    int
+}
+
+func (r *recordingStore) Driver() conn.Driver { return conn.DriverCassandra }
+func (r *recordingStore) Version(context.Context) (string, error) {
+	return "fake", nil
+}
+func (r *recordingStore) Close() error   { return nil }
+func (r *recordingStore) ReadOnly() bool { return true }
+func (r *recordingStore) Catalog() store.CatalogDescriptor {
+	return store.CatalogDescriptor{Title: "KEYS", ItemNoun: "key"}
+}
+func (r *recordingStore) Browse(context.Context, store.BrowseRequest) (store.BrowseResponse, error) {
+	return store.BrowseResponse{}, nil
+}
+func (r *recordingStore) Inspect(context.Context, string) (store.InspectionView, error) {
+	return &store.KeyValueStructure{Key: "k"}, nil
+}
+func (r *recordingStore) Query() store.QueryExecutor { return &recordingExec{r: r} }
+
+// recordingExec implements store.QueryExecutor and captures the incoming call.
+type recordingExec struct {
+	r *recordingStore
+}
+
+func (e *recordingExec) Language() string    { return "CQL" }
+func (e *recordingExec) PromptTitle() string { return "CQL QUERY" }
+func (e *recordingExec) Placeholder() string { return "SELECT ...;" }
+func (e *recordingExec) IsMutation(string) bool {
+	return false
+}
+func (e *recordingExec) Execute(_ context.Context, buffer string, line, maxRows int) (store.DataView, error) {
+	e.r.buffer = buffer
+	e.r.line = line
+	e.r.max = maxRows
+	return &store.TabularData{Columns: []string{"c"}, Rows: [][]string{{"ok"}}}, nil
+}
+
+func TestEditor_ExecuteSendsOnlyStatementAtCursor(t *testing.T) {
+	cases := []struct {
+		line int
+		want string
+	}{
+		{0, "SELECT 1"},
+		{1, "SELECT 2"},
+		{2, "SELECT * FROM users"},
+		{10, "SELECT * FROM users"}, // past the end: last statement
+	}
+	for _, tc := range cases {
+		ds := &recordingStore{}
+		e := New()
+		e.Buffer = "SELECT 1;\nSELECT 2;\nSELECT * FROM users"
+
+		if err := e.ExecuteAt(context.Background(), ds, tc.line); err != nil {
+			t.Fatalf("ExecuteAt(line %d): %v", tc.line, err)
+		}
+		if ds.buffer != tc.want {
+			t.Errorf("line %d: executor received %q, want %q", tc.line, ds.buffer, tc.want)
+		}
+		if e.LastQuery != tc.want {
+			t.Errorf("line %d: LastQuery = %q, want %q", tc.line, e.LastQuery, tc.want)
+		}
+		if tab, ok := e.Data.(*store.TabularData); !ok || len(tab.Rows) != 1 {
+			t.Errorf("line %d: Data = %+v, want the recorded result", tc.line, e.Data)
+		}
+	}
+}
+
+func TestEditor_ExecuteSendsMultilineStatementWhole(t *testing.T) {
+	ds := &recordingStore{}
+	e := New()
+	stmt := "SELECT *\nFROM users\nWHERE id = 1"
+	e.Buffer = stmt
+
+	if err := e.ExecuteAt(context.Background(), ds, 1); err != nil {
+		t.Fatalf("ExecuteAt: %v", err)
+	}
+	if ds.buffer != stmt {
+		t.Errorf("executor received %q, want the whole multi-line statement", ds.buffer)
+	}
+}
+
+func TestEditor_CommentOnlyBufferDoesNotExecute(t *testing.T) {
+	ds := &recordingStore{}
+	e := New()
+	e.Buffer = "-- just a comment\n/* and another */"
+
+	if err := e.ExecuteAt(context.Background(), ds, 0); err != nil {
+		t.Fatalf("ExecuteAt: %v", err)
+	}
+	if ds.buffer != "" {
+		t.Errorf("executor received %q, want no call for a comment-only buffer", ds.buffer)
+	}
+	if e.Data != nil {
+		t.Errorf("Data = %+v, want nil", e.Data)
+	}
+}

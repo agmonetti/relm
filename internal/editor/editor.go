@@ -59,18 +59,23 @@ func (e *Editor) ExecuteAt(ctx context.Context, ds store.DataSource, line int) e
 
 	q := ds.Query()
 	stmts := store.SplitStatements(e.Buffer)
-	stmtText := e.Buffer
-	if len(stmts) > 0 {
-		stmtIdx := 0
-		if len(stmts) > 1 {
-			stmtIdx = store.StatementAt(stmts, line)
-		}
-		stmtText = stmts[stmtIdx].Text
+	if len(stmts) == 0 {
+		// Only comments/whitespace in the buffer: nothing to run. Mirrors the
+		// relational executor, which treats an empty split the same way.
+		return nil
 	}
+	stmtIdx := 0
+	if len(stmts) > 1 {
+		stmtIdx = store.StatementAt(stmts, line)
+	}
+	stmtText := stmts[stmtIdx].Text
 
 	e.Wrote = q.IsMutation(stmtText)
 
-	data, err := q.Execute(ctx, e.Buffer, line, MaxResultRows)
+	// Send the statement under the cursor, never the whole buffer: the
+	// non-relational engines (Cassandra, Neo4j, Redis, Mongo) treat the input
+	// as a single statement and would fail on a multi-statement buffer.
+	data, err := q.Execute(ctx, stmtText, line, MaxResultRows)
 	if err != nil {
 		e.Data = nil
 		e.Error = err.Error()
