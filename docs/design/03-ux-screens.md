@@ -187,6 +187,7 @@ appear below, separated by a line.
 | `Tab` | Move focus to the next pane (sidebar → main → editor) |
 | `Alt+1` / `Alt+2` / `Alt+3` | Jump to sidebar / main / editor |
 | `Alt+E` | Export (prompt to save the result / current table page) |
+| `Alt+C` / `Ctrl+Y` | Copy query editor buffer to clipboard |
 
 > `Alt+1..3` work on every terminal. `Ctrl+1..3` are also bound for terminals
 > with CSI-u support (kitty, wezterm), but `Ctrl+<digit>` is not distinguishable
@@ -211,7 +212,7 @@ appear below, separated by a line.
 | `↑` / `k` | Previous table |
 | `↓` / `j` | Next table |
 | `PgUp` / `PgDn` | Move 10 tables |
-| `Enter` | Open the selected table in the main pane |
+| `Enter` | Open the selected table and focus the main pane |
 | `1..9` | Select table by index |
 
 ### Main pane (browser)
@@ -233,6 +234,7 @@ appear below, separated by a line.
 | Key | Action |
 |---|---|
 | `Ctrl+R` | Run query |
+| `Alt+C` / `Ctrl+Y` | Copy query buffer to clipboard |
 | `↑` (on empty input) | Previous query in history |
 | `↓` (on empty input) | Next query in history |
 | `Ctrl+L` | Clear input |

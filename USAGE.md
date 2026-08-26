@@ -65,11 +65,12 @@ go run ./cmd/demo
 
 - `Tab` / `Alt+1`, `Alt+2`, `Alt+3`: Switch focus between Sidebar (catalog), Main View, and Query Editor.
 - `↑↓` / `j k`: Navigate items/rows.
-- `Enter` in sidebar: Open selected table/collection/key/label.
+- `Enter` in sidebar: Open selected table/collection/key/label and focus main panel.
 - `i`: Structure inspector (columns, collection stats, key metrics, clustering keys, graph schema).
 - `v`: Detail view (full un-truncated row, formatted JSON document, KV entries, graph node & incident edges).
 - `r`: Reload current item.
 - `Alt+E`: Export query result or browsed page to `.csv` or `.json`.
+- `Alt+C` / `Ctrl+Y`: Copy editor query to clipboard.
 - `Ctrl+R`: Execute query in editor.
 - `Esc`: Cancel running query or close detail/structure overlay.
 
