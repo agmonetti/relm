@@ -117,13 +117,35 @@ func (c *ConnScreen) rebuildFields() {
 		in.Width = 24
 		return field{label: label, input: in}
 	}
+	userPlaceholder := "postgres"
+	dbPlaceholder := "mydb"
+	switch c.driver() {
+	case conn.DriverMySQL, conn.DriverMariaDB:
+		userPlaceholder = "root"
+		dbPlaceholder = "test"
+	case conn.DriverMSSQL:
+		userPlaceholder = "sa"
+		dbPlaceholder = "master"
+	case conn.DriverMongo:
+		userPlaceholder = "admin"
+		dbPlaceholder = "test"
+	case conn.DriverRedis:
+		userPlaceholder = ""
+		dbPlaceholder = "0"
+	case conn.DriverCassandra:
+		userPlaceholder = "cassandra"
+		dbPlaceholder = "system"
+	case conn.DriverNeo4j:
+		userPlaceholder = "neo4j"
+		dbPlaceholder = "neo4j"
+	}
 	c.fields = []field{
 		mk("File", "/data/app.db"),
 		mk("Host", "localhost"),
 		mk("Port", strconv.Itoa(conn.DefaultPort(c.driver()))),
-		mk("User", "postgres"),
+		mk("User", userPlaceholder),
 		mk("Password", ""),
-		mk("Database", "mydb"),
+		mk("Database", dbPlaceholder),
 		{label: "Read-only", isToggle: true},
 		mk("SSL", "prefer"),
 	}
@@ -138,6 +160,8 @@ func (c *ConnScreen) rebuildFields() {
 		c.field("Password").input.EchoMode = textinput.EchoPassword
 	}
 	c.field("Port").input.Placeholder = strconv.Itoa(conn.DefaultPort(c.driver()))
+	c.field("User").input.Placeholder = userPlaceholder
+	c.field("Database").input.Placeholder = dbPlaceholder
 }
 
 // field returns the form field with the given label, or nil if it does not exist.

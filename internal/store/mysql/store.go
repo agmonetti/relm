@@ -65,10 +65,10 @@ func newStore(cfg conn.ConnectionConfig, drv conn.Driver) (*Store, error) {
 }
 
 func init() {
-	store.Register(conn.DriverMySQL, func(cfg conn.ConnectionConfig) (store.Store, error) {
+	store.RegisterLegacy(conn.DriverMySQL, func(cfg conn.ConnectionConfig) (store.Store, error) {
 		return NewMySQL(cfg)
 	})
-	store.Register(conn.DriverMariaDB, func(cfg conn.ConnectionConfig) (store.Store, error) {
+	store.RegisterLegacy(conn.DriverMariaDB, func(cfg conn.ConnectionConfig) (store.Store, error) {
 		return NewMariaDB(cfg)
 	})
 }

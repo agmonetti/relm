@@ -1,18 +1,16 @@
-// Command demo creates the example dataset to try relm without any setup:
+// Command demo creates example datasets to try relm without manual setup:
 //
 //	go run ./cmd/demo                 # SQLite demo.db (no server needed)
-//	go run ./cmd/demo --all           # every engine, incl. the 4 network ones
-//	go run ./cmd/demo --postgres      # one engine
+//	go run ./cmd/demo --all           # every engine (relational + non-relational)
+//	go run ./cmd/demo --mongo         # MongoDB collections (users, products, orders)
+//	go run ./cmd/demo --redis         # Redis keys (strings, hashes, lists, sets, zsets)
+//	go run ./cmd/demo --cassandra     # Cassandra keyspace (relm_demo)
+//	go run ./cmd/demo --neo4j         # Neo4j graph nodes & relationships
+//	go run ./cmd/demo --postgres      # PostgreSQL
 //
-// For the network engines a server must already be running; the repo's
-// compose.yaml starts all four (docker compose up -d) with the credentials the
-// command uses by default. Credentials can be overridden with environment
-// variables (POSTGRES_HOST, MYSQL_PASSWORD, MSSQL_HOST, ...).
+// For network engines, start the containers first:
 //
-// The dataset is the same 20 tables with a few thousand rows each (users,
-// orders, products, payments, logs, ...), seeded deterministically, so
-// pagination and the browser can be exercised with a real amount of data on
-// every engine.
+//	docker compose up -d
 package main
 
 import (
@@ -24,39 +22,57 @@ import (
 	"strconv"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"  // MySQL and MariaDB
-	_ "github.com/jackc/pgx/v5/stdlib"  // PostgreSQL
-	_ "github.com/microsoft/go-mssqldb" // SQL Server
-	_ "modernc.org/sqlite"              // SQLite (pure Go)
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/gocql/gocql"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/microsoft/go-mssqldb"
+	neo4jdriver "github.com/neo4j/neo4j-go-driver/v5/neo4j"
+	goredis "github.com/redis/go-redis/v9"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
+	_ "modernc.org/sqlite"
 
 	"github.com/agmonetti/relm/internal/demo"
 )
 
-// default configs match the repo's compose.yaml.
 var defaults = map[string]demo.Config{
-	"postgres": {Host: "localhost", Port: 5432, User: "postgres", Password: "postgres", Database: "test"},
-	"mysql":    {Host: "localhost", Port: 3306, User: "root", Password: "root", Database: "test"},
-	"mariadb":  {Host: "localhost", Port: 3307, User: "root", Password: "root", Database: "test"},
-	"mssql":    {Host: "localhost", Port: 1433, User: "sa", Password: "Str0ng!Passw0rd", Database: "master"},
+	"postgres":  {Host: "localhost", Port: 5432, User: "postgres", Password: "postgres", Database: "test"},
+	"mysql":     {Host: "localhost", Port: 3306, User: "root", Password: "root", Database: "test"},
+	"mariadb":   {Host: "localhost", Port: 3307, User: "root", Password: "root", Database: "test"},
+	"mssql":     {Host: "localhost", Port: 1433, User: "sa", Password: "Str0ng!Passw0rd", Database: "master"},
+	"mongo":     {Host: "localhost", Port: 27017, Database: "test"},
+	"redis":     {Host: "localhost", Port: 6379, Database: "0"},
+	"cassandra": {Host: "localhost", Port: 9042, Database: "relm_demo"},
+	"neo4j":     {Host: "localhost", Port: 7687, User: "neo4j", Password: "password", Database: "neo4j"},
 }
 
-// allEngines is the list in the same order as relm's engine selector.
-var allEngines = []string{"sqlite", "postgres", "mysql", "mariadb", "mssql"}
+var allEngines = []string{
+	"sqlite", "postgres", "mysql", "mariadb", "mssql",
+	"mongo", "redis", "cassandra", "neo4j",
+}
 
 func main() {
 	var sqlite, postgres, mysql, mariadb, mssql bool
+	var mongoFlag, redisFlag, cassandraFlag, neo4jFlag bool
 	var all bool
+
 	flag.BoolVar(&all, "all", false, "seed every engine")
-	flag.BoolVar(&sqlite, "sqlite", false, "seed the SQLite demo.db")
+	flag.BoolVar(&sqlite, "sqlite", false, "seed SQLite (demo.db)")
 	flag.BoolVar(&postgres, "postgres", false, "seed PostgreSQL")
 	flag.BoolVar(&mysql, "mysql", false, "seed MySQL")
 	flag.BoolVar(&mariadb, "mariadb", false, "seed MariaDB")
 	flag.BoolVar(&mssql, "mssql", false, "seed SQL Server")
+	flag.BoolVar(&mongoFlag, "mongo", false, "seed MongoDB")
+	flag.BoolVar(&redisFlag, "redis", false, "seed Redis")
+	flag.BoolVar(&cassandraFlag, "cassandra", false, "seed Cassandra")
+	flag.BoolVar(&neo4jFlag, "neo4j", false, "seed Neo4j")
 	flag.Parse()
 
 	engines := map[string]bool{
 		"sqlite": sqlite, "postgres": postgres, "mysql": mysql,
 		"mariadb": mariadb, "mssql": mssql,
+		"mongo": mongoFlag, "redis": redisFlag, "cassandra": cassandraFlag, "neo4j": neo4jFlag,
 	}
 	if all {
 		for _, e := range allEngines {
@@ -64,7 +80,7 @@ func main() {
 		}
 	}
 	if !any(engines) {
-		engines["sqlite"] = true // default: no server needed
+		engines["sqlite"] = true
 	}
 
 	fail := 0
@@ -72,8 +88,8 @@ func main() {
 		if !engines[e] {
 			continue
 		}
-		if err := seed(e); err != nil {
-			fmt.Fprintf(os.Stderr, "demo %-8s: %v\n", e, err)
+		if err := seedEngine(e); err != nil {
+			fmt.Fprintf(os.Stderr, "demo %-10s: %v\n", e, err)
 			fail++
 			continue
 		}
@@ -105,11 +121,125 @@ func hint(e string) string {
 		return "open it with relm (MariaDB, localhost:3307, user root, database test)"
 	case "mssql":
 		return "open it with relm (SQL Server, localhost:1433, user sa, database master)"
+	case "mongo":
+		return "open it with relm (MongoDB, localhost:27017, database test)"
+	case "redis":
+		return "open it with relm (Redis, localhost:6379, db 0)"
+	case "cassandra":
+		return "open it with relm (Cassandra, localhost:9042, keyspace relm_demo)"
+	case "neo4j":
+		return "open it with relm (Neo4j, localhost:7687, user neo4j, password password)"
 	}
 	return ""
 }
 
-func seed(engine string) error {
+func seedEngine(engine string) error {
+	switch engine {
+	case "mongo":
+		return seedMongo()
+	case "redis":
+		return seedRedis()
+	case "cassandra":
+		return seedCassandra()
+	case "neo4j":
+		return seedNeo4j()
+	default:
+		return seedRelational(engine)
+	}
+}
+
+func seedMongo() error {
+	cfg := cfgFor("mongo")
+	uri := fmt.Sprintf("mongodb://%s:%d/%s", cfg.Host, cfg.Port, cfg.Database)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		return fmt.Errorf("mongo connect: %w", err)
+	}
+	defer client.Disconnect(ctx)
+
+	if err := client.Ping(ctx, readpref.Primary()); err != nil {
+		return fmt.Errorf("cannot reach MongoDB (%s): %w", uri, err)
+	}
+	start := time.Now()
+	if err := demo.SeedMongo(ctx, client, cfg.Database); err != nil {
+		return err
+	}
+	fmt.Printf("  mongo: 3 collections seeded in %s\n", time.Since(start).Round(time.Millisecond))
+	return nil
+}
+
+func seedRedis() error {
+	cfg := cfgFor("redis")
+	dbIdx, _ := strconv.Atoi(cfg.Database)
+	client := goredis.NewClient(&goredis.Options{
+		Addr: fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		DB:   dbIdx,
+	})
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := client.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("cannot reach Redis (localhost:%d): %w", cfg.Port, err)
+	}
+	start := time.Now()
+	if err := demo.SeedRedis(ctx, client); err != nil {
+		return err
+	}
+	fmt.Printf("  redis: keys (strings, hashes, lists, sets, zsets) seeded in %s\n", time.Since(start).Round(time.Millisecond))
+	return nil
+}
+
+func seedCassandra() error {
+	cfg := cfgFor("cassandra")
+	cluster := gocql.NewCluster(cfg.Host)
+	cluster.Port = cfg.Port
+	cluster.ConnectTimeout = 10 * time.Second
+	cluster.Timeout = 10 * time.Second
+
+	session, err := cluster.CreateSession()
+	if err != nil {
+		return fmt.Errorf("cannot reach Cassandra (localhost:%d): %w", cfg.Port, err)
+	}
+	defer session.Close()
+
+	start := time.Now()
+	if err := demo.SeedCassandra(session, cfg.Database); err != nil {
+		return err
+	}
+	fmt.Printf("  cassandra: keyspace %s & 3 tables seeded in %s\n", cfg.Database, time.Since(start).Round(time.Millisecond))
+	return nil
+}
+
+func seedNeo4j() error {
+	cfg := cfgFor("neo4j")
+	uri := fmt.Sprintf("neo4j://%s:%d", cfg.Host, cfg.Port)
+	auth := neo4jdriver.BasicAuth(cfg.User, cfg.Password, "")
+
+	driver, err := neo4jdriver.NewDriverWithContext(uri, auth)
+	if err != nil {
+		return fmt.Errorf("neo4j driver: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	defer driver.Close(ctx)
+
+	if err := driver.VerifyConnectivity(ctx); err != nil {
+		return fmt.Errorf("cannot reach Neo4j (%s): %w", uri, err)
+	}
+	start := time.Now()
+	if err := demo.SeedNeo4j(ctx, driver, cfg.Database); err != nil {
+		return err
+	}
+	fmt.Printf("  neo4j: nodes & relationships seeded in %s\n", time.Since(start).Round(time.Millisecond))
+	return nil
+}
+
+func seedRelational(engine string) error {
 	cfg := cfgFor(engine)
 	if engine == "sqlite" {
 		path := cfg.Path
@@ -141,9 +271,6 @@ func seed(engine string) error {
 	return nil
 }
 
-// cfgFor builds the demo config from the environment, falling back to the
-// compose.yaml credentials. SQLite reads the optional first argument as the
-// path, or writes demo.db.
 func cfgFor(engine string) demo.Config {
 	cfg := defaults[engine]
 	getenv := func(name, def string) string {
@@ -187,6 +314,24 @@ func cfgFor(engine string) demo.Config {
 		cfg.User = getenv("MSSQL_USER", cfg.User)
 		cfg.Password = getenv("MSSQL_PASSWORD", cfg.Password)
 		cfg.Database = getenv("MSSQL_DATABASE", cfg.Database)
+	case "mongo":
+		cfg.Host = getenv("MONGO_HOST", cfg.Host)
+		cfg.Port = intEnv("MONGO_PORT", cfg.Port)
+		cfg.Database = getenv("MONGO_DATABASE", cfg.Database)
+	case "redis":
+		cfg.Host = getenv("REDIS_HOST", cfg.Host)
+		cfg.Port = intEnv("REDIS_PORT", cfg.Port)
+		cfg.Database = getenv("REDIS_DATABASE", cfg.Database)
+	case "cassandra":
+		cfg.Host = getenv("CASSANDRA_HOST", cfg.Host)
+		cfg.Port = intEnv("CASSANDRA_PORT", cfg.Port)
+		cfg.Database = getenv("CASSANDRA_KEYSPACE", cfg.Database)
+	case "neo4j":
+		cfg.Host = getenv("NEO4J_HOST", cfg.Host)
+		cfg.Port = intEnv("NEO4J_PORT", cfg.Port)
+		cfg.User = getenv("NEO4J_USER", cfg.User)
+		cfg.Password = getenv("NEO4J_PASSWORD", cfg.Password)
+		cfg.Database = getenv("NEO4J_DATABASE", cfg.Database)
 	}
 	return cfg
 }
@@ -204,7 +349,6 @@ func isFlag(s string) bool {
 	return len(s) > 1 && s[0] == '-'
 }
 
-// redact hides the password from the DSN shown in error messages.
 func redact(cfg demo.Config) demo.Config {
 	cfg.Password = "xxxx"
 	return cfg

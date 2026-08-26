@@ -1,7 +1,7 @@
 BINARY := relm
 PKG    := ./cmd/relm
 
-.PHONY: build test lint clean demo demo-pg demo-mysql demo-maria demo-mssql demo-all
+.PHONY: build test lint clean demo demo-pg demo-mysql demo-maria demo-mssql demo-mongo demo-redis demo-cassandra demo-neo4j demo-all
 
 build:
 	go build -o bin/$(BINARY) $(PKG)
@@ -30,6 +30,18 @@ demo-maria:
 
 demo-mssql:
 	go run ./cmd/demo --mssql
+
+demo-mongo:
+	go run ./cmd/demo --mongo
+
+demo-redis:
+	go run ./cmd/demo --redis
+
+demo-cassandra:
+	go run ./cmd/demo --cassandra
+
+demo-neo4j:
+	go run ./cmd/demo --neo4j
 
 demo-all:
 	go run ./cmd/demo --all

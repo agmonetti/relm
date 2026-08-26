@@ -9,15 +9,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/agmonetti/relm/internal/editor"
+	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
-// EditorScreen keeps the multiline SQL editor input and its rendering.
+// EditorScreen keeps the multiline query editor input and its rendering.
 type EditorScreen struct {
-	ta textarea.Model
+	ta    textarea.Model
+	title string
 
-	// result viewport: the query results table can be scrolled and a row can
-	// be selected with the mouse
 	resultScroll int
 	resultCursor int
 }
@@ -30,14 +30,25 @@ func NewEditorScreen() *EditorScreen {
 	ta.ShowLineNumbers = true
 	ta.Prompt = ""
 	ta.CharLimit = 0
-	// the line-number gutter is styled like a chip: a tinted background that
-	// highlights the cursor line
 	ta.FocusedStyle.LineNumber = styles.StyleEditorLineNo
 	ta.FocusedStyle.CursorLineNumber = styles.StyleEditorLineNoCursor
 	ta.BlurredStyle.LineNumber = styles.StyleEditorLineNo
 	ta.BlurredStyle.CursorLineNumber = styles.StyleEditorLineNo
-	return &EditorScreen{ta: ta}
+	return &EditorScreen{ta: ta, title: "SQL EDITOR"}
 }
+
+// SetPlaceholder sets the textarea placeholder.
+func (s *EditorScreen) SetPlaceholder(p string) {
+	if p != "" {
+		s.ta.Placeholder = p
+	}
+}
+
+// SetTitle sets the editor pane title.
+func (s *EditorScreen) SetTitle(t string) { s.title = t }
+
+// Title returns the editor pane title.
+func (s *EditorScreen) Title() string { return s.title }
 
 // formatDuration renders a query duration compactly (e.g. 42µs, 1.2ms, 3s).
 func formatDuration(d time.Duration) string {
@@ -70,8 +81,7 @@ func (s *EditorScreen) ResetResult() {
 	s.resultCursor = -1
 }
 
-// EditorInputHeight returns the textarea height for an editor pane content
-// height, matching View.
+// EditorInputHeight returns the textarea height for an editor pane content height.
 func EditorInputHeight(contentH int) int {
 	h := contentH / 2
 	if h < 3 {
@@ -80,9 +90,7 @@ func EditorInputHeight(contentH int) int {
 	return h
 }
 
-// EditorResultsLayout returns the content line where the query results table
-// starts and how many data rows it can show, for the given editor content
-// height. Used both by View and the mouse hit-test so they agree.
+// EditorResultsLayout returns the content line where the query results table starts.
 func EditorResultsLayout(contentH int) (startLine, dataRows int) {
 	ih := EditorInputHeight(contentH)
 	regionH := contentH - ih
@@ -122,8 +130,7 @@ func (s *EditorScreen) Update(msg tea.Msg) (*EditorScreen, tea.Cmd) {
 	return s, cmd
 }
 
-// AtBoundary reports whether the cursor is at the top (up=true) or bottom
-// (up=false) edge of the input.
+// AtBoundary reports whether the cursor is at the top or bottom edge.
 func (s *EditorScreen) AtBoundary(up bool) bool {
 	if up {
 		return s.ta.Line() == 0
@@ -160,50 +167,69 @@ func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 		return b.String()
 	}
 
-	if e.Result == nil {
+	if e.Data == nil {
 		b.WriteString(styles.StyleHeaderDim.Render("  ctrl+r to run"))
 		return b.String()
 	}
 
-	if len(e.Result.Columns) > 0 {
-		rows := e.Result.Rows
-		resH := height - inputHeight
-		if resH < 2 {
-			resH = 2
-		}
-		dataRows := resH - 1
-		maxScroll := len(rows) - dataRows
-		if maxScroll < 0 {
-			maxScroll = 0
-		}
-		scroll := s.resultScroll
-		if scroll < 0 {
-			scroll = 0
-		}
-		if scroll > maxScroll {
-			scroll = maxScroll
-		}
-		view := rows[scroll:]
-		cursor := -1
-		if s.resultCursor >= scroll {
-			cursor = s.resultCursor - scroll
-			if cursor >= len(view) {
-				cursor = len(view) - 1
-			}
-		}
-		b.WriteString(RenderDataTable(e.Result.Columns, view, cursor, width-2, resH))
-		if e.Result.Truncated {
-			b.WriteString(styles.StyleHeaderDim.Render(
-				fmt.Sprintf("  showing first %d rows (%s)", editor.MaxResultRows, formatDuration(e.Duration))) + "\n")
-		}
-	} else if e.Result.Affected >= 0 {
-		noun := "rows"
-		if e.Result.Affected == 1 {
-			noun = "row"
-		}
-		b.WriteString(styles.StyleHeader.Render("STATUS: OK") +
-			styles.StyleHeaderDim.Render(fmt.Sprintf(" (%d %s affected, %s)",
-				e.Result.Affected, noun, formatDuration(e.Duration))))
+	resH := height - inputHeight
+	if resH < 2 {
+		resH = 2
 	}
+
+	switch v := e.Data.(type) {
+	case *store.TabularData:
+		if len(v.Columns) > 0 {
+			rows := v.Rows
+			dataRows := resH - 1
+			maxScroll := len(rows) - dataRows
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			scroll := s.resultScroll
+			if scroll < 0 {
+				scroll = 0
+			}
+			if scroll > maxScroll {
+				scroll = maxScroll
+			}
+			view := rows[scroll:]
+			cursor := -1
+			if s.resultCursor >= scroll {
+				cursor = s.resultCursor - scroll
+				if cursor >= len(view) {
+					cursor = len(view) - 1
+				}
+			}
+			b.WriteString(RenderDataTable(v.Columns, view, cursor, width-2, resH))
+			if v.Truncated {
+				b.WriteString(styles.StyleHeaderDim.Render(
+					fmt.Sprintf("  showing first %d rows (%s)", editor.MaxResultRows, formatDuration(e.Duration))) + "\n")
+			}
+		} else if v.Affected >= 0 {
+			noun := "rows"
+			if v.Affected == 1 {
+				noun = "row"
+			}
+			b.WriteString(styles.StyleHeader.Render("STATUS: OK") +
+				styles.StyleHeaderDim.Render(fmt.Sprintf(" (%d %s affected, %s)",
+					v.Affected, noun, formatDuration(e.Duration))))
+		}
+
+	case *store.DocumentData:
+		b.WriteString(RenderDocumentList(v, s.resultCursor, width-2, resH))
+		b.WriteString("\n" + styles.StyleHeaderDim.Render(fmt.Sprintf("  %s (%s)", v.Summary(), formatDuration(e.Duration))))
+
+	case *store.KeyValueData:
+		b.WriteString(RenderKeyValue(v, s.resultCursor, width-2, resH))
+
+	case *store.GraphData:
+		b.WriteString(RenderGraph(v, s.resultCursor, width-2, resH))
+		b.WriteString("\n" + styles.StyleHeaderDim.Render(fmt.Sprintf("  %s (%s)", v.Summary(), formatDuration(e.Duration))))
+
+	case *store.RawTextData:
+		b.WriteString(RenderRawText(v, width-2, resH))
+	}
+
 	return b.String()
 }

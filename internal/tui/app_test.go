@@ -99,6 +99,13 @@ func connect(t *testing.T) *Model {
 	return m
 }
 
+func execSQL(t *testing.T, m *Model, sql string) {
+	t.Helper()
+	if _, err := m.store.Query().Execute(context.Background(), sql, 0, 100); err != nil {
+		t.Fatalf("execSQL(%q): %v", sql, err)
+	}
+}
+
 var namedKeys = map[string]tea.KeyType{
 	"tab":    tea.KeyTab,
 	"enter":  tea.KeyEnter,
@@ -470,9 +477,7 @@ func TestModel_DetailViewShowsLongValue(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
 	m := connect(t)
 	// insert a row whose first column is very long and select it
-	if _, err := m.store.Exec("INSERT INTO orders (id) VALUES (999)"); err != nil {
-		t.Fatalf("insert: %v", err)
-	}
+	execSQL(t, m, "INSERT INTO orders (id) VALUES (999)")
 	press(t, m, "2")    // open users (has rows)
 	pressAlt(t, m, "2") // focus main
 	// move the cursor to the last row and open its detail
@@ -547,9 +552,7 @@ func TestModel_WheelScrollsSidebar(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir()) // deterministic pane geometry
 	m := connect(t)
 	for i := 0; i < 30; i++ {
-		if _, err := m.store.Exec(fmt.Sprintf("CREATE TABLE t%02d (id INTEGER PRIMARY KEY)", i)); err != nil {
-			t.Fatalf("create: %v", err)
-		}
+		execSQL(t, m, fmt.Sprintf("CREATE TABLE t%02d (id INTEGER PRIMARY KEY)", i))
 	}
 	if err := m.browser.Reload(context.Background(), m.store); err != nil {
 		t.Fatalf("reload: %v", err)
@@ -571,9 +574,7 @@ func TestModel_WheelScrollsMain(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
 	m := connect(t)
 	for i := 0; i < 60; i++ {
-		if _, err := m.store.Exec(fmt.Sprintf("INSERT INTO users (name, email) VALUES ('u%d','u%d@t.com')", i, i)); err != nil {
-			t.Fatalf("insert: %v", err)
-		}
+		execSQL(t, m, fmt.Sprintf("INSERT INTO users (name, email) VALUES ('u%d','u%d@t.com')", i, i))
 	}
 	press(t, m, "2") // open users
 	pressAlt(t, m, "2")
@@ -594,7 +595,7 @@ func TestModel_WheelScrollsMain(t *testing.T) {
 func TestModel_WheelScrollsResults(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
 	m := connect(t)
-	m.editor.Result = &store.Result{Columns: []string{"c"}, Rows: make([][]string, 60)}
+	m.editor.Data = &store.TabularData{Columns: []string{"c"}, Rows: make([][]string, 60)}
 	m.editorScreen.ResetResult()
 
 	step(t, m, mouseMsg(50, 24, tea.MouseButtonWheelDown, tea.MouseActionPress))
@@ -611,9 +612,7 @@ func TestModel_ClickSelectsSidebarTable(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
 	m := connect(t)
 	for i := 0; i < 30; i++ {
-		if _, err := m.store.Exec(fmt.Sprintf("CREATE TABLE t%02d (id INTEGER PRIMARY KEY)", i)); err != nil {
-			t.Fatalf("create: %v", err)
-		}
+		execSQL(t, m, fmt.Sprintf("CREATE TABLE t%02d (id INTEGER PRIMARY KEY)", i))
 	}
 	if err := m.browser.Reload(context.Background(), m.store); err != nil {
 		t.Fatalf("reload: %v", err)
@@ -628,9 +627,7 @@ func TestModel_ClickSelectsMainRow(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
 	m := connect(t)
 	for i := 0; i < 10; i++ {
-		if _, err := m.store.Exec(fmt.Sprintf("INSERT INTO users (name, email) VALUES ('u%d','u%d@t.com')", i, i)); err != nil {
-			t.Fatalf("insert: %v", err)
-		}
+		execSQL(t, m, fmt.Sprintf("INSERT INTO users (name, email) VALUES ('u%d','u%d@t.com')", i, i))
 	}
 	press(t, m, "2")                                                       // open users (10 rows)
 	step(t, m, mouseMsg(50, 6, tea.MouseButtonLeft, tea.MouseActionPress)) // data row 2
@@ -646,7 +643,7 @@ func TestModel_ClickSelectsMainRow(t *testing.T) {
 func TestModel_ClickSelectsResultRow(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
 	m := connect(t)
-	m.editor.Result = &store.Result{Columns: []string{"c"}, Rows: make([][]string, 60)}
+	m.editor.Data = &store.TabularData{Columns: []string{"c"}, Rows: make([][]string, 60)}
 	m.editorScreen.ResetResult()
 
 	step(t, m, mouseMsg(50, 24, tea.MouseButtonLeft, tea.MouseActionPress)) // first result row
@@ -689,11 +686,12 @@ func TestModel_EditorExecutesQuery(t *testing.T) {
 	if m.loading {
 		t.Fatal("query did not finish: loading stayed true")
 	}
-	if m.editor == nil || m.editor.Result == nil {
+	tab, ok := m.editor.Data.(*store.TabularData)
+	if !ok || tab == nil {
 		t.Fatalf("editor without result after running")
 	}
-	if len(m.editor.Result.Rows) != 2 {
-		t.Errorf("Rows = %d, want 2", len(m.editor.Result.Rows))
+	if len(tab.Rows) != 2 {
+		t.Errorf("Rows = %d, want 2", len(tab.Rows))
 	}
 	v := m.View()
 	if !strings.Contains(v, "Alice") {
@@ -723,7 +721,7 @@ func TestModel_EditorShowsError(t *testing.T) {
 	if m.editor == nil || m.editor.Error == "" {
 		t.Fatalf("expected an SQL error in the editor")
 	}
-	if m.editor.Result != nil {
+	if m.editor.Data != nil {
 		t.Error("there should be no result with an error")
 	}
 }
@@ -761,7 +759,8 @@ func TestModel_AutoRefreshAfterInsert(t *testing.T) {
 	pressAlt(t, m, "3") // editor
 	press(t, m, "INSERT INTO users (name, email) VALUES ('Carol','c@t.com')")
 	pressKey(t, m, "ctrl+r")
-	if m.editor == nil || m.editor.Result == nil || m.editor.Result.Affected != 1 {
+	tab, ok := m.editor.Data.(*store.TabularData)
+	if !ok || tab.Affected != 1 {
 		t.Fatalf("insert did not run: %+v", m.editor)
 	}
 
@@ -786,7 +785,8 @@ func TestModel_AutoRefreshAfterInsertReturning(t *testing.T) {
 	pressAlt(t, m, "3")
 	press(t, m, "INSERT INTO users (name, email) VALUES ('Dana','d@t.com') RETURNING id")
 	pressKey(t, m, "ctrl+r")
-	if m.editor == nil || m.editor.Result == nil || len(m.editor.Result.Columns) == 0 {
+	tab, ok := m.editor.Data.(*store.TabularData)
+	if !ok || len(tab.Columns) == 0 {
 		t.Fatalf("INSERT RETURNING did not produce a table: %+v", m.editor)
 	}
 
@@ -933,38 +933,19 @@ func TestModel_ConnectToPostgres(t *testing.T) {
 	_ = m.View()
 }
 
-// blockingStore blocks page fetches until its unblock channel is closed, so
-// tests can observe the navigating state while a navigation is in flight.
+// blockingStore blocks Browse until its unblock channel is closed.
 type blockingStore struct {
-	store.Store
+	store.DataSource
 	unblock chan struct{}
 }
 
-func (s *blockingStore) SelectTablePageContext(ctx context.Context, table string, limit, offset int) (*store.Result, error) {
+func (s *blockingStore) Browse(ctx context.Context, req store.BrowseRequest) (store.BrowseResponse, error) {
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return store.BrowseResponse{}, ctx.Err()
 	case <-s.unblock:
 	}
-	return s.Store.SelectTablePageContext(ctx, table, limit, offset)
-}
-
-func (s *blockingStore) SelectTableKeysetPageContext(ctx context.Context, table, key string, limit int, cursor string) (*store.Result, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-s.unblock:
-	}
-	return s.Store.SelectTableKeysetPageContext(ctx, table, key, limit, cursor)
-}
-
-func (s *blockingStore) CountTableContext(ctx context.Context, table string) (int, error) {
-	select {
-	case <-ctx.Done():
-		return 0, ctx.Err()
-	case <-s.unblock:
-	}
-	return s.Store.CountTableContext(ctx, table)
+	return s.DataSource.Browse(ctx, req)
 }
 
 // TestModel_PageNavigationRunsAsync verifies that a page change is applied in
@@ -973,15 +954,13 @@ func (s *blockingStore) CountTableContext(ctx context.Context, table string) (in
 func TestModel_PageNavigationRunsAsync(t *testing.T) {
 	m := connect(t)
 	for i := 0; i < 60; i++ {
-		if _, err := m.store.Exec(fmt.Sprintf("INSERT INTO users (name, email) VALUES ('u%d','u%d@t.com')", i, i)); err != nil {
-			t.Fatalf("insert: %v", err)
-		}
+		execSQL(t, m, fmt.Sprintf("INSERT INTO users (name, email) VALUES ('u%d','u%d@t.com')", i, i))
 	}
 	press(t, m, "2") // open users
 	pressAlt(t, m, "2")
 
 	unblock := make(chan struct{})
-	m.store = &blockingStore{Store: m.store, unblock: unblock}
+	m.store = &blockingStore{DataSource: m.store, unblock: unblock}
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
 	m = updated.(*Model)
@@ -1021,7 +1000,7 @@ func TestModel_EscCancelsNavigation(t *testing.T) {
 	pressAlt(t, m, "2")
 
 	unblock := make(chan struct{})
-	m.store = &blockingStore{Store: m.store, unblock: unblock}
+	m.store = &blockingStore{DataSource: m.store, unblock: unblock}
 
 	// start a navigation; it blocks in the background
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyPgDown})

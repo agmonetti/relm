@@ -18,9 +18,8 @@ import (
 )
 
 // openExport opens the export prompt for the data under the cursor: the last
-// query result when the editor has the focus, the active table's current page
-// otherwise. When there is nothing to export it reports it in the footer
-// instead of opening the prompt.
+// query result when the editor has the focus, the active item's current page
+// otherwise.
 func (m *Model) openExport() {
 	res, note, err := m.exportSource()
 	if err != nil {
@@ -37,36 +36,22 @@ func (m *Model) openExport() {
 }
 
 // exportSource snapshots the data to export according to the current focus.
-func (m *Model) exportSource() (*store.Result, string, error) {
+func (m *Model) exportSource() (store.DataView, string, error) {
 	if m.focus == screens.FocusEditor {
-		res := m.editor.Result
-		if res == nil || len(res.Columns) == 0 {
-			return nil, "", fmt.Errorf("nothing to export — run a query that returns rows")
+		res := m.editor.Data
+		if res == nil || res.IsEmpty() {
+			return nil, "", fmt.Errorf("nothing to export — run a query that returns data")
 		}
-		note := fmt.Sprintf("%d rows", len(res.Rows))
-		if res.Truncated {
-			note = fmt.Sprintf("first %d rows", len(res.Rows))
-		}
-		return res, note, nil
+		return res, res.Summary(), nil
 	}
 	b := m.browser
-	if b == nil || b.ActiveTable == "" || len(b.Columns) == 0 {
-		return nil, "", fmt.Errorf("nothing to export — open a table first")
+	if b == nil || b.ActiveTable == "" || b.Data == nil || b.Data.IsEmpty() {
+		return nil, "", fmt.Errorf("nothing to export — open an item first")
 	}
-	cols := make([]string, len(b.Columns))
-	for i, c := range b.Columns {
-		cols[i] = c.Name
-	}
-	res := &store.Result{Columns: cols, Rows: b.Rows, Nulls: b.Nulls}
-	note := fmt.Sprintf("%d rows", len(res.Rows))
-	if b.TotalRows > len(b.Rows) {
-		note = fmt.Sprintf("%d of %d rows (current page)", len(b.Rows), b.TotalRows)
-	}
-	return res, note, nil
+	return b.Data, b.Data.Summary(), nil
 }
 
-// handleExportKeys handles the keys of the export prompt. Enter writes the
-// file, Esc cancels, anything else edits the filename input.
+// handleExportKeys handles the keys of the export prompt.
 func (m *Model) handleExportKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case msg.Type == tea.KeyEsc:
@@ -78,14 +63,13 @@ func (m *Model) handleExportKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.exportErr = "type a file name"
 			return m, nil
 		}
-		path, n, err := writeExport(m.exportRes, name)
+		path, note, err := writeExport(m.exportRes, name)
 		if err != nil {
 			m.exportErr = err.Error()
 			return m, nil
 		}
-		note := m.exportNote
 		if note == "" {
-			note = fmt.Sprintf("%d rows", n)
+			note = m.exportNote
 		}
 		m.exported = fmt.Sprintf("exported %s → %s", note, path)
 		m.closeExport()
@@ -105,37 +89,34 @@ func (m *Model) closeExport() {
 	m.exportInput.Blur()
 }
 
-// writeExport serializes the result to the file name and returns the absolute
-// path and the number of exported rows. The format follows the extension
-// (.json → JSON); anything else is exported as CSV.
-func writeExport(res *store.Result, name string) (string, int, error) {
+// writeExport serializes the data view to the file name and returns the absolute path.
+func writeExport(data store.DataView, name string) (string, string, error) {
 	var buf bytes.Buffer
 	var err error
 	if strings.HasSuffix(strings.ToLower(name), ".json") {
-		err = export.WriteJSON(res, &buf)
+		err = export.WriteJSON(data, &buf)
 	} else {
-		err = export.WriteCSV(res, &buf)
+		err = export.WriteCSV(data, &buf)
 	}
 	if err != nil {
-		return "", 0, err
+		return "", "", err
 	}
 	if dir := filepath.Dir(name); dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return "", 0, err
+			return "", "", err
 		}
 	}
 	if err := os.WriteFile(name, buf.Bytes(), 0o644); err != nil {
-		return "", 0, err
+		return "", "", err
 	}
 	abs, err := filepath.Abs(name)
 	if err != nil {
 		abs = name
 	}
-	return abs, len(res.Rows), nil
+	return abs, data.Summary(), nil
 }
 
-// renderExportPrompt renders the export prompt, centered like the settings
-// screen: a filename input, the format hint and the action buttons.
+// renderExportPrompt renders the export prompt.
 func (m *Model) renderExportPrompt(width, height int) string {
 	style := styles.StyleInputBox
 	if m.exportInput.Focused() {

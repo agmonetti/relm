@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/agmonetti/relm/internal/conn"
+	"github.com/agmonetti/relm/internal/store"
 )
 
 func newModelOpts(t *testing.T, opts NewOpts) *Model {
@@ -75,10 +77,12 @@ func TestModel_GlobalReadOnlyForcesReadOnly(t *testing.T) {
 		t.Fatalf("store not open")
 	}
 	// the file itself is writable, but --read-only must open it mode=ro
-	if _, err := m.store.Exec("CREATE TABLE blocked (id INT)"); err == nil {
+	if _, err := m.store.Query().Execute(context.Background(), "CREATE TABLE blocked (id INT)", 0, 100); err == nil {
 		t.Error("write must be blocked by global read-only")
 	}
-	if res, err := m.store.Query("SELECT COUNT(*) FROM users"); err != nil || len(res.Rows) == 0 {
+	if res, err := m.store.Query().Execute(context.Background(), "SELECT COUNT(*) FROM users", 0, 100); err != nil {
 		t.Errorf("read in read-only mode failed: %v", err)
+	} else if tab, ok := res.(*store.TabularData); !ok || len(tab.Rows) == 0 {
+		t.Errorf("read in read-only mode returned unexpected: %v", res)
 	}
 }

@@ -7,12 +7,16 @@ import (
 	"strings"
 )
 
-// ParseDSN converts a command-line argument into a ConnectionConfig:
+// ParseDSN converts a command-line argument or URI into a ConnectionConfig:
 //
-//	relm ./app.db                     SQLite (a bare path, absolute or relative)
-//	relm sqlite:/abs/app.db           SQLite via URI
-//	relm postgres://u:p@host:5432/db  PostgreSQL (also mysql://, mariadb://)
+//	relm ./app.db                             SQLite (a bare path, absolute or relative)
+//	relm sqlite:/abs/app.db                   SQLite via URI
+//	relm postgres://u:p@host:5432/db          PostgreSQL (also mysql://, mariadb://)
 //	relm sqlserver://u:p@host:1433?database=db
+//	relm mongodb://u:p@host:27017/db          MongoDB (also mongodb+srv://)
+//	relm redis://:pass@host:6379/0            Redis (also rediss://)
+//	relm cassandra://host:9042/keyspace       Cassandra (also cql://)
+//	relm neo4j://u:p@host:7687/neo4j          Neo4j (also bolt://, neo4j+s://)
 //
 // Any engine accepts ?sslmode= or ?tls= in the URL query, which maps to
 // ConnectionConfig.SSLMode. Missing host/port fall back to localhost and the
@@ -30,7 +34,9 @@ func ParseDSN(dsn string) (ConnectionConfig, error) {
 
 	var cfg ConnectionConfig
 	q := u.Query()
-	switch strings.ToLower(u.Scheme) {
+	scheme := strings.ToLower(u.Scheme)
+
+	switch scheme {
 	case "sqlite", "file":
 		cfg.Driver = DriverSQLite
 		cfg.Path = u.Path
@@ -47,6 +53,20 @@ func ParseDSN(dsn string) (ConnectionConfig, error) {
 		cfg.Driver = DriverMariaDB
 	case "sqlserver":
 		cfg.Driver = DriverMSSQL
+	case "mongodb", "mongodb+srv":
+		cfg.Driver = DriverMongo
+		cfg.URI = dsn
+	case "redis", "rediss":
+		cfg.Driver = DriverRedis
+		cfg.URI = dsn
+		if scheme == "rediss" {
+			cfg.SSLMode = "require"
+		}
+	case "cassandra", "cql":
+		cfg.Driver = DriverCassandra
+	case "neo4j", "bolt", "neo4j+s", "neo4j+ssc":
+		cfg.Driver = DriverNeo4j
+		cfg.URI = dsn
 
 	case "":
 		// no scheme → a plain SQLite file path
@@ -72,6 +92,7 @@ func ParseDSN(dsn string) (ConnectionConfig, error) {
 		}
 		cfg.Port = n
 	}
+
 	if cfg.Driver == DriverMSSQL {
 		cfg.Database = q.Get("database")
 	} else if u.Path != "" {
@@ -80,6 +101,11 @@ func ParseDSN(dsn string) (ConnectionConfig, error) {
 			cfg.Database = decoded
 		}
 	}
+
+	if cfg.Driver == DriverRedis && cfg.Database == "" {
+		cfg.Database = "0"
+	}
+
 	if v := q.Get("sslmode"); v != "" {
 		cfg.SSLMode = v
 	} else if v := q.Get("tls"); v != "" {

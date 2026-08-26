@@ -101,8 +101,8 @@ func TestConnScreen_DriverCyclesAll(t *testing.T) {
 		seen[c.driver()] = true
 		c.cycleDriver(true)
 	}
-	if len(seen) != 5 {
-		t.Errorf("drivers seen = %d, want 5", len(seen))
+	if len(seen) != len(conn.Drivers) {
+		t.Errorf("drivers seen = %d, want %d", len(seen), len(conn.Drivers))
 	}
 }
 

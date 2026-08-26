@@ -17,10 +17,7 @@ import (
 // termGetSize is a seam for the size guard tests.
 var termGetSize = term.GetSize
 
-// correctSize returns a usable terminal size. Windows conhost reports the
-// screen buffer (e.g. 9001 rows of scrollback) instead of the visible window
-// in its resize events, so the raw value must not be trusted: when it looks
-// bogus it is re-queried with the OS viewport and clamped as a safety net.
+// correctSize returns a usable terminal size.
 func correctSize(w, h int) (int, int) {
 	if w < 10 || h < 3 || w > 500 || h > 1000 {
 		if rw, rh, err := termGetSize(os.Stdout.Fd()); err == nil && rw >= 10 && rh >= 3 {
@@ -83,7 +80,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleDetailKeys(msg)
 		}
 
-		// while a query runs, Esc cancels it instead of the pane default
+		// while an operation runs, Esc cancels it
 		if m.loading && msg.Type == tea.KeyEsc {
 			m.cancelQuery()
 			m.loading = false
@@ -138,12 +135,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editorDoneMsg:
 		m.cancelQuery()
 		if msg.token != m.queryID {
-			return m, nil // stale result: the session changed
+			return m, nil
 		}
 		m.loading = false
 		m.editorScreen.ResetResult()
-		// the goroutine ran against a throwaway history; keep the persistent
-		// ring buffer and push the executed statement here, on the UI goroutine
 		hist := m.editor.History
 		m.editor = msg.ed
 		m.editor.History = hist
@@ -152,16 +147,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if msg.err == nil && msg.ed.LastQuery != "" {
 			hist.Push(msg.ed.LastQuery)
-			// persist across sessions; a failed write is not worth a message
 			editor.SaveHistory(hist.Items())
 		}
 
-		// A write query (INSERT/UPDATE/DELETE/CREATE/DROP/...) may have changed
-		// the schema or the data: refresh the table list and the open table in
-		// the background, so a slow reload cannot freeze the UI.
+		// A write query may have changed the schema or the data: refresh the catalog and active item in background
 		var cmds []tea.Cmd
 		if msg.err == nil && m.browser != nil && m.store != nil && msg.ed.Wrote {
-			if cmd := m.runBrowserOp(func(b *browser.Browser, st store.Store, ctx context.Context) error {
+			if cmd := m.runBrowserOp(func(b *browser.Browser, st store.DataSource, ctx context.Context) error {
 				return b.Reload(ctx, st)
 			}); cmd != nil {
 				cmds = append(cmds, cmd)
@@ -175,13 +167,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case browserDoneMsg:
 		if msg.load {
 			if msg.token != m.queryID {
-				return m, nil // stale result: the session changed
+				return m, nil
 			}
 			m.cancelConnect()
 			m.connecting = false
 		} else {
 			if msg.navID != m.navID || msg.token != m.queryID {
-				return m, nil // stale: superseded by a newer navigation or the session changed
+				return m, nil
 			}
 			m.cancelNav()
 			m.navigating = false
@@ -189,8 +181,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			err := friendlyErr(msg.err)
 			if msg.load {
-				// the initial load failed: close the store and go back to the
-				// connection screen with the engine error
 				m.closeStore()
 				m.connect.SetError(err.Error())
 				m.screen = ScreenConnect

@@ -74,6 +74,44 @@ func TestParseDSN_MSSQL(t *testing.T) {
 	}
 }
 
+func TestParseDSN_NonRelational(t *testing.T) {
+	// MongoDB
+	mongoCfg, err := ParseDSN("mongodb://user:pass@mongo.local:27018/mydb?sslmode=require")
+	if err != nil {
+		t.Fatalf("ParseDSN(mongo): %v", err)
+	}
+	if mongoCfg.Driver != DriverMongo || mongoCfg.Port != 27018 || mongoCfg.Database != "mydb" {
+		t.Errorf("mongoCfg = %+v", mongoCfg)
+	}
+
+	// Redis
+	redisCfg, err := ParseDSN("redis://:pass@redis.local:6380/2")
+	if err != nil {
+		t.Fatalf("ParseDSN(redis): %v", err)
+	}
+	if redisCfg.Driver != DriverRedis || redisCfg.Port != 6380 || redisCfg.Database != "2" {
+		t.Errorf("redisCfg = %+v", redisCfg)
+	}
+
+	// Cassandra
+	cassCfg, err := ParseDSN("cassandra://cass.local:9042/my_keyspace")
+	if err != nil {
+		t.Fatalf("ParseDSN(cassandra): %v", err)
+	}
+	if cassCfg.Driver != DriverCassandra || cassCfg.Port != 9042 || cassCfg.Database != "my_keyspace" {
+		t.Errorf("cassCfg = %+v", cassCfg)
+	}
+
+	// Neo4j
+	neoCfg, err := ParseDSN("neo4j://neo4j:secret@neo.local:7687/neo4j")
+	if err != nil {
+		t.Fatalf("ParseDSN(neo4j): %v", err)
+	}
+	if neoCfg.Driver != DriverNeo4j || neoCfg.Port != 7687 || neoCfg.Database != "neo4j" {
+		t.Errorf("neoCfg = %+v", neoCfg)
+	}
+}
+
 func TestParseDSN_Errors(t *testing.T) {
 	bad := []string{
 		"",

@@ -16,16 +16,15 @@ import (
 type WorkspaceFocus int
 
 const (
-	// FocusSidebar is the tables list on the left.
+	// FocusSidebar is the items list on the left.
 	FocusSidebar WorkspaceFocus = iota
 	// FocusMain is the central panel (browser or structure).
 	FocusMain
-	// FocusEditor is the bottom SQL editor.
+	// FocusEditor is the bottom query editor.
 	FocusEditor
 )
 
-// Pane sizing bounds used when the user resizes the panes with a right-click
-// drag. The automatic defaults keep the current look.
+// Pane sizing bounds.
 const (
 	SidebarMinW = 10
 	EditorMinH  = 5
@@ -33,8 +32,7 @@ const (
 	MainMinH    = 2
 )
 
-// WorkspaceLayout is the resolved geometry of the workspace panes, shared by
-// the renderer and the mouse resize handler so both agree on the sizes.
+// WorkspaceLayout is the resolved geometry of the workspace panes.
 type WorkspaceLayout struct {
 	ShowSidebar bool
 	SidebarW    int
@@ -43,10 +41,7 @@ type WorkspaceLayout struct {
 	RightW      int
 }
 
-// ComputeLayout resolves the pane sizes for the given terminal size. A zero
-// sidebarW/editorH uses the automatic defaults; a positive value (e.g. from a
-// previous right-click drag) is clamped to keep every pane usable on the
-// current terminal.
+// ComputeLayout resolves the pane sizes for the given terminal size.
 func ComputeLayout(width, height int, showSidebar bool, sidebarW, editorH int) WorkspaceLayout {
 	if width < 60 {
 		showSidebar = false
@@ -59,7 +54,6 @@ func ComputeLayout(width, height int, showSidebar bool, sidebarW, editorH int) W
 			l.EditorH = 2
 		}
 	} else {
-		// automatic default, matching the previous fixed layout
 		l.EditorH = height / 4
 		if l.EditorH < 9 {
 			l.EditorH = 9
@@ -102,8 +96,7 @@ func clampInt(v, lo, hi int) int {
 	return v
 }
 
-// RenderWorkspace renders the single working screen: sidebar, main pane and
-// editor, each inside a visible border. The focused pane has an accent border.
+// RenderWorkspace renders the single working screen.
 func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 	focus WorkspaceFocus, structure bool, layout WorkspaceLayout, sidebarCursor int,
 	width, height int) string {
@@ -117,11 +110,7 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 	rightW := layout.RightW
 	showSidebar := layout.ShowSidebar
 
-	// the right column spans the full width when the sidebar is hidden; a
-	// one-char gap separates it from the sidebar
 	gap := " "
-
-	// content width inside a pane: border (1 col/side) + padding (1 col/side)
 	contentW := func(paneW int) int {
 		if w := paneW - 4; w < 1 {
 			return 1
@@ -129,10 +118,11 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		return paneW - 4
 	}
 
-	// main pane: the title (table name + count) lives inside the top border
 	mainTitle := ""
 	if b != nil && b.ActiveTable != "" {
-		if b.TotalRows > 0 {
+		if b.Data != nil {
+			mainTitle = fmt.Sprintf("%s · %s", b.ActiveTable, b.Data.Summary())
+		} else if b.TotalRows > 0 {
 			noun := "rows"
 			if b.TotalRows == 1 {
 				noun = "row"
@@ -148,43 +138,37 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		mainContent = styles.StyleHeaderDim.Render("no connection")
 	} else if structure {
 		mainContent = RenderStructure(b, contentW(rightW), mainBodyH)
-	} else if len(b.Tables) == 0 {
-		mainContent = styles.StyleHeaderDim.Render("no tables — use the editor to create one")
 	} else {
-		cols := make([]string, len(b.Columns))
-		for i, c := range b.Columns {
-			cols[i] = c.Name
-		}
-		mainContent = RenderDataTable(cols, b.Rows, b.Cursor, contentW(rightW), mainBodyH)
-		if len(b.Rows) == 0 && len(b.Columns) > 0 {
-			mainContent = strings.TrimRight(mainContent, "\n") + "\n\n" +
-				RenderEmptyTable(cols, contentW(rightW))
-		}
+		mainContent = RenderMainBrowser(b, contentW(rightW), mainBodyH)
 	}
 
-	// editor pane: title + editor
 	editorContent := es.View(e, contentW(rightW), editorH-2)
 
+	editorTitle := "QUERY EDITOR"
+	if es.Title() != "" {
+		editorTitle = es.Title()
+	}
+
 	mainPane := boxed(mainContent, mainTitle, rightW, mainH, focus == FocusMain)
-	editorPane := boxed(editorContent, "SQL EDITOR", rightW, editorH, focus == FocusEditor)
+	editorPane := boxed(editorContent, editorTitle, rightW, editorH, focus == FocusEditor)
 	right := lipgloss.JoinVertical(lipgloss.Top, mainPane, " ", editorPane)
 
 	if !showSidebar {
 		return right
 	}
 
+	sidebarTitle := "TABLES"
+	if b != nil && b.CatalogTitle != "" {
+		sidebarTitle = b.CatalogTitle
+	}
+
 	sidebarContent := RenderSidebar(b, sidebarCursor, contentW(sidebarW), height-2)
-	sidebarPane := boxed(sidebarContent, "TABLES", sidebarW, height, focus == FocusSidebar)
+	sidebarPane := boxed(sidebarContent, sidebarTitle, sidebarW, height, focus == FocusSidebar)
 	return lipgloss.JoinHorizontal(lipgloss.Top, sidebarPane, gap, right)
 }
 
-// boxed wraps content in a bordered pane of exactly the given size, with the
-// title drawn inside the top border and an accent border when focused.
-// lipgloss Width/Height apply to the content (Width already includes the
-// horizontal padding) and the border adds one line/column per side, so the
-// content area is width-4 × height-2; overflow lines are trimmed.
 func boxed(content, title string, width, height int, focused bool) string {
-	innerW := width - 2 // width of content + horizontal padding
+	innerW := width - 2
 	innerH := height - 2
 	if innerW < 0 {
 		innerW = 0
@@ -207,9 +191,6 @@ func boxed(content, title string, width, height int, focused bool) string {
 	return strings.Join(lines, "\n")
 }
 
-// topBorder rebuilds the top border line of a pane with the title embedded:
-// ╭─ TABLES ──────────╮. The border runes keep the pane's border color and
-// the title keeps the pane title style.
 func topBorder(title string, width int, focused bool) string {
 	border := styles.StyleBorderLine
 	if focused {

@@ -1,6 +1,6 @@
 # Test databases for relm.
 #
-# Starts the 4 network engines with fixed credentials and a "test" database
+# Starts the network engines with fixed credentials and a "test" database / keyspace
 # auto-created on first start. Usage:
 #
 #   docker compose up -d
@@ -10,10 +10,14 @@
 # SQLite needs no server: it is just a file (see USAGE.md section 1).
 #
 # Connection credentials (match USAGE.md):
-#   PostgreSQL : localhost:5432  postgres/postgres  database test
-#   MySQL      : localhost:3306  root/root          database test
-#   MariaDB    : localhost:3307  root/root          database test
-#   SQL Server : localhost:1433  sa/Str0ng!Passw0rd database master
+#   PostgreSQL : localhost:5432  postgres/postgres     database test
+#   MySQL      : localhost:3306  root/root             database test
+#   MariaDB    : localhost:3307  root/root             database test
+#   SQL Server : localhost:1433  sa/Str0ng!Passw0rd    database master
+#   MongoDB    : localhost:27017 (no auth)             database test
+#   Redis      : localhost:6379  (no auth)             db 0
+#   Cassandra  : localhost:9042  (no auth)             keyspace relm_demo
+#   Neo4j      : localhost:7687  neo4j/password        database neo4j
 
 services:
   postgres:
@@ -72,3 +76,55 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  mongo:
+    image: mongo:7
+    container_name: relm-mongo
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: relm-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  cassandra:
+    image: cassandra:4.1
+    container_name: relm-cassandra
+    environment:
+      CASSANDRA_START_RPC: "true"
+      MAX_HEAP_SIZE: "512M"
+      HEAP_NEWSIZE: "128M"
+    ports:
+      - "9042:9042"
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe cluster' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: relm-neo4j
+    environment:
+      NEO4J_AUTH: "neo4j/password"
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p password 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

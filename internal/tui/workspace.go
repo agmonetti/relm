@@ -36,7 +36,7 @@ func (m *Model) handleWorkspaceKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setFocus(screens.FocusMain)
 		return m, nil
 	case !typingEditor && key.Matches(msg, m.keys.Refresh) && m.browser != nil:
-		return m, m.runBrowserOp(func(b *browser.Browser, st store.Store, ctx context.Context) error {
+		return m, m.runBrowserOp(func(b *browser.Browser, st store.DataSource, ctx context.Context) error {
 			return b.Reload(ctx, st)
 		})
 	case !m.loading && !m.navigating && key.Matches(msg, m.keys.Export):
@@ -69,8 +69,7 @@ func (m *Model) cycleFocus() {
 	m.setFocus(next)
 }
 
-// setFocus moves the focus to a pane, keeping the editor's textarea state in
-// sync.
+// setFocus moves the focus to a pane.
 func (m *Model) setFocus(f screens.WorkspaceFocus) {
 	if f == screens.FocusEditor {
 		m.editorScreen.Focus()
@@ -123,8 +122,7 @@ func (m *Model) handleSidebarKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// selectTable opens the table at index idx in the sidebar, loading its data in
-// the background.
+// selectTable opens the item at index idx in the sidebar.
 func (m *Model) selectTable(idx int) tea.Cmd {
 	if m.browser == nil || idx < 0 || idx >= len(m.browser.Tables) {
 		return nil
@@ -132,12 +130,12 @@ func (m *Model) selectTable(idx int) tea.Cmd {
 	m.sidebarCursor = idx
 	m.structure = false
 	name := m.browser.Tables[idx]
-	return m.runBrowserOp(func(b *browser.Browser, st store.Store, ctx context.Context) error {
-		return b.SelectTable(ctx, name, st)
+	return m.runBrowserOp(func(b *browser.Browser, st store.DataSource, ctx context.Context) error {
+		return b.SelectItem(ctx, name, st)
 	})
 }
 
-// clampSidebar keeps the sidebar cursor inside the table list.
+// clampSidebar keeps the sidebar cursor inside the item list.
 func (m *Model) clampSidebar() {
 	if m.browser == nil {
 		return
@@ -158,7 +156,6 @@ func (m *Model) handleMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	b := m.browser
 	if m.navigating {
-		// a navigation is in flight: ignore row/page keys until it lands
 		return m, nil
 	}
 	switch {
@@ -168,12 +165,8 @@ func (m *Model) handleMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case key.Matches(msg, m.keys.Detail):
-		if !m.structure && len(b.Rows) > 0 && b.Cursor >= 0 && b.Cursor < len(b.Rows) {
-			cols := make([]string, len(b.Columns))
-			for i, c := range b.Columns {
-				cols[i] = c.Name
-			}
-			m.openDetail(b.ActiveTable, cols, b.Rows[b.Cursor])
+		if !m.structure && b.Data != nil {
+			m.openDetailFromBrowser(b)
 		}
 		return m, nil
 	case key.Matches(msg, m.keys.Up):
@@ -183,18 +176,18 @@ func (m *Model) handleMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		b.MoveCursor(1)
 		return m, nil
 	case key.Matches(msg, m.keys.PageUp):
-		return m, m.runBrowserOp(func(nb *browser.Browser, st store.Store, ctx context.Context) error {
+		return m, m.runBrowserOp(func(nb *browser.Browser, st store.DataSource, ctx context.Context) error {
 			return nb.PrevPage(ctx, st)
 		})
 	case key.Matches(msg, m.keys.PageDown):
-		return m, m.runBrowserOp(func(nb *browser.Browser, st store.Store, ctx context.Context) error {
+		return m, m.runBrowserOp(func(nb *browser.Browser, st store.DataSource, ctx context.Context) error {
 			return nb.NextPage(ctx, st)
 		})
 	case key.Matches(msg, m.keys.First):
-		b.MoveCursor(-len(b.Rows))
+		b.MoveCursor(-1000000)
 		return m, nil
 	case key.Matches(msg, m.keys.Last):
-		b.MoveCursor(len(b.Rows))
+		b.MoveCursor(1000000)
 		return m, nil
 	}
 	return m, nil

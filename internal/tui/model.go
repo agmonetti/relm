@@ -56,7 +56,7 @@ type NewOpts struct {
 // Model is the main bubbletea model.
 type Model struct {
 	opts         NewOpts
-	store        store.Store
+	store        store.DataSource
 	connect      *screens.ConnScreen
 	settings     *screens.SettingsScreen
 	browser      *browser.Browser
@@ -70,8 +70,8 @@ type Model struct {
 	prefs        prefs.Prefs
 
 	// workspace state
-	structure     bool // the main pane shows the structure of the active table
-	sidebarCursor int  // table selected in the sidebar
+	structure     bool // the main pane shows the structure of the active item
+	sidebarCursor int  // item selected in the sidebar
 
 	spinner spinner.Model
 	loading bool
@@ -79,9 +79,7 @@ type Model struct {
 	cancel  context.CancelFunc // cancels the running query
 
 	// browser navigation runs in the background (like the editor) so a slow
-	// table cannot freeze the UI. Only one navigation and one connection load
-	// may be in flight; both are bounded by the configured query timeout and
-	// cancelled with Esc.
+	// item cannot freeze the UI.
 	navigating    bool
 	navCancel     context.CancelFunc
 	navID         int // incremented per navigation; stale results are dropped
@@ -101,18 +99,20 @@ type Model struct {
 	err         string
 	warn        string // advisory notice, rendered in amber below the content
 
-	// detail view ("v"): a snapshot of the selected row with full values
+	// detail view ("v"): a snapshot of the selected item with full values
 	showDetail   bool
 	detailScroll int
 	detailTitle  string
 	detailCols   []string
 	detailVals   []string
+	detailDoc    string // formatted JSON document preview
+	detailGraph  *store.GraphNode
 
 	// export prompt ("alt+e"): a centered input for the target filename
 	exporting   bool
 	exportInput textinput.Model
 	exportErr   string
-	exportRes   *store.Result
+	exportRes   store.DataView
 	exportNote  string // "N rows" description appended to the success message
 	exported    string // last success message, rendered in green
 }

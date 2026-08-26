@@ -1,225 +1,196 @@
-// Package browser manages the state for navigating tables and rows,
+// Package browser manages the state for navigating catalog items and data views,
 // independent of the TUI and the engine.
 package browser
 
 import (
 	"context"
-	"sort"
 
 	"github.com/agmonetti/relm/internal/store"
 )
 
-// PageSizeDefault is the number of rows per page.
+// PageSizeDefault is the number of items per page.
 const PageSizeDefault = 50
 
-// Browser keeps the navigation state of the active database.
+// Browser keeps the navigation state of the active data source.
 type Browser struct {
-	Tables      []string
-	ActiveTable string
-	Columns     []store.Column
-	Indexes     []store.Index
-	Page        int
-	PageSize    int
-	TotalRows   int
-	Rows        [][]string
-	Cursor      int
-	// Nulls mirrors Rows cell by cell (true = SQL NULL), carried from the
-	// store Result so exporters can keep NULL distinct from an empty string.
-	Nulls [][]bool
+	// Catalog state
+	CatalogTitle string
+	ItemNoun     string
+	Items        []store.CatalogItem
+	Tables       []string // Names of catalog items (convenience & backwards compat)
+	ActiveTable  string   // Name of selected item
 
-	// keyset pagination state (only when the active table has a single-column
-	// primary key); otherwise the browser falls back to OFFSET pagination
-	orderBy string
-	keyIdx  int
-	cur     []string // cur[p] = key of the last row of page p-1; "" for page 0
+	// Active data and inspection views
+	Data      store.DataView
+	Structure store.InspectionView
+
+	// Relational / Tabular convenience fields
+	Columns []store.Column
+	Indexes []store.Index
+	Rows    [][]string
+	Nulls   [][]bool
+
+	// Pagination & cursor state
+	Page      int
+	PageSize  int
+	TotalRows int
+	Cursor    int // Row/Item cursor within visible page
+
+	// Cursor stack for backward pagination across keyset/cursor engines
+	cur     []string // cur[p] = cursor of page p; cur[0] = ""
 	hasNext bool
 }
 
-// New loads the tables of the database and selects the first one.
-func New(ctx context.Context, st store.Store) (*Browser, error) {
-	b := &Browser{PageSize: PageSizeDefault}
-	if err := b.Load(ctx, st); err != nil {
+// New loads the catalog of the data source and selects the first item.
+func New(ctx context.Context, ds store.DataSource) (*Browser, error) {
+	b := &Browser{
+		PageSize: PageSizeDefault,
+		cur:      []string{""},
+	}
+	if err := b.Load(ctx, ds); err != nil {
 		return nil, err
 	}
-	if len(b.Tables) > 0 {
-		if err := b.SelectTable(ctx, b.Tables[0], st); err != nil {
+	if len(b.Items) > 0 {
+		if err := b.SelectItem(ctx, b.Items[0].Name, ds); err != nil {
 			return nil, err
 		}
 	}
 	return b, nil
 }
 
-// Load reloads the list of tables.
-func (b *Browser) Load(ctx context.Context, st store.Store) error {
-	tables, err := st.Tables()
+// Load reloads the list of catalog items.
+func (b *Browser) Load(ctx context.Context, ds store.DataSource) error {
+	cat := ds.Catalog()
+	b.CatalogTitle = cat.Title
+	b.ItemNoun = cat.ItemNoun
+
+	items, err := cat.ListObjects(ctx)
 	if err != nil {
 		return err
 	}
-	sort.Strings(tables)
+	b.Items = items
+	tables := make([]string, len(items))
+	for i, it := range items {
+		tables[i] = it.Name
+	}
 	b.Tables = tables
 	return nil
 }
 
-// SelectTable switches the active table, resets the page and loads its data.
-func (b *Browser) SelectTable(ctx context.Context, name string, st store.Store) error {
+// SelectTable switches the active item (alias for SelectItem).
+func (b *Browser) SelectTable(ctx context.Context, name string, ds store.DataSource) error {
+	return b.SelectItem(ctx, name, ds)
+}
+
+// SelectItem switches the active item, resets pagination and loads its data.
+func (b *Browser) SelectItem(ctx context.Context, name string, ds store.DataSource) error {
 	b.ActiveTable = name
 	b.Page = 0
 	b.Cursor = 0
-
-	cols, err := st.Columns(name)
-	if err != nil {
-		return err
-	}
-	b.Columns = cols
-
-	indexes, err := st.Indexes(name)
-	if err != nil {
-		return err
-	}
-	b.Indexes = indexes
-
-	b.orderBy, b.keyIdx = keysetKey(cols)
 	b.cur = []string{""}
 	b.hasNext = false
-	return b.countAndRefresh(ctx, st)
-}
 
-// keysetKey returns the single-column primary key for keyset pagination, or an
-// empty key when the table has no PK or a composite PK (OFTSET fallback).
-func keysetKey(cols []store.Column) (string, int) {
-	var pk []int
-	for i, c := range cols {
-		if c.PK {
-			pk = append(pk, i)
+	// Inspect structure
+	insp, err := ds.Inspect(ctx, name)
+	if err == nil {
+		b.Structure = insp
+		if rel, ok := insp.(*store.RelationalStructure); ok {
+			b.Columns = rel.Columns
+			b.Indexes = rel.Indexes
+		} else {
+			b.Columns = nil
+			b.Indexes = nil
 		}
 	}
-	if len(pk) == 1 {
-		return cols[pk[0]].Name, pk[0]
-	}
-	return "", -1
+
+	return b.fetchPage(ctx, ds)
 }
 
-// Refresh reloads the current page of the active table without re-counting it.
-// The row count is only refreshed when the table is (re)selected or reloaded
-// (countAndRefresh); page navigation keeps the last known count, so COUNT(*)
-// does not run on every PgUp/PgDn. In keyset mode the page is re-fetched from
-// its stored cursor, so refreshing does not move the visible rows.
-func (b *Browser) Refresh(ctx context.Context, st store.Store) error {
+// Refresh reloads the current page of the active item without re-listing the catalog.
+func (b *Browser) Refresh(ctx context.Context, ds store.DataSource) error {
 	if b.ActiveTable == "" {
 		return nil
 	}
-	return b.fetchPage(ctx, st)
+	return b.fetchPage(ctx, ds)
 }
 
-// countAndRefresh loads the row count of the active table and its page. It is
-// the expensive path: a full COUNT(*) runs here, on table selection and on
-// Reload (manual refresh or after a write query from the editor).
-func (b *Browser) countAndRefresh(ctx context.Context, st store.Store) error {
-	if b.ActiveTable == "" {
-		return nil
+func (b *Browser) fetchPage(ctx context.Context, ds store.DataSource) error {
+	cursor := ""
+	if b.Page < len(b.cur) {
+		cursor = b.cur[b.Page]
 	}
-	total, err := st.CountTableContext(ctx, b.ActiveTable)
+
+	resp, err := ds.Browse(ctx, store.BrowseRequest{
+		ObjectName: b.ActiveTable,
+		PageSize:   b.PageSize,
+		Page:       b.Page,
+		Cursor:     cursor,
+	})
 	if err != nil {
 		return err
 	}
-	b.TotalRows = total
-	return b.fetchPage(ctx, st)
-}
 
-// fetchPage loads the current page of the active table using the stored
-// pagination state. It never runs COUNT(*).
-func (b *Browser) fetchPage(ctx context.Context, st store.Store) error {
-	if b.orderBy == "" {
-		res, err := st.SelectTablePageContext(ctx, b.ActiveTable, b.PageSize, b.Page*b.PageSize)
-		if err != nil {
-			return err
-		}
-		b.Rows = res.Rows
-		b.Nulls = res.Nulls
-		b.clampCursor()
-		return nil
-	}
+	b.Data = resp.Data
+	b.hasNext = resp.HasNext
+	b.TotalRows = int(resp.TotalCount)
 
-	// keyset: fetch the page after cur[Page], asking for one extra row to
-	// know whether another page follows
-	res, err := st.SelectTableKeysetPageContext(ctx, b.ActiveTable, b.orderBy, b.PageSize+1, b.cur[b.Page])
-	if err != nil {
-		return err
-	}
-	b.hasNext = len(res.Rows) > b.PageSize
-	rows := res.Rows
-	if len(rows) > b.PageSize {
-		rows = rows[:b.PageSize]
-	}
-	b.Rows = rows
-	if res.Nulls != nil {
-		nulls := res.Nulls
-		if len(nulls) > b.PageSize {
-			nulls = nulls[:b.PageSize]
+	// Populate convenience tabular fields if data is TabularData
+	if tab, ok := resp.Data.(*store.TabularData); ok {
+		b.Rows = tab.Rows
+		b.Nulls = tab.Nulls
+		if b.TotalRows < 0 && tab.TotalRows >= 0 {
+			b.TotalRows = int(tab.TotalRows)
 		}
-		b.Nulls = nulls
+		if len(b.Columns) == 0 && len(tab.Columns) > 0 {
+			cols := make([]store.Column, len(tab.Columns))
+			for i, c := range tab.Columns {
+				cols[i] = store.Column{Name: c}
+			}
+			b.Columns = cols
+		}
 	} else {
+		b.Rows = nil
 		b.Nulls = nil
 	}
+
 	b.clampCursor()
 	return nil
 }
 
-// Reload reloads the table list and the active table data. If the database
-// had no active table (e.g. you created a table from the editor) or the active
-// one no longer exists, it selects the first. Covers tables created/dropped
-// externally or from the editor.
-func (b *Browser) Reload(ctx context.Context, st store.Store) error {
-	if err := b.Load(ctx, st); err != nil {
+// Reload reloads the catalog and the active item data.
+func (b *Browser) Reload(ctx context.Context, ds store.DataSource) error {
+	if err := b.Load(ctx, ds); err != nil {
 		return err
 	}
 	if b.ActiveTable == "" || !hasString(b.Tables, b.ActiveTable) {
 		if len(b.Tables) > 0 {
-			return b.SelectTable(ctx, b.Tables[0], st)
+			return b.SelectItem(ctx, b.Tables[0], ds)
 		}
 		b.ActiveTable = ""
 		b.Columns = nil
 		b.Indexes = nil
 		b.Rows = nil
 		b.Nulls = nil
+		b.Data = nil
+		b.Structure = nil
 		b.TotalRows = 0
-		b.Page = 0
-		b.Cursor = 0
-		return nil
-	}
-	if err := b.refreshMeta(st); err != nil {
-		return err
-	}
-	return b.countAndRefresh(ctx, st)
-}
-
-// refreshMeta reloads the columns and indexes of the active table and
-// recomputes the keyset state, so DDL from the editor (drop/recreate, alter)
-// does not leave a stale ordering key or column list.
-func (b *Browser) refreshMeta(st store.Store) error {
-	cols, err := st.Columns(b.ActiveTable)
-	if err != nil {
-		return err
-	}
-	b.Columns = cols
-
-	indexes, err := st.Indexes(b.ActiveTable)
-	if err != nil {
-		return err
-	}
-	b.Indexes = indexes
-
-	orderBy, keyIdx := keysetKey(cols)
-	if orderBy != b.orderBy {
-		// the ordering key changed or disappeared: restart the navigation
 		b.Page = 0
 		b.Cursor = 0
 		b.cur = []string{""}
 		b.hasNext = false
+		return nil
 	}
-	b.orderBy = orderBy
-	b.keyIdx = keyIdx
-	return nil
+
+	// Re-inspect structure
+	insp, err := ds.Inspect(ctx, b.ActiveTable)
+	if err == nil {
+		b.Structure = insp
+		if rel, ok := insp.(*store.RelationalStructure); ok {
+			b.Columns = rel.Columns
+			b.Indexes = rel.Indexes
+		}
+	}
+	return b.fetchPage(ctx, ds)
 }
 
 func hasString(list []string, want string) bool {
@@ -232,44 +203,45 @@ func hasString(list []string, want string) bool {
 }
 
 // NextPage advances to the next page if it exists.
-func (b *Browser) NextPage(ctx context.Context, st store.Store) error {
+func (b *Browser) NextPage(ctx context.Context, ds store.DataSource) error {
 	if !b.HasNextPage() {
 		return nil
 	}
-	if b.orderBy == "" {
-		b.Page++
-		b.Cursor = 0
-		return b.Refresh(ctx, st)
+	// Record next cursor if available from browse response
+	nextCursor := ""
+	if tab, ok := b.Data.(*store.TabularData); ok && len(tab.Rows) > 0 {
+		pkIdx := -1
+		for i, c := range b.Columns {
+			if c.PK {
+				pkIdx = i
+				break
+			}
+		}
+		if pkIdx >= 0 && pkIdx < len(tab.Rows[len(tab.Rows)-1]) {
+			nextCursor = tab.Rows[len(tab.Rows)-1][pkIdx]
+		}
 	}
-	last, ok := b.lastKey()
-	if !ok {
-		return nil
+
+	for len(b.cur) <= b.Page+1 {
+		b.cur = append(b.cur, nextCursor)
 	}
-	b.cur = append(b.cur, last)
+	b.cur[b.Page+1] = nextCursor
 	b.Page++
 	b.Cursor = 0
-	return b.Refresh(ctx, st)
+	return b.fetchPage(ctx, ds)
 }
 
 // PrevPage goes back to the previous page if it exists.
-func (b *Browser) PrevPage(ctx context.Context, st store.Store) error {
+func (b *Browser) PrevPage(ctx context.Context, ds store.DataSource) error {
 	if !b.HasPrevPage() {
 		return nil
 	}
-	if b.orderBy == "" {
-		b.Page--
-		b.Cursor = 0
-		return b.Refresh(ctx, st)
-	}
-	// re-fetching forward from the previous page's cursor and trimming to the
-	// page size yields exactly the previous page (it is full by construction)
-	b.cur = b.cur[:b.Page]
 	b.Page--
 	b.Cursor = 0
-	return b.Refresh(ctx, st)
+	return b.fetchPage(ctx, ds)
 }
 
-// MoveCursor moves the selected row within the visible page.
+// MoveCursor moves the selected item within the visible page.
 func (b *Browser) MoveCursor(delta int) {
 	b.Cursor += delta
 	b.clampCursor()
@@ -277,10 +249,13 @@ func (b *Browser) MoveCursor(delta int) {
 
 // HasNextPage reports whether there are more pages after the current one.
 func (b *Browser) HasNextPage() bool {
-	if b.orderBy != "" {
-		return b.hasNext
+	if b.hasNext {
+		return true
 	}
-	return (b.Page+1)*b.PageSize < b.TotalRows
+	if b.TotalRows > 0 {
+		return (b.Page+1)*b.PageSize < b.TotalRows
+	}
+	return false
 }
 
 // HasPrevPage reports whether there are pages before the current one.
@@ -288,28 +263,39 @@ func (b *Browser) HasPrevPage() bool {
 	return b.Page > 0
 }
 
-// lastKey returns the key value of the last row of the current page.
-func (b *Browser) lastKey() (string, bool) {
-	if len(b.Rows) == 0 || b.keyIdx < 0 {
-		return "", false
+func (b *Browser) itemCount() int {
+	if b.Data != nil {
+		switch v := b.Data.(type) {
+		case *store.TabularData:
+			return len(v.Rows)
+		case *store.DocumentData:
+			return len(v.Documents)
+		case *store.KeyValueData:
+			return len(v.Entries)
+		case *store.GraphData:
+			return len(v.Nodes)
+		}
 	}
-	return b.Rows[len(b.Rows)-1][b.keyIdx], true
+	return len(b.Rows)
 }
 
 func (b *Browser) clampCursor() {
 	if b.Cursor < 0 {
 		b.Cursor = 0
 	}
-	if max := len(b.Rows) - 1; b.Cursor > max {
+	max := b.itemCount() - 1
+	if max < 0 {
+		max = 0
+	}
+	if b.Cursor > max {
 		b.Cursor = max
 	}
 }
 
-// Clone returns a deep copy of the browser. The TUI runs slow navigation
-// operations on a clone in a background goroutine and swaps the result in, so
-// the UI goroutine never observes a partially-updated Browser.
+// Clone returns a deep copy of the browser.
 func (b *Browser) Clone() *Browser {
 	c := *b
+	c.Items = append([]store.CatalogItem(nil), b.Items...)
 	c.Tables = append([]string(nil), b.Tables...)
 	c.Columns = append([]store.Column(nil), b.Columns...)
 	c.Indexes = append([]store.Index(nil), b.Indexes...)

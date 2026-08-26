@@ -145,7 +145,7 @@ func (m *Model) scrollMain(delta int) tea.Cmd {
 	}
 	if delta < 0 && b.Cursor == 0 && b.HasPrevPage() {
 		// land on the last row of the previous page after the async swap
-		return m.runBrowserOp(func(nb *browser.Browser, st store.Store, ctx context.Context) error {
+		return m.runBrowserOp(func(nb *browser.Browser, st store.DataSource, ctx context.Context) error {
 			if err := nb.PrevPage(ctx, st); err != nil {
 				return err
 			}
@@ -154,7 +154,7 @@ func (m *Model) scrollMain(delta int) tea.Cmd {
 		})
 	}
 	if delta > 0 && b.Cursor >= len(b.Rows)-1 && b.HasNextPage() {
-		return m.runBrowserOp(func(nb *browser.Browser, st store.Store, ctx context.Context) error {
+		return m.runBrowserOp(func(nb *browser.Browser, st store.DataSource, ctx context.Context) error {
 			return nb.NextPage(ctx, st)
 		})
 	}
@@ -163,11 +163,12 @@ func (m *Model) scrollMain(delta int) tea.Cmd {
 }
 
 func (m *Model) scrollResults(delta int, layout screens.WorkspaceLayout) {
-	if m.editor.Result == nil || len(m.editor.Result.Rows) == 0 {
+	tab, ok := m.editor.Data.(*store.TabularData)
+	if !ok || len(tab.Rows) == 0 {
 		return
 	}
 	_, dataRows := screens.EditorResultsLayout(layout.EditorH - 2)
-	maxScroll := len(m.editor.Result.Rows) - dataRows
+	maxScroll := len(tab.Rows) - dataRows
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -209,7 +210,8 @@ func (m *Model) selectAt(wx, wy int, layout screens.WorkspaceLayout) {
 
 // selectResultRow selects the query result row under the pointer.
 func (m *Model) selectResultRow(wy int, layout screens.WorkspaceLayout) {
-	if m.editor.Result == nil || len(m.editor.Result.Rows) == 0 {
+	tab, ok := m.editor.Data.(*store.TabularData)
+	if !ok || len(tab.Rows) == 0 {
 		return
 	}
 	editorTop := layout.MainH + 1
@@ -219,7 +221,7 @@ func (m *Model) selectResultRow(wy int, layout screens.WorkspaceLayout) {
 		return
 	}
 	row := m.editorScreen.ResultScroll() + rel
-	if row >= 0 && row < len(m.editor.Result.Rows) {
+	if row >= 0 && row < len(tab.Rows) {
 		m.editorScreen.SetResultCursor(row)
 	}
 }

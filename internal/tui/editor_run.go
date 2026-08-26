@@ -24,7 +24,7 @@ func (m *Model) handleEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if strings.TrimSpace(m.editorScreen.Value()) == "" {
-			m.editor.Result = nil
+			m.editor.Data = nil
 			m.editor.Error = "write a query first"
 			return m, nil
 		}
@@ -56,26 +56,22 @@ func (m *Model) handleEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // executeEditor runs the current query in the background and shows a spinner.
-// The query is bounded by the configured timeout and can be cancelled with Esc.
 func (m *Model) executeEditor() tea.Cmd {
 	if m.store == nil {
 		return nil
 	}
 	buf := m.editorScreen.Value()
-	line := m.editorScreen.Line() // statement under the cursor
+	line := m.editorScreen.Line()
 	st := m.store
 	token := m.queryID
 	timeout := time.Duration(m.prefs.QueryTimeout()) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	m.cancelQuery() // release a previous cancel, if any
+	m.cancelQuery()
 	m.cancel = cancel
 	m.loading = true
 	m.exported = ""
 	return tea.Batch(
 		func() tea.Msg {
-			// The query runs on a fresh editor with a throwaway history: the
-			// persistent ring buffer is only touched from the UI goroutine (in
-			// editorDoneMsg), so the two never race.
 			ed := editor.New()
 			ed.Buffer = buf
 			err := ed.ExecuteAt(ctx, st, line)
@@ -96,7 +92,6 @@ func (m *Model) cancelQuery() {
 	}
 }
 
-// friendlyErr maps context cancellation to the message shown to the user.
 func friendlyErr(err error) error {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):

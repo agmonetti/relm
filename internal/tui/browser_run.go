@@ -11,7 +11,7 @@ import (
 )
 
 // browserDoneMsg carries the result of an asynchronous browser operation (a
-// page change, a table selection, a reload or the initial connection load).
+// page change, an item selection, a reload or the initial connection load).
 type browserDoneMsg struct {
 	token int
 	navID int // matches m.navID; guards against superseded/cancelled ops
@@ -20,12 +20,9 @@ type browserDoneMsg struct {
 	load  bool             // true when it was the initial connection load
 }
 
-// runBrowserOp runs a browser mutation (select table, change page, reload) on
-// a background goroutine. The mutation happens on a clone, so the UI goroutine
-// never observes a half-updated Browser; on success the clone is swapped in.
-// Only one navigation may run at a time and it is bounded by the configured
-// query timeout, so a slow or hung engine shows a spinner instead of freezing.
-func (m *Model) runBrowserOp(op func(b *browser.Browser, st store.Store, ctx context.Context) error) tea.Cmd {
+// runBrowserOp runs a browser mutation (select item, change page, reload) on
+// a background goroutine.
+func (m *Model) runBrowserOp(op func(b *browser.Browser, st store.DataSource, ctx context.Context) error) tea.Cmd {
 	if m.browser == nil || m.store == nil || m.navigating {
 		return nil
 	}
@@ -50,10 +47,8 @@ func (m *Model) runBrowserOp(op func(b *browser.Browser, st store.Store, ctx con
 	)
 }
 
-// loadBrowserCmd loads the tables and the first page of a freshly connected
-// store in the background. Unlike runBrowserOp there is no clone: the Browser
-// does not exist yet, so it is built entirely off-screen and swapped in.
-func (m *Model) loadBrowserCmd(st store.Store) tea.Cmd {
+// loadBrowserCmd loads the catalog and first page of a freshly connected store.
+func (m *Model) loadBrowserCmd(st store.DataSource) tea.Cmd {
 	token := m.queryID
 	timeout := time.Duration(m.prefs.QueryTimeout()) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -88,8 +83,7 @@ func (m *Model) cancelConnect() {
 	}
 }
 
-// busy reports whether any background operation is running (a query, a
-// navigation or a connection load); the footer shows the spinner meanwhile.
+// busy reports whether any background operation is running.
 func (m *Model) busy() bool {
 	return m.loading || m.navigating || m.connecting
 }

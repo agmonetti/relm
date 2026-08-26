@@ -9,10 +9,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/agmonetti/relm/internal/conn"
-	_ "github.com/agmonetti/relm/internal/store/mssql"    // registers SQL Server
-	_ "github.com/agmonetti/relm/internal/store/mysql"    // registers MySQL and MariaDB
-	_ "github.com/agmonetti/relm/internal/store/postgres" // registers PostgreSQL
-	_ "github.com/agmonetti/relm/internal/store/sqlite"   // registers SQLite
+	_ "github.com/agmonetti/relm/internal/store/cassandra" // registers Cassandra
+	_ "github.com/agmonetti/relm/internal/store/mongo"     // registers MongoDB
+	_ "github.com/agmonetti/relm/internal/store/mssql"     // registers SQL Server
+	_ "github.com/agmonetti/relm/internal/store/mysql"     // registers MySQL and MariaDB
+	_ "github.com/agmonetti/relm/internal/store/neo4j"     // registers Neo4j
+	_ "github.com/agmonetti/relm/internal/store/postgres"  // registers PostgreSQL
+	_ "github.com/agmonetti/relm/internal/store/redis"     // registers Redis
+	_ "github.com/agmonetti/relm/internal/store/sqlite"    // registers SQLite
 	"github.com/agmonetti/relm/internal/tui"
 )
 

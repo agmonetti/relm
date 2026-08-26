@@ -23,10 +23,7 @@ func newEditorWithPersistedHistory() *editor.Editor {
 	return e
 }
 
-// doConnect opens the store and starts loading the browser. The store opening
-// (with the engine's connection timeout) is synchronous; the schema and first
-// page are loaded in the background so connecting to a big or slow database
-// shows a spinner instead of freezing the UI.
+// doConnect opens the store and starts loading the browser.
 func (m *Model) doConnect(cfg conn.ConnectionConfig) tea.Cmd {
 	// a global --read-only forces every connection, including saved ones
 	cfg.ReadOnly = cfg.ReadOnly || m.opts.GlobalReadOnly
@@ -61,10 +58,19 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) tea.Cmd {
 		return nil
 	}
 	m.store = st
-	// read-only is not enforce-able per session on SQL Server: say so instead
-	// of pretending the flag protects the database.
-	if cfg.ReadOnly && cfg.Driver == conn.DriverMSSQL {
-		m.warn = "read-only is not enforced on mssql — connect with a read-only user"
+
+	// Configure query executor placeholder and title in editor
+	q := st.Query()
+	m.editorScreen.SetPlaceholder(q.Placeholder())
+
+	// Read-only advisory warnings for engines without native session-level locking
+	if cfg.ReadOnly {
+		switch cfg.Driver {
+		case conn.DriverMSSQL:
+			m.warn = "read-only is not enforced on mssql — connect with a read-only user"
+		case conn.DriverCassandra:
+			m.warn = "read-only is client-guarded on cassandra — connect with a read-only role for full enforcement"
+		}
 	}
 	return m.loadBrowserCmd(st)
 }
@@ -89,6 +95,9 @@ func (m *Model) saveConnection(cfg conn.ConnectionConfig) {
 func defaultName(cfg conn.ConnectionConfig) string {
 	if cfg.Driver == conn.DriverSQLite {
 		return cfg.Path
+	}
+	if cfg.URI != "" {
+		return cfg.Label()
 	}
 	return fmt.Sprintf("%s:%d/%s", cfg.Host, cfg.Port, cfg.Database)
 }

@@ -1,16 +1,17 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/mattn/go-runewidth"
 
 	"github.com/agmonetti/relm/internal/browser"
+	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
 
-// SidebarWindow returns the visible window of the sidebar list: `offset` is
-// the index of the first shown table and `visible` how many are shown.
+// SidebarWindow returns the visible window of the sidebar list.
 func SidebarWindow(cursor, height int) (offset, visible int) {
 	offset = 0
 	if cursor >= height {
@@ -20,10 +21,9 @@ func SidebarWindow(cursor, height int) (offset, visible int) {
 	return
 }
 
-// RenderSidebar renders the table list with a selection cursor and the opened
-// table marked. It scrolls vertically so the cursor stays visible.
+// RenderSidebar renders the catalog list with a selection cursor and badges.
 func RenderSidebar(b *browser.Browser, cursor, width, height int) string {
-	if b == nil || width < 10 || height < 1 {
+	if b == nil || width < 6 || height < 1 {
 		return ""
 	}
 	n := len(b.Tables)
@@ -40,23 +40,26 @@ func RenderSidebar(b *browser.Browser, cursor, width, height int) string {
 
 	var sb strings.Builder
 	for i := offset; i < n && i < offset+height; i++ {
-		name := truncate(b.Tables[i], width-2)
+		name := b.Tables[i]
+		badge := ""
+		if i < len(b.Items) && b.Items[i].Badge != "" {
+			badge = " [" + b.Items[i].Badge + "]"
+		}
+		itemText := truncate(name+badge, width-2)
 		switch {
 		case i == cursor:
-			sb.WriteString(styles.StyleSidebarActive.Render("> " + name))
+			sb.WriteString(styles.StyleSidebarActive.Render("> " + itemText))
 		case b.Tables[i] == b.ActiveTable:
-			sb.WriteString(styles.StyleSidebarActiveTable.Render("  " + name))
+			sb.WriteString(styles.StyleSidebarActiveTable.Render("  " + itemText))
 		default:
-			sb.WriteString(styles.StyleSidebarItem.Render("  " + name))
+			sb.WriteString(styles.StyleSidebarItem.Render("  " + itemText))
 		}
 		sb.WriteString("\n")
 	}
 	return sb.String()
 }
 
-// TableWindow returns the visible window of a data table: `start` is the index
-// of the first visible row and `visible` the number of rows shown, keeping the
-// cursor row on screen.
+// TableWindow returns the visible window of a data table.
 func TableWindow(rows, cursor, height int) (start, visible int) {
 	visible = height - 1 // leaves room for the header
 	if visible > rows {
@@ -72,12 +75,186 @@ func TableWindow(rows, cursor, height int) (start, visible int) {
 	return
 }
 
-// colSep is the separator between columns; colSepW is its display width.
 const colSep = " | "
-const colSepW = 3 // len of " | " in cells
+const colSepW = 3
 
-// RenderDataTable renders columns + rows with the cursor row highlighted. The
-// rows scroll vertically so the cursor row always stays visible.
+// RenderMainBrowser renders data from any DataView.
+func RenderMainBrowser(b *browser.Browser, width, height int) string {
+	if b == nil {
+		return styles.StyleHeaderDim.Render("no connection")
+	}
+	if len(b.Tables) == 0 {
+		noun := "items"
+		if b.ItemNoun != "" {
+			noun = b.ItemNoun + "s"
+		}
+		return styles.StyleHeaderDim.Render(fmt.Sprintf("no %s — use the editor to create data", noun))
+	}
+	if b.Data == nil {
+		if len(b.Columns) > 0 {
+			cols := make([]string, len(b.Columns))
+			for i, c := range b.Columns {
+				cols[i] = c.Name
+			}
+			if len(b.Rows) == 0 {
+				return RenderDataTable(cols, nil, b.Cursor, width, 2) + "\n\n" + RenderEmptyTable(cols, width)
+			}
+			return RenderDataTable(cols, b.Rows, b.Cursor, width, height)
+		}
+		return styles.StyleHeaderDim.Render("select an item")
+	}
+
+	switch v := b.Data.(type) {
+	case *store.TabularData:
+		cols := v.Columns
+		if len(cols) == 0 {
+			cols = make([]string, len(b.Columns))
+			for i, c := range b.Columns {
+				cols[i] = c.Name
+			}
+		}
+		if len(v.Rows) == 0 {
+			return RenderEmptyTable(cols, width)
+		}
+		return RenderDataTable(cols, v.Rows, b.Cursor, width, height)
+
+	case *store.DocumentData:
+		return RenderDocumentList(v, b.Cursor, width, height)
+
+	case *store.KeyValueData:
+		return RenderKeyValue(v, b.Cursor, width, height)
+
+	case *store.GraphData:
+		return RenderGraph(v, b.Cursor, width, height)
+
+	case *store.RawTextData:
+		return RenderRawText(v, width, height)
+
+	default:
+		// Fallback for Tabular convenience fields
+		if len(b.Columns) > 0 {
+			cols := make([]string, len(b.Columns))
+			for i, c := range b.Columns {
+				cols[i] = c.Name
+			}
+			if len(b.Rows) == 0 {
+				return RenderEmptyTable(cols, width)
+			}
+			return RenderDataTable(cols, b.Rows, b.Cursor, width, height)
+		}
+		return styles.StyleHeaderDim.Render("unsupported view format")
+	}
+}
+
+// RenderDocumentList renders a list of BSON/JSON documents.
+func RenderDocumentList(docs *store.DocumentData, cursor, width, height int) string {
+	if len(docs.Documents) == 0 {
+		return styles.StyleHeaderDim.Render("( 0 documents )")
+	}
+	start, visible := TableWindow(len(docs.Documents), cursor, height)
+	var sb strings.Builder
+	for i := 0; i < visible; i++ {
+		idx := start + i
+		if idx >= len(docs.Documents) {
+			break
+		}
+		d := docs.Documents[idx]
+		summary := d.Summary
+		if summary == "" {
+			summary = d.RawJSON
+		}
+		line := fmt.Sprintf("[%s] %s", d.ID, summary)
+		line = truncate(line, width-4)
+		if idx == cursor {
+			sb.WriteString(styles.StyleCursor.Render("> "+line) + "\n")
+		} else {
+			sb.WriteString(styles.StyleSidebarItem.Render("  "+line) + "\n")
+		}
+	}
+	return sb.String()
+}
+
+// RenderKeyValue renders Redis Key-Value entries.
+func RenderKeyValue(kv *store.KeyValueData, cursor, width, height int) string {
+	if kv.Type == "string" {
+		var sb strings.Builder
+		sb.WriteString(styles.StyleHeaderDim.Render(fmt.Sprintf("Key: %s · Type: string · TTL: %s", kv.Key, kv.TTL)) + "\n\n")
+		val := ""
+		if len(kv.Entries) > 0 {
+			val = kv.Entries[0].Value
+		}
+		sb.WriteString(styles.StyleSidebarItem.Render(val) + "\n")
+		return sb.String()
+	}
+
+	cols := []string{"INDEX", "VALUE"}
+	hasExtra := false
+	for _, e := range kv.Entries {
+		if e.Extra != "" {
+			hasExtra = true
+			break
+		}
+	}
+	if hasExtra {
+		cols = append(cols, "EXTRA")
+	}
+
+	rows := make([][]string, len(kv.Entries))
+	for i, e := range kv.Entries {
+		if hasExtra {
+			rows[i] = []string{e.Index, e.Value, e.Extra}
+		} else {
+			rows[i] = []string{e.Index, e.Value}
+		}
+	}
+	header := styles.StyleHeaderDim.Render(fmt.Sprintf("Key: %s · Type: %s · TTL: %s", kv.Key, kv.Type, kv.TTL))
+	table := RenderDataTable(cols, rows, cursor, width, height-2)
+	return header + "\n" + table
+}
+
+// RenderGraph renders Neo4j nodes and incident relationships.
+func RenderGraph(g *store.GraphData, cursor, width, height int) string {
+	if len(g.Nodes) == 0 {
+		return styles.StyleHeaderDim.Render("( 0 nodes )")
+	}
+	start, visible := TableWindow(len(g.Nodes), cursor, height)
+	var sb strings.Builder
+	for i := 0; i < visible; i++ {
+		idx := start + i
+		if idx >= len(g.Nodes) {
+			break
+		}
+		n := g.Nodes[idx]
+		labels := ":" + strings.Join(n.Labels, ":")
+		props := ""
+		for k, v := range n.Properties {
+			props += fmt.Sprintf("%s: %q ", k, v)
+		}
+		edges := fmt.Sprintf("[%d edges]", len(n.Incident))
+		line := fmt.Sprintf("(%s %s) %s %s", n.ID, labels, props, edges)
+		line = truncate(line, width-4)
+		if idx == cursor {
+			sb.WriteString(styles.StyleCursor.Render("> "+line) + "\n")
+		} else {
+			sb.WriteString(styles.StyleSidebarItem.Render("  "+line) + "\n")
+		}
+	}
+	return sb.String()
+}
+
+// RenderRawText renders plain diagnostic text.
+func RenderRawText(raw *store.RawTextData, width, height int) string {
+	lines := strings.Split(raw.Text, "\n")
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	for i, l := range lines {
+		lines[i] = truncate(l, width-2)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// RenderDataTable renders columns + rows with cursor row highlighted.
 func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) string {
 	if len(cols) == 0 {
 		return ""
@@ -87,9 +264,7 @@ func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) 
 	start, visible := TableWindow(len(rows), cursor, height)
 
 	var sb strings.Builder
-	// header
 	sb.WriteString(renderHeader(cols, widths) + "\n")
-	// underline under the header, connecting the columns
 	sb.WriteString(renderSep(cols, widths) + "\n")
 
 	for i := 0; i < visible; i++ {
@@ -102,7 +277,6 @@ func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) 
 	return sb.String()
 }
 
-// renderHeader renders the column header row with the column header style.
 func renderHeader(cells []string, widths []int) string {
 	var sb strings.Builder
 	for i, c := range cells {
@@ -117,7 +291,6 @@ func renderHeader(cells []string, widths []int) string {
 	return sb.String()
 }
 
-// renderSep renders the dashed line under the header (e.g. ---+----+---).
 func renderSep(cells []string, widths []int) string {
 	var sb strings.Builder
 	for i, w := range widths {
@@ -132,24 +305,15 @@ func renderSep(cells []string, widths []int) string {
 	return styles.StyleBorder.Render(sb.String())
 }
 
-// colMaxW caps the width of any single column so one very long value does not
-// starve the rest of the table. The full value is available in the detail view.
 const colMaxW = 36
-
-// colMinW is the smallest width a column is allowed to shrink to.
 const colMinW = 4
 
-// colWidths computes the width of each column based on the visible content. A
-// column is capped at colMaxW and, when the row overflows the pane, the excess
-// is distributed proportionally to each column's headroom instead of shrinking
-// the first columns to the floor.
 func colWidths(cols []string, rows [][]string, width int) []int {
 	n := len(cols)
 	widths := make([]int, n)
 	for i, c := range cols {
 		widths[i] = runewidth.StringWidth(c)
 	}
-	// consider up to 100 rows so wide tables stay cheap
 	maxRows := len(rows)
 	if maxRows > 100 {
 		maxRows = 100
@@ -164,14 +328,13 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 			}
 		}
 	}
-	// cap wide columns so a single long value does not blow the layout
 	for i := range widths {
 		if widths[i] > colMaxW {
 			widths[i] = colMaxW
 		}
 	}
 
-	total := (n - 1) * colSepW // column separators
+	total := (n - 1) * colSepW
 	for _, w := range widths {
 		total += w
 	}
@@ -179,8 +342,6 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 		return widths
 	}
 
-	// shrink proportionally to the headroom of each column (above the floor),
-	// then absorb any remainder greedily
 	over := total - width
 	giveable := 0
 	for _, w := range widths {
@@ -211,7 +372,6 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 			widths[i] -= share
 			remaining -= share
 		}
-		// absorb any remainder greedily without going below the floor
 		for remaining > 0 {
 			progress := false
 			for i := range widths {
@@ -237,11 +397,6 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 		}
 	}
 
-	// Last resort: every column is already at the floor but the table still
-	// does not fit (e.g. a wide table on a narrow pane). Shrink the columns
-	// below the floor, down to 1 cell each. The absolute minimum for n columns
-	// is n + (n-1)*3 (the separators); a table wider than the pane at that
-	// point simply cannot fit.
 	total = (n - 1) * colSepW
 	for _, w := range widths {
 		total += w
@@ -265,7 +420,6 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 	return widths
 }
 
-// renderRow renders a row. selected highlights the whole row.
 func renderRow(cells []string, widths []int, selected bool) string {
 	var sb strings.Builder
 	for i, cell := range cells {
@@ -284,7 +438,6 @@ func renderRow(cells []string, widths []int, selected bool) string {
 	return sb.String()
 }
 
-// renderCellText renders a single padded cell, highlighting it when selected.
 func renderCellText(cell string, width int, selected bool) string {
 	text := cell
 	if text == "" {
@@ -328,8 +481,7 @@ func pad(s string, w int) string {
 	return s
 }
 
-// RenderEmptyTable renders the centered ASCII-art drawing shown when the open
-// table has no rows, with the "( 0 rows returned )" caption underneath.
+// RenderEmptyTable renders the centered ASCII-art empty state drawing.
 func RenderEmptyTable(cols []string, width int) string {
 	if width < 12 {
 		width = 12
@@ -357,13 +509,12 @@ func RenderEmptyTable(cols []string, width int) string {
 		styles.StyleHeaderDim.Render(center(caption))
 }
 
-// RenderRowDetail renders a single row with every column and its full value,
-// wrapped to the pane width and scrollable. Used by the detail view ("v").
+// RenderRowDetail renders a single row with every column and full value.
 func RenderRowDetail(title string, cols, vals []string, scroll, width, height int) string {
 	if width < 4 {
 		width = 40
 	}
-	contentW := width - 4 // border (2) + padding (2)
+	contentW := width - 4
 	if contentW < 4 {
 		contentW = 4
 	}
@@ -408,7 +559,6 @@ func RenderRowDetail(title string, cols, vals []string, scroll, width, height in
 	return strings.Join(lines[scroll:end], "\n")
 }
 
-// wrapCells hard-wraps a string at max cells without splitting multibyte runes.
 func wrapCells(s string, max int) []string {
 	if max <= 0 {
 		return []string{""}

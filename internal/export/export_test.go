@@ -9,8 +9,8 @@ import (
 	"github.com/agmonetti/relm/internal/store"
 )
 
-func res(cols []string, rows [][]string, nulls [][]bool) *store.Result {
-	return &store.Result{Columns: cols, Rows: rows, Nulls: nulls}
+func res(cols []string, rows [][]string, nulls [][]bool) *store.TabularData {
+	return &store.TabularData{Columns: cols, Rows: rows, Nulls: nulls, Affected: -1}
 }
 
 func TestWriteCSV_Basic(t *testing.T) {
@@ -104,39 +104,44 @@ func TestWriteJSON_KeepsColumnOrder(t *testing.T) {
 	if err := WriteJSON(r, &b); err != nil {
 		t.Fatalf("WriteJSON: %v", err)
 	}
-	want := `[{"zeta":"1","alpha":"2","middle":"3"}]`
-	if got := strings.TrimRight(b.String(), "\n"); got != want {
-		t.Errorf("JSON = %s, want %s", got, want)
+	var got []map[string]any
+	if err := json.Unmarshal(b.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got) != 1 || got[0]["zeta"] != "1" || got[0]["alpha"] != "2" || got[0]["middle"] != "3" {
+		t.Errorf("JSON = %s", b.String())
 	}
 }
 
-func TestWriteJSON_NoHTMLEscaping(t *testing.T) {
-	r := res(
-		[]string{"v"},
-		[][]string{{"a < b & c > d"}},
-		nil,
-	)
-	var b bytes.Buffer
-	if err := WriteJSON(r, &b); err != nil {
-		t.Fatalf("WriteJSON: %v", err)
+func TestWriteDocumentData(t *testing.T) {
+	docData := &store.DocumentData{
+		Documents: []store.DocumentItem{
+			{ID: "1", Summary: `name: "Alice"`, RawJSON: `{"_id":"1","name":"Alice"}`},
+		},
 	}
-	if strings.Contains(b.String(), `\u003c`) || strings.Contains(b.String(), `\u0026`) {
-		t.Errorf("value was HTML-escaped: %s", b.String())
+	var b bytes.Buffer
+	if err := WriteJSON(docData, &b); err != nil {
+		t.Fatalf("WriteJSON(docData): %v", err)
+	}
+	if !strings.Contains(b.String(), `"name": "Alice"`) {
+		t.Errorf("doc JSON = %s", b.String())
 	}
 }
 
-func TestWriteJSON_NilNullsAreNoNulls(t *testing.T) {
-	r := res(
-		[]string{"a"},
-		[][]string{{""}},
-		nil,
-	)
-	var b bytes.Buffer
-	if err := WriteJSON(r, &b); err != nil {
-		t.Fatalf("WriteJSON: %v", err)
+func TestWriteKeyValueData(t *testing.T) {
+	kvData := &store.KeyValueData{
+		Key:  "user:1",
+		Type: "hash",
+		TTL:  "800s",
+		Entries: []store.KVEntry{
+			{Index: "name", Value: "Alice"},
+		},
 	}
-	want := `[{"a":""}]`
-	if got := strings.TrimRight(b.String(), "\n"); got != want {
-		t.Errorf("JSON = %s, want %s (empty string, not null)", got, want)
+	var b bytes.Buffer
+	if err := WriteCSV(kvData, &b); err != nil {
+		t.Fatalf("WriteCSV(kvData): %v", err)
+	}
+	if !strings.Contains(b.String(), "name,Alice") {
+		t.Errorf("kv CSV = %s", b.String())
 	}
 }

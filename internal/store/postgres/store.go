@@ -60,7 +60,7 @@ func New(cfg conn.ConnectionConfig) (*Store, error) {
 }
 
 func init() {
-	store.Register(conn.DriverPostgres, func(cfg conn.ConnectionConfig) (store.Store, error) {
+	store.RegisterLegacy(conn.DriverPostgres, func(cfg conn.ConnectionConfig) (store.Store, error) {
 		return New(cfg)
 	})
 }

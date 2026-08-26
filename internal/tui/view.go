@@ -26,8 +26,6 @@ func (m *Model) render() string {
 
 	header := m.renderHeader()
 	footer := m.renderFooter()
-	// the layout is wrapped in a 1-char margin on all four sides: a blank
-	// line above the header and below the footer, plus the lateral padding
 	contentHeight := m.height - 4
 	if contentHeight < 1 {
 		contentHeight = 1
@@ -41,8 +39,7 @@ func (m *Model) render() string {
 		content = m.settings.View(innerW, contentHeight)
 	case ScreenWorkspace:
 		if m.showDetail {
-			content = screens.RenderRowDetail(m.detailTitle, m.detailCols, m.detailVals,
-				m.detailScroll, innerW, contentHeight)
+			content = m.renderActiveDetail(innerW, contentHeight)
 		} else if m.exporting {
 			content = m.renderExportPrompt(innerW, contentHeight)
 		} else {
@@ -73,8 +70,6 @@ func (m *Model) render() string {
 }
 
 func (m *Model) renderHeader() string {
-	// every pill is bracketed: [ mysql@localhost:3306/tasks ]; the ones with
-	// something to highlight get a solid background, the rest stay dim
 	label := "no connection"
 	if m.store != nil {
 		label = m.cfgLabel
@@ -124,6 +119,11 @@ func footerBindings(pairs []binding) string {
 }
 
 func (m *Model) renderFooter() string {
+	sidebarNoun := "tables"
+	if m.browser != nil && m.browser.ItemNoun != "" {
+		sidebarNoun = m.browser.ItemNoun + "s"
+	}
+
 	left := ""
 	switch m.screen {
 	case ScreenConnect:
@@ -145,7 +145,7 @@ func (m *Model) renderFooter() string {
 		switch m.focus {
 		case screens.FocusSidebar:
 			left = footerBindings([]binding{
-				{"↑↓", "tables"},
+				{"↑↓", sidebarNoun},
 				{"enter", "open"},
 				{"tab", "next"},
 				{"?", "help"},
@@ -159,7 +159,7 @@ func (m *Model) renderFooter() string {
 				})
 			} else {
 				left = footerBindings([]binding{
-					{"↑↓", "rows"},
+					{"↑↓", "navigate"},
 					{"i", "structure"},
 					{"v", "detail"},
 					{"r", "refresh"},
@@ -211,14 +211,13 @@ func (m *Model) renderHelp() string {
 	var out string
 	for _, group := range m.keys.FullHelp() {
 		for _, b := range group {
-			// align the keys cleanly
 			key := fmt.Sprintf("[%s]", b.Help().Key)
 			out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render(key), styles.StyleHeaderDim.Render(b.Help().Desc))
 		}
 		out += "\n"
 	}
 	out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render("[right-click drag]"), styles.StyleHeaderDim.Render("resize panes"))
-	out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render("[click]"), styles.StyleHeaderDim.Render("focus / select row"))
+	out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render("[click]"), styles.StyleHeaderDim.Render("focus / select item"))
 	out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render("[wheel]"), styles.StyleHeaderDim.Render("scroll pane"))
 
 	return lipgloss.JoinVertical(lipgloss.Left,

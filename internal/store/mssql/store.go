@@ -60,7 +60,7 @@ func New(cfg conn.ConnectionConfig) (*Store, error) {
 }
 
 func init() {
-	store.Register(conn.DriverMSSQL, func(cfg conn.ConnectionConfig) (store.Store, error) {
+	store.RegisterLegacy(conn.DriverMSSQL, func(cfg conn.ConnectionConfig) (store.Store, error) {
 		return New(cfg)
 	})
 }

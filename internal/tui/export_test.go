@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
@@ -43,7 +45,8 @@ func TestExport_EditorResultToCSV(t *testing.T) {
 	pressAlt(t, m, "3")
 	press(t, m, "SELECT NULL AS a, 'x' AS b")
 	pressKey(t, m, "ctrl+r")
-	if m.editor == nil || m.editor.Result == nil || len(m.editor.Result.Columns) != 2 {
+	tab, ok := m.editor.Data.(*store.TabularData)
+	if !ok || len(tab.Columns) != 2 {
 		t.Fatalf("setup: query did not produce a table: %+v", m.editor)
 	}
 
@@ -88,9 +91,12 @@ func TestExport_EditorResultToJSONNulls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	want := `[{"a":null,"b":"x"}]`
-	if strings.TrimRight(string(got), "\n") != want {
-		t.Errorf("JSON content = %q, want %q (NULL as null)", got, want)
+	var rows []map[string]any
+	if err := json.Unmarshal(got, &rows); err != nil {
+		t.Fatalf("unmarshal JSON: %v", err)
+	}
+	if len(rows) != 1 || rows[0]["a"] != nil || rows[0]["b"] != "x" {
+		t.Errorf("JSON content = %s, want [{\"a\":null,\"b\":\"x\"}]", string(got))
 	}
 }
 
