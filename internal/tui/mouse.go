@@ -2,7 +2,9 @@ package tui
 
 import (
 	"context"
+	"strings"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/agmonetti/relm/internal/browser"
@@ -86,10 +88,23 @@ func (m *Model) handleWorkspaceMouse(msg tea.MouseMsg) tea.Cmd {
 		case tea.MouseButtonLeft:
 			m.focusPaneAt(wx, wy, layout)
 			m.selectAt(wx, wy, layout)
+			line, col, inInput := m.resolveEditorPos(wx, wy, layout)
+			if inInput && strings.TrimSpace(m.editorScreen.Value()) != "" {
+				m.dragSelecting = true
+				m.dragStartLine = line
+				m.dragStartCol = col
+				m.dragEndLine = line
+				m.dragEndCol = col
+			}
 		}
 	case tea.MouseActionMotion:
 		if m.resizing {
 			m.applyResize(wx, wy, layout)
+		}
+		if m.dragSelecting {
+			line, col, _ := m.resolveEditorPos(wx, wy, layout)
+			m.dragEndLine = line
+			m.dragEndCol = col
 		}
 	case tea.MouseActionRelease:
 		if m.resizing {
@@ -97,8 +112,61 @@ func (m *Model) handleWorkspaceMouse(msg tea.MouseMsg) tea.Cmd {
 			m.resizeDiv = resizeNone
 			m.persistLayout()
 		}
+		if m.dragSelecting {
+			m.dragSelecting = false
+			line, col, _ := m.resolveEditorPos(wx, wy, layout)
+			m.dragEndLine = line
+			m.dragEndCol = col
+			if m.dragStartLine != m.dragEndLine || m.dragStartCol != m.dragEndCol {
+				selected := screens.ExtractTextRange(m.editorScreen.Value(),
+					m.dragStartLine, m.dragStartCol, m.dragEndLine, m.dragEndCol)
+				if strings.TrimSpace(selected) != "" {
+					if err := clipboard.WriteAll(selected); err == nil {
+						m.exported = "selection copied to clipboard"
+					}
+				}
+			}
+		}
 	}
 	return nil
+}
+
+// resolveEditorPos maps workspace cell coordinates to (line, col) inside the query editor textarea.
+func (m *Model) resolveEditorPos(wx, wy int, layout screens.WorkspaceLayout) (line, col int, inInput bool) {
+	editorTop := layout.MainH + 1
+	editorContentTop := editorTop + 1
+	inputHeight := screens.EditorInputHeight(layout.EditorH - 2)
+	editorLeft := 0
+	if layout.ShowSidebar {
+		editorLeft = layout.SidebarW + 1
+	}
+	editorContentLeft := editorLeft + 2 // border (1) + padding (1)
+
+	lineCount := m.editorScreen.LineCount()
+	if lineCount < 1 {
+		lineCount = 1
+	}
+	gutterW := screens.EditorGutterWidth(lineCount)
+	textLeft := editorContentLeft + gutterW
+
+	relY := wy - editorContentTop
+	relX := wx - textLeft
+	if relX < 0 {
+		relX = 0
+	}
+	inInput = wy >= editorContentTop && wy < editorContentTop+inputHeight && wx >= editorLeft && wx <= editorLeft+layout.RightW
+
+	lines := strings.Split(m.editorScreen.Value(), "\n")
+	if len(lines) == 0 {
+		return 0, 0, inInput
+	}
+	if relY < 0 {
+		relY = 0
+	}
+	if relY >= len(lines) {
+		relY = len(lines) - 1
+	}
+	return relY, relX, inInput
 }
 
 // scrollAt scrolls the pane under the pointer with the mouse wheel.
@@ -199,7 +267,7 @@ func (m *Model) selectAt(wx, wy int, layout screens.WorkspaceLayout) {
 			return
 		}
 		start, visible := screens.TableWindow(len(m.browser.Rows), m.browser.Cursor, layout.MainH-2)
-		rel := wy - 2 // header line + top border
+		rel := wy - 3 // top border (1) + header line (1) + separator line (1)
 		if rel >= 0 && rel < visible {
 			if row := start + rel; row < len(m.browser.Rows) {
 				m.browser.Cursor = row
@@ -216,7 +284,7 @@ func (m *Model) selectResultRow(wy int, layout screens.WorkspaceLayout) {
 	}
 	editorTop := layout.MainH + 1
 	startLine, dataRows := screens.EditorResultsLayout(layout.EditorH - 2)
-	rel := (wy - editorTop - 1) - startLine - 1 // data row within the viewport
+	rel := (wy - editorTop - 1) - startLine - 2 // header + sep line above data rows
 	if rel < 0 || rel >= dataRows {
 		return
 	}

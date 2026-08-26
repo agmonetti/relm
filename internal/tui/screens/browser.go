@@ -61,12 +61,28 @@ func RenderSidebar(b *browser.Browser, cursor, width, height int) string {
 
 // TableWindow returns the visible window of a data table.
 func TableWindow(rows, cursor, height int) (start, visible int) {
-	visible = height - 1 // leaves room for the header
+	visible = height - 2 // leaves room for the header and separator
 	if visible > rows {
 		visible = rows
 	}
-	if visible < 0 {
-		visible = 0
+	if visible <= 0 {
+		return 0, 0
+	}
+	start = 0
+	if cursor >= visible {
+		start = cursor - visible + 1
+	}
+	return
+}
+
+// ListWindow returns the visible window of a line-based list without headers.
+func ListWindow(rows, cursor, height int) (start, visible int) {
+	visible = height
+	if visible > rows {
+		visible = rows
+	}
+	if visible <= 0 {
+		return 0, 0
 	}
 	start = 0
 	if cursor >= visible {
@@ -151,7 +167,7 @@ func RenderDocumentList(docs *store.DocumentData, cursor, width, height int) str
 	if len(docs.Documents) == 0 {
 		return styles.StyleHeaderDim.Render("( 0 documents )")
 	}
-	start, visible := TableWindow(len(docs.Documents), cursor, height)
+	start, visible := ListWindow(len(docs.Documents), cursor, height)
 	var sb strings.Builder
 	for i := 0; i < visible; i++ {
 		idx := start + i
@@ -217,7 +233,7 @@ func RenderGraph(g *store.GraphData, cursor, width, height int) string {
 	if len(g.Nodes) == 0 {
 		return styles.StyleHeaderDim.Render("( 0 nodes )")
 	}
-	start, visible := TableWindow(len(g.Nodes), cursor, height)
+	start, visible := ListWindow(len(g.Nodes), cursor, height)
 	var sb strings.Builder
 	for i := 0; i < visible; i++ {
 		idx := start + i

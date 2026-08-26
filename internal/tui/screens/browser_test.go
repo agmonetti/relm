@@ -127,24 +127,48 @@ func TestRenderDataTable_CursorStaysVisible(t *testing.T) {
 		rows = append(rows, []string{string(rune('a' + i))})
 	}
 
-	// height=6 -> 5 visible rows. Cursor 0: rows 0..4.
+	// height=6 -> 4 visible rows (6 minus 2 for header/separator). Total lines produced must be 6.
 	out := RenderDataTable(cols, rows, 0, 20, 6)
-	data := dataLines(out, 6)
-	if len(data) != 5 {
-		t.Fatalf("data rows = %d, want 5", len(data))
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(lines) != 6 {
+		t.Fatalf("total lines = %d, want 6", len(lines))
 	}
-	if data[0] != "a" || data[4] != "e" {
-		t.Errorf("cursor 0 should show rows a-e only: %v", data)
+	data := dataLines(out, 6)
+	if len(data) != 4 {
+		t.Fatalf("data rows = %d, want 4", len(data))
+	}
+	if data[0] != "a" || data[3] != "d" {
+		t.Errorf("cursor 0 should show rows a-d only: %v", data)
 	}
 
-	// Cursor 7: window must scroll so row 7 (h) is visible (rows d-h).
+	// Cursor 3 (last visible row in initial window): window 0..3 (rows a-d)
+	out = RenderDataTable(cols, rows, 3, 20, 6)
+	data = dataLines(out, 6)
+	if len(data) != 4 {
+		t.Fatalf("data rows = %d, want 4", len(data))
+	}
+	if data[0] != "a" || data[3] != "d" {
+		t.Errorf("cursor 3 should show rows a-d: %v", data)
+	}
+
+	// Cursor 4: window must displace by 1 so row 4 (e) is visible at bottom (rows b-e)
+	out = RenderDataTable(cols, rows, 4, 20, 6)
+	data = dataLines(out, 6)
+	if len(data) != 4 {
+		t.Fatalf("data rows = %d, want 4", len(data))
+	}
+	if data[0] != "b" || data[3] != "e" {
+		t.Errorf("cursor 4 should show rows b-e: %v", data)
+	}
+
+	// Cursor 7: window must scroll so row 7 (h) is visible (rows e-h).
 	out = RenderDataTable(cols, rows, 7, 20, 6)
 	data = dataLines(out, 6)
-	if len(data) != 5 {
-		t.Fatalf("data rows = %d, want 5", len(data))
+	if len(data) != 4 {
+		t.Fatalf("data rows = %d, want 4", len(data))
 	}
-	if data[0] != "d" || data[4] != "h" {
-		t.Errorf("cursor 7 should show rows d-h: %v", data)
+	if data[0] != "e" || data[3] != "h" {
+		t.Errorf("cursor 7 should show rows e-h: %v", data)
 	}
 }
 

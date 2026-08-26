@@ -286,6 +286,9 @@ func TestModel_SidebarEnterOpensTable(t *testing.T) {
 	if m.browser.ActiveTable != "users" {
 		t.Errorf("ActiveTable = %q, want users", m.browser.ActiveTable)
 	}
+	if m.focus != screens.FocusMain {
+		t.Errorf("focus = %v, want FocusMain", m.focus)
+	}
 }
 
 func TestModel_SidebarFirstLast(t *testing.T) {
@@ -630,11 +633,11 @@ func TestModel_ClickSelectsMainRow(t *testing.T) {
 		execSQL(t, m, fmt.Sprintf("INSERT INTO users (name, email) VALUES ('u%d','u%d@t.com')", i, i))
 	}
 	press(t, m, "2")                                                       // open users (10 rows)
-	step(t, m, mouseMsg(50, 6, tea.MouseButtonLeft, tea.MouseActionPress)) // data row 2
+	step(t, m, mouseMsg(50, 7, tea.MouseButtonLeft, tea.MouseActionPress)) // data row 2
 	if m.browser.Cursor != 2 {
 		t.Errorf("cursor = %d, want 2", m.browser.Cursor)
 	}
-	step(t, m, mouseMsg(50, 8, tea.MouseButtonLeft, tea.MouseActionPress)) // data row 4
+	step(t, m, mouseMsg(50, 9, tea.MouseButtonLeft, tea.MouseActionPress)) // data row 4
 	if m.browser.Cursor != 4 {
 		t.Errorf("cursor = %d, want 4", m.browser.Cursor)
 	}
@@ -646,13 +649,13 @@ func TestModel_ClickSelectsResultRow(t *testing.T) {
 	m.editor.Data = &store.TabularData{Columns: []string{"c"}, Rows: make([][]string, 60)}
 	m.editorScreen.ResetResult()
 
-	step(t, m, mouseMsg(50, 24, tea.MouseButtonLeft, tea.MouseActionPress)) // first result row
+	step(t, m, mouseMsg(50, 25, tea.MouseButtonLeft, tea.MouseActionPress)) // first result row
 	if m.editorScreen.ResultCursor() != 0 {
 		t.Errorf("resultCursor = %d, want 0", m.editorScreen.ResultCursor())
 	}
-	step(t, m, mouseMsg(50, 26, tea.MouseButtonLeft, tea.MouseActionPress)) // third result row
-	if m.editorScreen.ResultCursor() != 2 {
-		t.Errorf("resultCursor = %d, want 2", m.editorScreen.ResultCursor())
+	step(t, m, mouseMsg(50, 26, tea.MouseButtonLeft, tea.MouseActionPress)) // second result row
+	if m.editorScreen.ResultCursor() != 1 {
+		t.Errorf("resultCursor = %d, want 1", m.editorScreen.ResultCursor())
 	}
 }
 
@@ -1041,3 +1044,35 @@ func TestModel_ConnectIsAsync(t *testing.T) {
 		t.Fatal("browser should be loaded")
 	}
 }
+
+func TestModel_CopyQueryShortcut(t *testing.T) {
+	m := connect(t)
+	m.editorScreen.SetValue("SELECT * FROM users")
+
+	pressAlt(t, m, "c")
+	if m.exported != "query copied to clipboard" {
+		t.Errorf("exported = %q, want 'query copied to clipboard'", m.exported)
+	}
+
+	m.exported = ""
+	m.editorScreen.SetValue("")
+	pressAlt(t, m, "c")
+	if m.warn != "no query to copy" {
+		t.Errorf("warn = %q, want 'no query to copy'", m.warn)
+	}
+}
+
+func TestModel_MouseDragSelectQuery(t *testing.T) {
+	m := connect(t)
+	m.editorScreen.SetValue("SELECT id, name\nFROM users")
+
+	// Drag inside editor textarea (content starts at wy=18 -> msg.Y=20):
+	step(t, m, mouseMsg(30, 20, tea.MouseButtonLeft, tea.MouseActionPress))
+	step(t, m, mouseMsg(36, 20, tea.MouseButtonLeft, tea.MouseActionMotion))
+	step(t, m, mouseMsg(36, 20, tea.MouseButtonLeft, tea.MouseActionRelease))
+
+	if m.exported != "selection copied to clipboard" {
+		t.Errorf("exported = %q, want 'selection copied to clipboard'", m.exported)
+	}
+}
+

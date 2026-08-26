@@ -115,6 +115,13 @@ type Model struct {
 	exportRes   store.DataView
 	exportNote  string // "N rows" description appended to the success message
 	exported    string // last success message, rendered in green
+
+	// mouse text drag-selection in query editor
+	dragSelecting bool
+	dragStartLine int
+	dragStartCol  int
+	dragEndLine   int
+	dragEndCol    int
 }
 
 // New creates the initial model (connection screen).

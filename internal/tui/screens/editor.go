@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -97,7 +98,82 @@ func EditorResultsLayout(contentH int) (startLine, dataRows int) {
 	if regionH < 2 {
 		regionH = 2
 	}
-	return ih, regionH - 1
+	dataRows = regionH - 2
+	if dataRows < 0 {
+		dataRows = 0
+	}
+	return ih, dataRows
+}
+
+// EditorGutterWidth calculates the line number gutter width for the given line count.
+func EditorGutterWidth(lineCount int) int {
+	digits := len(strconv.Itoa(lineCount))
+	if digits < 1 {
+		digits = 1
+	}
+	// StyleEditorLineNo has Padding(0, 1), so 1 leading space + digits + 1 trailing space
+	return digits + 2
+}
+
+// ExtractTextRange extracts a substring from a multiline string between
+// (startLine, startCol) and (endLine, endCol) 0-indexed coordinates.
+func ExtractTextRange(text string, startLine, startCol, endLine, endCol int) string {
+	if text == "" {
+		return ""
+	}
+	lines := strings.Split(text, "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+
+	// Normalize order so (startLine, startCol) is before (endLine, endCol)
+	if startLine > endLine || (startLine == endLine && startCol > endCol) {
+		startLine, endLine = endLine, startLine
+		startCol, endCol = endCol, startCol
+	}
+
+	if startLine < 0 {
+		startLine = 0
+		startCol = 0
+	}
+	if startLine >= len(lines) {
+		return ""
+	}
+	if endLine < 0 {
+		return ""
+	}
+	if endLine >= len(lines) {
+		endLine = len(lines) - 1
+		endCol = len(lines[endLine])
+	}
+
+	if startCol < 0 {
+		startCol = 0
+	}
+	if startCol > len(lines[startLine]) {
+		startCol = len(lines[startLine])
+	}
+	if endCol < 0 {
+		endCol = 0
+	}
+	if endCol > len(lines[endLine]) {
+		endCol = len(lines[endLine])
+	}
+
+	if startLine == endLine {
+		if startCol >= endCol {
+			return ""
+		}
+		return lines[startLine][startCol:endCol]
+	}
+
+	var result []string
+	result = append(result, lines[startLine][startCol:])
+	for i := startLine + 1; i < endLine; i++ {
+		result = append(result, lines[i])
+	}
+	result = append(result, lines[endLine][:endCol])
+	return strings.Join(result, "\n")
 }
 
 // SetValue replaces the textarea content.
@@ -181,7 +257,10 @@ func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 	case *store.TabularData:
 		if len(v.Columns) > 0 {
 			rows := v.Rows
-			dataRows := resH - 1
+			dataRows := resH - 2
+			if dataRows < 0 {
+				dataRows = 0
+			}
 			maxScroll := len(rows) - dataRows
 			if maxScroll < 0 {
 				maxScroll = 0

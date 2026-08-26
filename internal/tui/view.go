@@ -172,6 +172,7 @@ func (m *Model) renderFooter() string {
 		case screens.FocusEditor:
 			left = footerBindings([]binding{
 				{"ctrl+r", "run"},
+				{"alt+c", "copy"},
 				{"ctrl+l", "clear"},
 				{"esc", "back"},
 			})
@@ -218,6 +219,7 @@ func (m *Model) renderHelp() string {
 		out += "\n"
 	}
 	out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render("[right-click drag]"), styles.StyleHeaderDim.Render("resize panes"))
+	out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render("[drag click]"), styles.StyleHeaderDim.Render("select & copy text"))
 	out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render("[click]"), styles.StyleHeaderDim.Render("focus / select item"))
 	out += fmt.Sprintf("  %-20s %s\n", styles.StyleFooterKey.Render("[wheel]"), styles.StyleHeaderDim.Render("scroll pane"))
 

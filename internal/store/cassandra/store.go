@@ -185,6 +185,7 @@ func (s *CassandraSource) Browse(ctx context.Context, req store.BrowseRequest) (
 	tabData := &store.TabularData{
 		Columns:   cols,
 		Rows:      rows,
+		Affected:  -1,
 		TotalRows: -1, // unbounded in Cassandra
 	}
 

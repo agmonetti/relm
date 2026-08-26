@@ -2,7 +2,9 @@ package tui
 
 import (
 	"context"
+	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -42,6 +44,8 @@ func (m *Model) handleWorkspaceKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case !m.loading && !m.navigating && key.Matches(msg, m.keys.Export):
 		m.openExport()
 		return m, nil
+	case key.Matches(msg, m.keys.CopyQuery):
+		return m, m.copyQueryToClipboard()
 	}
 
 	switch m.focus {
@@ -113,6 +117,7 @@ func (m *Model) handleSidebarKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case msg.Type == tea.KeyEnter:
+		m.setFocus(screens.FocusMain)
 		return m, m.selectTable(m.sidebarCursor)
 	case msg.Type == tea.KeyRunes && !msg.Alt && len(msg.Runes) == 1 &&
 		msg.Runes[0] >= '1' && msg.Runes[0] <= '9':
@@ -191,4 +196,19 @@ func (m *Model) handleMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+// copyQueryToClipboard copies the current query editor buffer to the system clipboard.
+func (m *Model) copyQueryToClipboard() tea.Cmd {
+	buf := m.editorScreen.Value()
+	if strings.TrimSpace(buf) == "" {
+		m.warn = "no query to copy"
+		return nil
+	}
+	if err := clipboard.WriteAll(buf); err != nil {
+		m.err = "failed to copy: " + err.Error()
+		return nil
+	}
+	m.exported = "query copied to clipboard"
+	return nil
 }
