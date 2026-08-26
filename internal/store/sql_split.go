@@ -11,7 +11,7 @@ type Statement struct {
 }
 
 // SplitStatements splits the SQL into statements respecting strings (single
-// quotes, "\" escapes and "''" duplication), comments (`--`, `/* */` and
+// quotes, "\" escapes and "”" duplication), comments (`--`, `/* */` and
 // MySQL's `#`) and the `;` outside them. Comments are replaced by a space so
 // adjacent tokens are not glued together.
 func SplitStatements(sql string) []Statement {
@@ -62,6 +62,9 @@ func SplitStatements(sql string) []Statement {
 				mode = 0
 			}
 		case 3: // block comment: skipped until "*/"
+			if c == '\n' {
+				line++
+			}
 			if c == '*' && i+1 < len(sql) && sql[i+1] == '/' {
 				i++
 				mode = 0

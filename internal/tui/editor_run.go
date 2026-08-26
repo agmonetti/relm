@@ -63,6 +63,7 @@ func (m *Model) executeEditor() tea.Cmd {
 	buf := m.editorScreen.Value()
 	line := m.editorScreen.Line()
 	st := m.store
+	m.queryID++
 	token := m.queryID
 	timeout := time.Duration(m.prefs.QueryTimeout()) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

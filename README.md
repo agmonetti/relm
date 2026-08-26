@@ -83,7 +83,7 @@ relm --read-only redis://localhost:6379/0
 ## What you get
 
 - **Single-window adaptive layout** — sidebar (catalog), main data viewer (tables, documents, key-values, graph nodes) and editor always visible, always in sync.
-- **Multi-paradigm pagination** — relational keyset pagination, MongoDB ObjectIds, Redis SCAN/paging, Cassandra page states, and Cypher skip/limits.
+- **Multi-paradigm pagination** — relational keyset pagination, MongoDB skip/limit pages, Redis SCAN/paging, Cassandra page states, and Cypher skip/limits.
 - **Native Query Editor** — executes SQL, MQL, RESP, CQL, and Cypher with history of your last 100 queries (`~/.config/relm/history.json`).
 - **Auto-refresh** — after any write query the catalog and active item reload automatically in the background.
 - **Structure Inspector (`i`)** — view columns and indexes (relational), collection stats and inferred schema (MongoDB), key memory and server stats (Redis), Partition Keys & Clustering Columns (Cassandra), or node label schemas & relationship types (Neo4j).

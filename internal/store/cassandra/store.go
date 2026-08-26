@@ -150,8 +150,11 @@ func (s *CassandraSource) Browse(ctx context.Context, req store.BrowseRequest) (
 		cols[i] = c.Name
 	}
 
+	// Read exactly one page: gocql transparently fetches subsequent pages as
+	// they are scanned, so stop after pageSize rows to keep the PageState
+	// cursor meaningful for the browser's next-page request.
 	var rows [][]string
-	for {
+	for len(rows) < pageSize {
 		rowMap := make(map[string]interface{})
 		if !iter.MapScan(rowMap) {
 			break
@@ -170,7 +173,7 @@ func (s *CassandraSource) Browse(ctx context.Context, req store.BrowseRequest) (
 
 	nextState := iter.PageState()
 	var nextCursor string
-	hasNext := len(nextState) > 0
+	hasNext := len(rows) > 0 && len(nextState) > 0
 	if hasNext {
 		nextCursor = hex.EncodeToString(nextState)
 	}
@@ -273,8 +276,12 @@ func (e *CassandraExecutor) IsMutation(stmt string) bool {
 	return false
 }
 
-func (e *CassandraExecutor) Execute(ctx context.Context, cql string, limit, offset int) (store.DataView, error) {
-	trimmed := strings.TrimSpace(cql)
+// Execute runs a CQL statement. The QueryExecutor contract passes
+// (buffer, line, maxRows): line is the cursor line (unused) and maxRows caps
+// how many rows a read query loads into memory (a hard breaker, since gocql
+// iterates every server page otherwise).
+func (e *CassandraExecutor) Execute(ctx context.Context, buffer string, _line int, maxRows int) (store.DataView, error) {
+	trimmed := strings.TrimSpace(buffer)
 	if trimmed == "" {
 		return nil, errors.New("empty CQL query")
 	}
@@ -294,7 +301,7 @@ func (e *CassandraExecutor) Execute(ctx context.Context, cql string, limit, offs
 		}, nil
 	}
 
-	pageSize := limit
+	pageSize := maxRows
 	if pageSize <= 0 {
 		pageSize = 50
 	}
@@ -306,7 +313,12 @@ func (e *CassandraExecutor) Execute(ctx context.Context, cql string, limit, offs
 	}
 
 	var rows [][]string
+	truncated := false
 	for {
+		if maxRows > 0 && len(rows) >= maxRows {
+			truncated = true
+			break
+		}
 		rowMap := make(map[string]interface{})
 		if !iter.MapScan(rowMap) {
 			break
@@ -328,7 +340,10 @@ func (e *CassandraExecutor) Execute(ctx context.Context, cql string, limit, offs
 	}
 
 	return &store.TabularData{
-		Columns: cols,
-		Rows:    rows,
+		Columns:   cols,
+		Rows:      rows,
+		Affected:  -1, // read query
+		TotalRows: -1,
+		Truncated: truncated,
 	}, nil
 }

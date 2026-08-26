@@ -2,6 +2,8 @@ package conn
 
 import (
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 )
 
@@ -130,31 +132,32 @@ func (c ConnectionConfig) Label() string {
 	if c.URI != "" {
 		return fmt.Sprintf("%s %s", c.Driver, redactURI(c.URI))
 	}
+	hostPort := net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
 	switch c.Driver {
 	case DriverRedis:
 		db := c.Database
 		if db == "" {
 			db = "0"
 		}
-		return fmt.Sprintf("redis %s:%d/%s", c.Host, c.Port, db)
+		return fmt.Sprintf("redis %s/%s", hostPort, db)
 	case DriverMongo:
 		if c.User != "" {
-			return fmt.Sprintf("mongodb %s@%s:%d/%s", c.User, c.Host, c.Port, c.Database)
+			return fmt.Sprintf("mongodb %s@%s/%s", c.User, hostPort, c.Database)
 		}
-		return fmt.Sprintf("mongodb %s:%d/%s", c.Host, c.Port, c.Database)
+		return fmt.Sprintf("mongodb %s/%s", hostPort, c.Database)
 	case DriverCassandra:
-		return fmt.Sprintf("cassandra %s:%d/%s", c.Host, c.Port, c.Database)
+		return fmt.Sprintf("cassandra %s/%s", hostPort, c.Database)
 	case DriverNeo4j:
 		user := c.User
 		if user == "" {
 			user = "neo4j"
 		}
-		return fmt.Sprintf("neo4j %s@%s:%d/%s", user, c.Host, c.Port, c.Database)
+		return fmt.Sprintf("neo4j %s@%s/%s", user, hostPort, c.Database)
 	default:
 		if c.User != "" {
-			return fmt.Sprintf("%s@%s:%d/%s", c.User, c.Host, c.Port, c.Database)
+			return fmt.Sprintf("%s@%s/%s", c.User, hostPort, c.Database)
 		}
-		return fmt.Sprintf("%s:%d/%s", c.Host, c.Port, c.Database)
+		return fmt.Sprintf("%s/%s", hostPort, c.Database)
 	}
 }
 

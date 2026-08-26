@@ -227,7 +227,9 @@ func (m *Model) selectResultRow(wy int, layout screens.WorkspaceLayout) {
 }
 
 // pickResizeDivider returns the pane divider closest to the given workspace
-// coordinates, or resizeNone when there is none to resize.
+// coordinates, or resizeNone when there is none to resize. A click must land
+// within 2 cells of a divider to avoid grabbing the wrong pane when clicking
+// far from any divider.
 func (m *Model) pickResizeDivider(wx, wy int, layout screens.WorkspaceLayout) int {
 	best := resizeNone
 	bestDist := 1 << 30
@@ -238,7 +240,11 @@ func (m *Model) pickResizeDivider(wx, wy int, layout screens.WorkspaceLayout) in
 		}
 	}
 	if d := absInt(wy - layout.MainH); d < bestDist {
+		bestDist = d
 		best = resizeEditor
+	}
+	if bestDist > 2 {
+		return resizeNone
 	}
 	return best
 }

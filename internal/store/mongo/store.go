@@ -312,20 +312,42 @@ func (e *MongoExecutor) Placeholder() string {
 	return "db.collection.find({})"
 }
 
+// mongoMutationMethods are the collection methods that change data or schema.
+var mongoMutationMethods = map[string]bool{
+	"insertone": true, "insertmany": true,
+	"updateone": true, "updatemany": true, "replaceone": true,
+	"deleteone": true, "deletemany": true,
+	"findoneanddelete": true, "findoneandreplace": true, "findoneandupdate": true,
+	"drop": true, "dropindex": true, "createindex": true,
+	"renamecollection": true,
+}
+
+// IsMutation reports whether the statement writes data or schema. It inspects
+// the called collection method (or the leading key of a raw JSON command), so
+// read-only browse filters that merely contain words like "insert" or "update"
+// are never flagged as mutations.
 func (e *MongoExecutor) IsMutation(stmt string) bool {
-	lower := strings.ToLower(strings.TrimSpace(stmt))
-	return strings.Contains(lower, "insert") ||
-		strings.Contains(lower, "update") ||
-		strings.Contains(lower, "delete") ||
-		strings.Contains(lower, "drop") ||
-		strings.Contains(lower, "create") ||
-		strings.Contains(lower, "replace")
+	trimmed := strings.TrimSpace(stmt)
+	if m := mqlCallPattern.FindStringSubmatch(trimmed); len(m) == 4 {
+		return mongoMutationMethods[strings.ToLower(m[2])]
+	}
+	lower := strings.ToLower(trimmed)
+	for _, op := range []string{`"insert"`, `"update"`, `"delete"`, `"findandmodify"`, `"drop"`, `"create"`, `"renamecollection"`, `"dropindexes"`} {
+		if strings.HasPrefix(lower, "{"+op) {
+			return true
+		}
+	}
+	return false
 }
 
 var mqlCallPattern = regexp.MustCompile(`(?i)^db\.([a-zA-Z0-9_\-\.]+)\.([a-zA-Z0-9_]+)\s*\(([\s\S]*)\)\s*;?$`)
 
-func (e *MongoExecutor) Execute(ctx context.Context, query string, limit, offset int) (store.DataView, error) {
-	trimmed := strings.TrimSpace(query)
+// Execute runs a MongoDB MQL statement against the store. The QueryExecutor
+// contract passes (buffer, line, maxRows): line is the cursor line (MQL is
+// single-statement, so it is ignored) and maxRows caps how many documents a
+// find loads into memory.
+func (e *MongoExecutor) Execute(ctx context.Context, buffer string, _line int, maxRows int) (store.DataView, error) {
+	trimmed := strings.TrimSpace(buffer)
 	if trimmed == "" {
 		return nil, errors.New("empty query")
 	}
@@ -339,7 +361,7 @@ func (e *MongoExecutor) Execute(ctx context.Context, query string, limit, offset
 		collName := m[1]
 		method := strings.ToLower(m[2])
 		argsRaw := strings.TrimSpace(m[3])
-		return e.executeMQLCall(ctx, collName, method, argsRaw, limit, offset)
+		return e.executeMQLCall(ctx, collName, method, argsRaw, maxRows)
 	}
 
 	// 2. Check for raw JSON command: e.g. {"find": "users", "filter": {...}}
@@ -368,28 +390,21 @@ func (e *MongoExecutor) Execute(ctx context.Context, query string, limit, offset
 	return nil, fmt.Errorf("unsupported MongoDB syntax; use db.<collection>.find({...}) or a JSON command")
 }
 
-func (e *MongoExecutor) executeMQLCall(ctx context.Context, collName, method, argsRaw string, limit, offset int) (store.DataView, error) {
+func (e *MongoExecutor) executeMQLCall(ctx context.Context, collName, method, argsRaw string, maxRows int) (store.DataView, error) {
 	coll := e.source.database.Collection(collName)
 
 	switch method {
 	case "find":
-		filterDoc := bson.M{}
-		if argsRaw != "" {
-			if err := bson.UnmarshalExtJSON([]byte(argsRaw), true, &filterDoc); err != nil {
-				var m bson.M
-				if err2 := json.Unmarshal([]byte(argsRaw), &m); err2 == nil {
-					filterDoc = m
-				} else {
-					return nil, fmt.Errorf("invalid find filter JSON: %w", err)
-				}
-			}
+		filterDoc, err := parseMQLDoc(argsRaw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid find filter JSON: %w", err)
 		}
 
-		findLimit := int64(limit)
+		findLimit := int64(maxRows)
 		if findLimit <= 0 {
 			findLimit = 50
 		}
-		findOpts := options.Find().SetLimit(findLimit).SetSkip(int64(offset))
+		findOpts := options.Find().SetLimit(findLimit).SetSkip(0)
 
 		cur, err := coll.Find(ctx, filterDoc, findOpts)
 		if err != nil {
@@ -418,25 +433,27 @@ func (e *MongoExecutor) executeMQLCall(ctx context.Context, collName, method, ar
 		}, nil
 
 	case "countdocuments", "count":
-		filterDoc := bson.M{}
-		if argsRaw != "" {
-			_ = json.Unmarshal([]byte(argsRaw), &filterDoc)
+		filterDoc, err := parseMQLDoc(argsRaw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid count filter JSON: %w", err)
 		}
 		count, err := coll.CountDocuments(ctx, filterDoc)
 		if err != nil {
 			return nil, fmt.Errorf("count: %w", err)
 		}
 		return &store.TabularData{
-			Columns: []string{"count"},
-			Rows:    [][]string{{strconv.FormatInt(count, 10)}},
+			Columns:   []string{"count"},
+			Rows:      [][]string{{strconv.FormatInt(count, 10)}},
+			Affected:  -1, // read query
+			TotalRows: -1,
 		}, nil
 
 	case "insertone":
 		if e.source.readOnly {
 			return nil, errors.New("insertOne is blocked in read-only mode")
 		}
-		var doc bson.M
-		if err := json.Unmarshal([]byte(argsRaw), &doc); err != nil {
+		doc, err := parseMQLDoc(argsRaw)
+		if err != nil {
 			return nil, fmt.Errorf("invalid insert JSON: %w", err)
 		}
 		res, err := coll.InsertOne(ctx, doc)
@@ -453,8 +470,8 @@ func (e *MongoExecutor) executeMQLCall(ctx context.Context, collName, method, ar
 		if e.source.readOnly {
 			return nil, errors.New("delete is blocked in read-only mode")
 		}
-		var filter bson.M
-		if err := json.Unmarshal([]byte(argsRaw), &filter); err != nil {
+		filter, err := parseMQLDoc(argsRaw)
+		if err != nil {
 			return nil, fmt.Errorf("invalid delete filter: %w", err)
 		}
 		var count int64
@@ -490,6 +507,143 @@ func (e *MongoExecutor) executeMQLCall(ctx context.Context, collName, method, ar
 	default:
 		return nil, fmt.Errorf("unsupported collection method %q", method)
 	}
+}
+
+func parseMQLDoc(raw string) (bson.M, error) {
+	if raw == "" {
+		return bson.M{}, nil
+	}
+	var doc bson.M
+	if err := bson.UnmarshalExtJSON([]byte(raw), true, &doc); err == nil {
+		return doc, nil
+	}
+	if err := json.Unmarshal([]byte(raw), &doc); err == nil {
+		return doc, nil
+	}
+	quoted, err := quoteMQLKeys(raw)
+	if err != nil {
+		return nil, err
+	}
+	if err := bson.UnmarshalExtJSON([]byte(quoted), true, &doc); err != nil {
+		return nil, fmt.Errorf("invalid BSON/JSON: %w", err)
+	}
+	return doc, nil
+}
+
+// quoteMQLKeys rewrites Mongo-shell style argument text into strict JSON by
+// double-quoting unquoted object keys ("age:", "$gt:") and normalizing
+// single-quoted string values to double-quoted ones. Already-valid JSON passes
+// through unchanged. Values (numbers, booleans, null, nested objects/arrays)
+// are left as-is.
+func quoteMQLKeys(s string) (string, error) {
+	type frame struct {
+		obj       bool // top-level container is an object (keys allowed) or array
+		expectKey bool
+	}
+	var out strings.Builder
+	stack := []frame{{obj: true, expectKey: false}}
+	i, n := 0, len(s)
+	for i < n {
+		c := s[i]
+		switch {
+		case c == ' ' || c == '\t' || c == '\r' || c == '\n':
+			out.WriteByte(c)
+			i++
+		case c == '{':
+			stack = append(stack, frame{obj: true, expectKey: true})
+			out.WriteByte(c)
+			i++
+		case c == '[':
+			stack = append(stack, frame{obj: false, expectKey: false})
+			out.WriteByte(c)
+			i++
+		case c == '}' || c == ']':
+			if len(stack) > 1 {
+				stack = stack[:len(stack)-1]
+			}
+			out.WriteByte(c)
+			i++
+		case c == '"':
+			start := i
+			i++
+			for i < n {
+				if s[i] == '\\' && i+1 < n {
+					i += 2
+					continue
+				}
+				if s[i] == '"' {
+					i++
+					break
+				}
+				i++
+			}
+			if i > n {
+				return "", fmt.Errorf("unterminated string at byte %d", start)
+			}
+			out.WriteString(s[start:i])
+			stack[len(stack)-1].expectKey = false
+		case c == '\'':
+			start := i
+			i++ // opening quote
+			var val strings.Builder
+			for i < n && s[i] != '\'' {
+				if s[i] == '\\' && i+1 < n {
+					val.WriteByte(s[i])
+					val.WriteByte(s[i+1])
+					i += 2
+					continue
+				}
+				val.WriteByte(s[i])
+				i++
+			}
+			if i >= n {
+				return "", fmt.Errorf("unterminated single-quoted string at byte %d", start)
+			}
+			i++ // closing quote
+			enc, err := json.Marshal(val.String())
+			if err != nil {
+				return "", err
+			}
+			out.Write(enc)
+			stack[len(stack)-1].expectKey = false
+		case c == ',':
+			out.WriteByte(c)
+			i++
+			stack[len(stack)-1].expectKey = stack[len(stack)-1].obj
+		case c == ':':
+			out.WriteByte(c)
+			i++
+			stack[len(stack)-1].expectKey = false
+		case stack[len(stack)-1].expectKey:
+			start := i
+			for i < n && s[i] != ':' {
+				i++
+			}
+			if i >= n {
+				return "", fmt.Errorf("unterminated key at byte %d", start)
+			}
+			key := strings.TrimSpace(s[start:i])
+			if key == "" {
+				return "", fmt.Errorf("empty key at byte %d", start)
+			}
+			if key[0] == '"' || key[0] == '\'' {
+				key = strings.Trim(key, `"'`)
+			}
+			kenc, err := json.Marshal(key)
+			if err != nil {
+				return "", err
+			}
+			out.Write(kenc)
+			out.WriteByte(':')
+			i++ // skip ':'
+			stack[len(stack)-1].expectKey = false
+		default:
+			// primitive value: copy through (numbers, booleans, null, ...)
+			out.WriteByte(c)
+			i++
+		}
+	}
+	return out.String(), nil
 }
 
 func extractDocID(doc bson.M) string {

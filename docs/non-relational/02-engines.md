@@ -11,7 +11,7 @@
 | **MySQL** | Relational | `github.com/go-sql-driver/mysql` | MPL-2.0 (Pure Go) | 3306 | SQL |
 | **MariaDB** | Relational | `github.com/go-sql-driver/mysql` | MPL-2.0 (Pure Go) | 3306 (3307 compose) | SQL |
 | **SQL Server** | Relational | `github.com/microsoft/go-mssqldb` | MIT (Pure Go) | 1433 | T-SQL |
-| **MongoDB** | Document | `go.mongodb.org/mongo-driver/v2` | Apache 2.0 (Pure Go) | 27017 | MQL / JSON |
+| **MongoDB** | Document | `go.mongodb.org/mongo-driver` v1.17 | Apache 2.0 (Pure Go) | 27017 | MQL / JSON |
 | **Redis** | Key-Value / Structures | `github.com/redis/go-redis/v9` | BSD-2 (Pure Go) | 6379 | Redis Commands |
 | **Apache Cassandra** | Wide-Column | `github.com/gocql/gocql` | BSD-3 (Pure Go) | 9042 | CQL |
 | **Neo4j** | Graph | `github.com/neo4j/neo4j-go-driver/v5` | Apache 2.0 (Pure Go) | 7687 | Cypher |

@@ -211,7 +211,7 @@ type RelationalStructure struct {
 }
 
 func (r *RelationalStructure) inspectionView() {}
-func (r *RelationalStructure) Title() string  { return "Columns & Indexes" }
+func (r *RelationalStructure) Title() string   { return "Columns & Indexes" }
 
 // FieldSchema represents a field name and inferred type.
 type FieldSchema struct {
@@ -231,7 +231,7 @@ type DocumentStructure struct {
 }
 
 func (d *DocumentStructure) inspectionView() {}
-func (d *DocumentStructure) Title() string  { return fmt.Sprintf("Collection: %s", d.CollectionName) }
+func (d *DocumentStructure) Title() string   { return fmt.Sprintf("Collection: %s", d.CollectionName) }
 
 // KeyValueStructure describes Redis key metadata and server stats.
 type KeyValueStructure struct {
@@ -245,7 +245,7 @@ type KeyValueStructure struct {
 }
 
 func (k *KeyValueStructure) inspectionView() {}
-func (k *KeyValueStructure) Title() string  { return fmt.Sprintf("Key Info: %s", k.Key) }
+func (k *KeyValueStructure) Title() string   { return fmt.Sprintf("Key Info: %s", k.Key) }
 
 // GraphStructure describes Node Label schema, properties, constraints, and relationships.
 type GraphStructure struct {
@@ -257,7 +257,7 @@ type GraphStructure struct {
 }
 
 func (g *GraphStructure) inspectionView() {}
-func (g *GraphStructure) Title() string  { return fmt.Sprintf("Label: %s", g.LabelName) }
+func (g *GraphStructure) Title() string   { return fmt.Sprintf("Label: %s", g.LabelName) }
 
 // --- Catalog & Browsing Models ---
 

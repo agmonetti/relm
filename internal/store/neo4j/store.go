@@ -353,20 +353,94 @@ func (e *Neo4jExecutor) Placeholder() string {
 	return "MATCH (n) RETURN n LIMIT 25;"
 }
 
-var cypherMutations = []string{"CREATE", "MERGE", "DELETE", "SET", "REMOVE", "DROP", "DETACH"}
+var cypherMutations = map[string]bool{
+	"CREATE": true, "MERGE": true, "DELETE": true, "DETACH": true,
+	"SET": true, "REMOVE": true, "DROP": true,
+}
 
+// IsMutation reports whether the statement writes data or schema. It scans the
+// Cypher tokens, ignoring string literals, backtick-quoted identifiers and
+// comments, so a read like MATCH (n) WHERE n.name='CREATE' RETURN n or
+// RETURN n.offset is never misclassified, while MATCH (n) SET n.x=1 and
+// MATCH (n) DETACH DELETE n still are.
 func (e *Neo4jExecutor) IsMutation(stmt string) bool {
-	upper := strings.ToUpper(strings.TrimSpace(stmt))
-	for _, m := range cypherMutations {
-		if strings.Contains(upper, m) {
+	for _, tok := range cypherTokens(stmt) {
+		if cypherMutations[tok] {
 			return true
 		}
 	}
 	return false
 }
 
-func (e *Neo4jExecutor) Execute(ctx context.Context, cypher string, limit, offset int) (store.DataView, error) {
-	trimmed := strings.TrimSpace(cypher)
+// cypherTokens splits a Cypher statement into uppercase word tokens, skipping
+// whitespace, comments, string literals and backtick-quoted identifiers.
+func cypherTokens(s string) []string {
+	var out []string
+	i, n := 0, len(s)
+	for i < n {
+		c := s[i]
+		switch {
+		case c == ' ' || c == '\t' || c == '\r' || c == '\n':
+			i++
+		case c == '/' && i+1 < n && s[i+1] == '/': // line comment
+			for i < n && s[i] != '\n' {
+				i++
+			}
+		case c == '/' && i+1 < n && s[i+1] == '*': // block comment
+			i += 2
+			for i+1 < n && !(s[i] == '*' && s[i+1] == '/') {
+				i++
+			}
+			i += 2
+		case c == '\'' || c == '"': // string literal
+			q := c
+			i++
+			for i < n {
+				if s[i] == '\\' && i+1 < n {
+					i += 2
+					continue
+				}
+				if s[i] == q {
+					i++
+					break
+				}
+				i++
+			}
+		case c == '`': // quoted identifier
+			i++
+			for i < n && s[i] != '`' {
+				i++
+			}
+			i++
+		case isCypherWord(c):
+			j := i
+			for j < n && isCypherWord(s[j]) {
+				j++
+			}
+			out = append(out, strings.ToUpper(s[i:j]))
+			i = j
+		default:
+			i++
+		}
+	}
+	return out
+}
+
+func isCypherWord(c byte) bool {
+	switch {
+	case c >= 'A' && c <= 'Z', c >= 'a' && c <= 'z', c >= '0' && c <= '9':
+		return true
+	case c == '_', c == '$':
+		return true
+	}
+	return false
+}
+
+// Execute runs a Cypher query. The QueryExecutor contract passes
+// (buffer, line, maxRows): line is the cursor line (unused) and maxRows caps
+// how many records a read query materializes in memory.
+func (e *Neo4jExecutor) Execute(ctx context.Context, buffer string, _line int, maxRows int) (store.DataView, error) {
+	trimmed := strings.TrimSpace(buffer)
 	if trimmed == "" {
 		return nil, errors.New("empty Cypher query")
 	}
@@ -399,7 +473,12 @@ func (e *Neo4jExecutor) Execute(ctx context.Context, cypher string, limit, offse
 	}
 
 	var nodes []store.GraphNode
+	truncated := false
 	for result.Next(ctx) {
+		if maxRows > 0 && len(rows) >= maxRows {
+			truncated = true
+			break
+		}
 		record := result.Record()
 		row := make([]string, len(cols))
 		for i, c := range cols {
@@ -429,13 +508,15 @@ func (e *Neo4jExecutor) Execute(ctx context.Context, cypher string, limit, offse
 	summary, _ := result.Consume(ctx)
 	if isMut && summary != nil {
 		counters := summary.Counters()
+		// Count structural changes only; a bare CREATE (node) reports 1 and a
+		// property-only SET reports 0 affected (it still mutates schema/data).
 		affected := counters.NodesCreated() + counters.NodesDeleted() +
-			counters.RelationshipsCreated() + counters.RelationshipsDeleted() +
-			counters.PropertiesSet()
+			counters.RelationshipsCreated() + counters.RelationshipsDeleted()
 		return &store.TabularData{
-			Columns:  cols,
-			Rows:     rows,
-			Affected: int64(affected),
+			Columns:   cols,
+			Rows:      rows,
+			Affected:  int64(affected),
+			Truncated: truncated,
 		}, nil
 	}
 
@@ -446,7 +527,10 @@ func (e *Neo4jExecutor) Execute(ctx context.Context, cypher string, limit, offse
 	}
 
 	return &store.TabularData{
-		Columns: cols,
-		Rows:    rows,
+		Columns:   cols,
+		Rows:      rows,
+		Affected:  -1, // read query
+		TotalRows: -1,
+		Truncated: truncated,
 	}, nil
 }

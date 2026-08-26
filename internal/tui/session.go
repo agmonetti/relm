@@ -62,15 +62,11 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) tea.Cmd {
 	// Configure query executor placeholder and title in editor
 	q := st.Query()
 	m.editorScreen.SetPlaceholder(q.Placeholder())
+	m.editorScreen.SetTitle(q.PromptTitle())
 
 	// Read-only advisory warnings for engines without native session-level locking
-	if cfg.ReadOnly {
-		switch cfg.Driver {
-		case conn.DriverMSSQL:
-			m.warn = "read-only is not enforced on mssql — connect with a read-only user"
-		case conn.DriverCassandra:
-			m.warn = "read-only is client-guarded on cassandra — connect with a read-only role for full enforcement"
-		}
+	if cfg.ReadOnly && cfg.Driver == conn.DriverCassandra {
+		m.warn = "read-only is client-guarded on cassandra — connect with a read-only role for full enforcement"
 	}
 	return m.loadBrowserCmd(st)
 }

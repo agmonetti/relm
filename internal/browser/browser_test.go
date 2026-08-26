@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/agmonetti/relm/internal/conn"
@@ -277,5 +278,157 @@ func TestBrowser_ReloadPicksUpNewTableAndRows(t *testing.T) {
 	}
 	if b.TotalRows != 1 {
 		t.Errorf("TotalRows = %d, want 1", b.TotalRows)
+	}
+}
+
+// cursorSource emulates a cursor-paged engine (Redis hash/set/zset SCAN
+// cursors, Cassandra page states) where the engine controls the next-cursor
+// and offset-based paging would repeat data. It exposes 130 items that only
+// advance when the previous response's cursor is sent back.
+type cursorSource struct {
+	items []store.CatalogItem
+	name  string
+}
+
+func newCursorSource(n int) *cursorSource {
+	items := make([]store.CatalogItem, n)
+	for i := range items {
+		items[i] = store.CatalogItem{Name: fmt.Sprintf("k%d", i)}
+	}
+	return &cursorSource{items: items, name: "cur"}
+}
+
+func (f *cursorSource) Driver() conn.Driver { return conn.DriverRedis }
+func (f *cursorSource) Version(context.Context) (string, error) {
+	return "fake", nil
+}
+func (f *cursorSource) Close() error   { return nil }
+func (f *cursorSource) ReadOnly() bool { return true }
+func (f *cursorSource) Catalog() store.CatalogDescriptor {
+	return store.CatalogDescriptor{
+		Title:    "KEYS",
+		ItemNoun: "key",
+		ListObjects: func(ctx context.Context) ([]store.CatalogItem, error) {
+			return f.items, nil
+		},
+	}
+}
+func (f *cursorSource) Inspect(context.Context, string) (store.InspectionView, error) {
+	return &store.KeyValueStructure{Key: f.name}, nil
+}
+func (f *cursorSource) Query() store.QueryExecutor { return nil }
+
+func (f *cursorSource) Browse(_ context.Context, req store.BrowseRequest) (store.BrowseResponse, error) {
+	start := 0
+	if req.Cursor != "" {
+		var err error
+		start, err = strconv.Atoi(req.Cursor)
+		if err != nil {
+			start = 0 // a non-integer cursor must NOT silently replay page 0
+		}
+	}
+	total := len(f.items)
+	end := start + req.PageSize
+	if end > total {
+		end = total
+	}
+	rows := make([][]string, 0, end-start)
+	for i := start; i < end; i++ {
+		rows = append(rows, []string{f.items[i].Name})
+	}
+	next := ""
+	if end < total {
+		next = strconv.Itoa(end)
+	}
+	return store.BrowseResponse{
+		Data: &store.TabularData{
+			Columns:   []string{"key"},
+			Rows:      rows,
+			Affected:  -1,
+			TotalRows: int64(total),
+		},
+		HasNext:    end < total,
+		NextCursor: next,
+		TotalCount: int64(total),
+	}, nil
+}
+
+func TestBrowser_CursorPagination(t *testing.T) {
+	ds := newCursorSource(130)
+	b := &Browser{PageSize: 50, cur: []string{""}, next: []string{""}}
+	if err := b.SelectItem(context.Background(), "cur", ds); err != nil {
+		t.Fatalf("SelectItem: %v", err)
+	}
+	firstOf := func() string { return b.Rows[0][0] }
+	lastOf := func() string { return b.Rows[len(b.Rows)-1][0] }
+
+	if got, want := len(b.Rows), 50; got != want {
+		t.Fatalf("page 0 rows = %d, want %d", got, want)
+	}
+	if firstOf() != "k0" || lastOf() != "k49" {
+		t.Fatalf("page 0 range = %s..%s, want k0..k49", firstOf(), lastOf())
+	}
+
+	if err := b.NextPage(context.Background(), ds); err != nil {
+		t.Fatalf("NextPage: %v", err)
+	}
+	if b.Page != 1 || firstOf() != "k50" || lastOf() != "k99" {
+		t.Fatalf("page 1 = %d rows %s..%s, want k50..k99", len(b.Rows), firstOf(), lastOf())
+	}
+
+	// Refresh must stay on page 1 (the recorded cursor, not a recomputed PK).
+	if err := b.Refresh(context.Background(), ds); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if firstOf() != "k50" {
+		t.Errorf("after Refresh page 1 starts at %s, want k50 (stable)", firstOf())
+	}
+
+	if err := b.NextPage(context.Background(), ds); err != nil {
+		t.Fatalf("NextPage: %v", err)
+	}
+	if b.Page != 2 || len(b.Rows) != 30 || firstOf() != "k100" {
+		t.Fatalf("page 2 = %d rows starting at %s, want 30 from k100", len(b.Rows), firstOf())
+	}
+	if b.HasNextPage() {
+		t.Error("page 2 (last) should not have a next page")
+	}
+	if err := b.NextPage(context.Background(), ds); err != nil {
+		t.Fatalf("NextPage out of range: %v", err)
+	}
+	if b.Page != 2 {
+		t.Errorf("Page = %d, should not advance beyond 2", b.Page)
+	}
+
+	if err := b.PrevPage(context.Background(), ds); err != nil {
+		t.Fatalf("PrevPage: %v", err)
+	}
+	if b.Page != 1 || firstOf() != "k50" {
+		t.Errorf("PrevPage -> page %d starting at %s, want 1/k50", b.Page, firstOf())
+	}
+	if err := b.PrevPage(context.Background(), ds); err != nil {
+		t.Fatalf("PrevPage: %v", err)
+	}
+	if b.Page != 0 || firstOf() != "k0" {
+		t.Errorf("PrevPage -> page %d starting at %s, want 0/k0", b.Page, firstOf())
+	}
+}
+
+func TestBrowser_CloneCopiesCursorStacks(t *testing.T) {
+	ds := newCursorSource(130)
+	b := &Browser{PageSize: 50, cur: []string{""}, next: []string{""}}
+	if err := b.SelectItem(context.Background(), "cur", ds); err != nil {
+		t.Fatalf("SelectItem: %v", err)
+	}
+	// record the next-cursor of page 0 as SelectItem already does
+	c := b.Clone()
+	if len(c.cur) != len(b.cur) || len(c.next) != len(b.next) {
+		t.Fatalf("clone cursor stacks (cur=%d next=%d) != source (cur=%d next=%d)",
+			len(c.cur), len(c.next), len(b.cur), len(b.next))
+	}
+	for i := range b.next {
+		if c.next[i] != b.next[i] {
+			t.Errorf("clone next[%d] = %q, want %q", i, c.next[i], b.next[i])
+		}
 	}
 }

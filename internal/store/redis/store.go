@@ -253,7 +253,7 @@ func (s *RedisSource) Browse(ctx context.Context, req store.BrowseRequest) (stor
 				score = res[i+1]
 			}
 			entries = append(entries, store.KVEntry{
-				Index: res[i],
+				Index: strconv.Itoa(i / 2),
 				Value: res[i],
 				Extra: score,
 			})
@@ -292,6 +292,10 @@ func (s *RedisSource) Inspect(ctx context.Context, name string) (store.Inspectio
 	var memUsage int64
 	var length int64
 	encoding, _ := s.client.ObjectEncoding(ctx, name).Result()
+
+	if mu, err := s.client.MemoryUsage(ctx, name).Result(); err == nil {
+		memUsage = mu
+	}
 
 	switch kType {
 	case "string":
@@ -371,7 +375,10 @@ func (e *RedisExecutor) IsMutation(stmt string) bool {
 	return redisWriteCmds[cmd]
 }
 
-func (e *RedisExecutor) Execute(ctx context.Context, buffer string, limit, offset int) (store.DataView, error) {
+// Execute runs a Redis command. The QueryExecutor contract passes
+// (buffer, line, maxRows); line and maxRows are not applicable to RESP and are
+// ignored.
+func (e *RedisExecutor) Execute(ctx context.Context, buffer string, _line, _maxRows int) (store.DataView, error) {
 	trimmed := strings.TrimSpace(buffer)
 	if trimmed == "" {
 		return nil, errors.New("empty command")
@@ -441,13 +448,17 @@ func formatRedisResult(val any) store.DataView {
 	switch v := val.(type) {
 	case string:
 		return &store.TabularData{
-			Columns: []string{"value"},
-			Rows:    [][]string{{v}},
+			Columns:   []string{"value"},
+			Rows:      [][]string{{v}},
+			Affected:  -1,
+			TotalRows: -1,
 		}
 	case int64:
 		return &store.TabularData{
-			Columns: []string{"result (integer)"},
-			Rows:    [][]string{{strconv.FormatInt(v, 10)}},
+			Columns:   []string{"result (integer)"},
+			Rows:      [][]string{{strconv.FormatInt(v, 10)}},
+			Affected:  -1,
+			TotalRows: -1,
 		}
 	case []any:
 		rows := make([][]string, len(v))
@@ -455,14 +466,44 @@ func formatRedisResult(val any) store.DataView {
 			rows[i] = []string{strconv.Itoa(i), fmt.Sprint(item)}
 		}
 		return &store.TabularData{
-			Columns: []string{"#", "value"},
-			Rows:    rows,
+			Columns:   []string{"#", "value"},
+			Rows:      rows,
+			Affected:  -1,
+			TotalRows: -1,
+		}
+	case map[string]string:
+		var entries []store.KVEntry
+		for k, val := range v {
+			entries = append(entries, store.KVEntry{
+				Index: k,
+				Value: val,
+			})
+		}
+		return &store.KeyValueData{
+			Type:    "hash",
+			TTL:     "-",
+			Entries: entries,
 		}
 	case map[string]any:
 		var entries []store.KVEntry
 		for k, val := range v {
 			entries = append(entries, store.KVEntry{
 				Index: k,
+				Value: fmt.Sprint(val),
+			})
+		}
+		return &store.KeyValueData{
+			Type:    "hash",
+			TTL:     "-",
+			Entries: entries,
+		}
+	case map[interface{}]interface{}:
+		// go-redis Do returns HGETALL (and friends) as a map keyed by the
+		// reply's native types.
+		var entries []store.KVEntry
+		for k, val := range v {
+			entries = append(entries, store.KVEntry{
+				Index: fmt.Sprint(k),
 				Value: fmt.Sprint(val),
 			})
 		}

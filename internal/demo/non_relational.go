@@ -64,12 +64,12 @@ func SeedMongo(ctx context.Context, client *mongo.Client, dbName string) error {
 	var prodDocs []any
 	for i := 1; i <= 30; i++ {
 		prodDocs = append(prodDocs, bson.M{
-			"_id":         primitive.NewObjectID(),
-			"sku":         fmt.Sprintf("SKU-%04d", i),
-			"title":       fmt.Sprintf("Product %s (%d)", demoAdjectives[i%len(demoAdjectives)], i),
-			"price":       19.99 + float64(i*5),
-			"in_stock":    50 - (i % 40),
-			"category":    demoCategories[i%len(demoCategories)],
+			"_id":      primitive.NewObjectID(),
+			"sku":      fmt.Sprintf("SKU-%04d", i),
+			"title":    fmt.Sprintf("Product %s (%d)", demoAdjectives[i%len(demoAdjectives)], i),
+			"price":    19.99 + float64(i*5),
+			"in_stock": 50 - (i % 40),
+			"category": demoCategories[i%len(demoCategories)],
 			"specs": bson.M{
 				"weight_kg": 0.5 + float64(i)*0.1,
 				"color":     []string{"black", "silver", "blue", "red"}[i%4],

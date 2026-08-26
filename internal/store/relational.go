@@ -57,7 +57,7 @@ func (a *RelationalAdapter) Browse(ctx context.Context, req BrowseRequest) (Brow
 		return BrowseResponse{}, err
 	}
 
-	pkCol, pkIdx := singlePK(cols)
+	pkCol, _ := singlePK(cols)
 	total, err := a.store.CountTableContext(ctx, req.ObjectName)
 	if err != nil {
 		total = -1
@@ -82,8 +82,17 @@ func (a *RelationalAdapter) Browse(ctx context.Context, req BrowseRequest) (Brow
 			}
 		}
 		nextCursor := ""
-		if len(rows) > 0 && pkIdx >= 0 && pkIdx < len(rows[len(rows)-1]) {
-			nextCursor = rows[len(rows)-1][pkIdx]
+		if len(rows) > 0 {
+			pkResIdx := -1
+			for i, c := range res.Columns {
+				if c == pkCol {
+					pkResIdx = i
+					break
+				}
+			}
+			if pkResIdx >= 0 && pkResIdx < len(rows[len(rows)-1]) {
+				nextCursor = rows[len(rows)-1][pkResIdx]
+			}
 		}
 		return BrowseResponse{
 			Data: &TabularData{

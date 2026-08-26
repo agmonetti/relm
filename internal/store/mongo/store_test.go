@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -114,8 +115,27 @@ func TestMongo_ExecutorLanguageAndPrompt(t *testing.T) {
 	if !exec.IsMutation("db.users.deleteOne({id: 1})") {
 		t.Error("deleteOne must be detected as mutation")
 	}
+	if !exec.IsMutation("db.users.updateMany({}, {$set: {a: 1}})") {
+		t.Error("updateMany must be detected as mutation")
+	}
 	if exec.IsMutation("db.users.find({})") {
 		t.Error("find must not be detected as mutation")
+	}
+	// words that merely appear inside a filter must not flag reads as writes
+	if exec.IsMutation("db.users.find({status: \"insert\"})") {
+		t.Error("find with an 'insert' value must not be a mutation")
+	}
+	if exec.IsMutation("db.users.countDocuments({created: {$gte: 1}})") {
+		t.Error("countDocuments must not be detected as mutation")
+	}
+	if !exec.IsMutation(`{"insert": "users", "documents": [{a: 1}]}`) {
+		t.Error("raw JSON insert command must be detected as mutation")
+	}
+	if !exec.IsMutation(`{"findAndModify": "users", "update": {"a": 1}}`) {
+		t.Error("raw JSON findAndModify command must be detected as mutation")
+	}
+	if exec.IsMutation(`{"find": "users", "limit": 5}`) {
+		t.Error("raw JSON find command must not be detected as mutation")
 	}
 }
 
@@ -126,5 +146,83 @@ func TestMongo_ReadOnlyBlocksMutations(t *testing.T) {
 	_, err := exec.Execute(context.Background(), "db.users.insertOne({name: 'Blocked'})", 0, 10)
 	if err == nil {
 		t.Fatal("expected mutation to be blocked in read-only mode")
+	}
+}
+
+func TestMongo_ReadOnlyAllowsReads(t *testing.T) {
+	// Words like "insert"/"update" inside a filter must still run in read-only
+	// mode; they are guarded after the read-only classification, so here we
+	// only assert the classification is not a false positive.
+	source := &MongoSource{readOnly: true}
+	exec := &MongoExecutor{source: source}
+	if exec.IsMutation("db.users.find({tags: \"insert updated\"})") {
+		t.Fatal("read query with mutation words in the filter was misclassified")
+	}
+}
+
+func TestMongo_QuoteMQLKeys(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{`{ age: { $gt: 18 } }`, `{"age": {"$gt": 18} }`},
+		{`{ age: 18 }`, `{"age": 18}`},
+		{`{}`, `{}`},
+		{`{"age": 18}`, `{"age": 18}`}, // strict JSON passes through
+		{`{ name: "Charlie", role: "admin" }`, `{"name": "Charlie", "role": "admin"}`},
+		{`{ name: 'Charlie' }`, `{"name": "Charlie"}`},
+		{`{ $and: [ {age: {$gt: 25}}, {age: {$lt: 45}} ] }`,
+			`{"$and": [ {"age": {"$gt": 25}}, {"age": {"$lt": 45}} ] }`},
+		{`{ status : { $in : [ "active", "pending" ] } }`,
+			`{"status" : { "$in" : [ "active", "pending" ] } }`},
+		{`{items: [{sku: "a", qty: 2}, {sku: "b", qty: 1}]}`,
+			`{"items": [{"sku": "a", "qty": 2}, {"sku": "b", "qty": 1}]}`},
+	}
+	for _, tc := range tests {
+		got, err := quoteMQLKeys(tc.in)
+		if err != nil {
+			t.Errorf("quoteMQLKeys(%q) error: %v", tc.in, err)
+			continue
+		}
+		if stripSpace(got) != stripSpace(tc.want) {
+			t.Errorf("quoteMQLKeys(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func stripSpace(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r == ' ' || r == '\t' || r == '\n' {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+func TestMongo_ParseMQLDoc(t *testing.T) {
+	doc, err := parseMQLDoc(`{ age: { $gt: 18 } }`)
+	if err != nil {
+		t.Fatalf("parseMQLDoc: %v", err)
+	}
+	ageField, ok := doc["age"]
+	if !ok {
+		t.Fatalf("parsed doc missing age: %v", doc)
+	}
+	if gt, ok := ageField.(bson.M)["$gt"]; !ok || gt != int32(18) {
+		t.Errorf("age.$gt = %v (type %T), want int32 18", ageField.(bson.M)["$gt"], gt)
+	}
+
+	empty, err := parseMQLDoc("")
+	if err != nil || len(empty) != 0 {
+		t.Errorf("parseMQLDoc(\"\") = %v, %v", empty, err)
+	}
+
+	if _, err := parseMQLDoc(`{unclosed: [`); err == nil {
+		t.Error("malformed input must error")
+	}
+	if _, err := parseMQLDoc(`{nope: nonsense}`); err == nil {
+		t.Error("non-JSON/non-shell input must error")
 	}
 }

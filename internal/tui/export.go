@@ -102,11 +102,11 @@ func writeExport(data store.DataView, name string) (string, string, error) {
 		return "", "", err
 	}
 	if dir := filepath.Dir(name); dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return "", "", err
 		}
 	}
-	if err := os.WriteFile(name, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(name, buf.Bytes(), 0o600); err != nil {
 		return "", "", err
 	}
 	abs, err := filepath.Abs(name)

@@ -94,13 +94,13 @@ The reload strategy adapts to each engine:
 `relm` implements a clear, 3-tier read-only hierarchy:
 
 1. **Tier 1 — Server-Enforced (Native Session Mode)**:
-   - SQLite: Opens file with `mode=ro`.
-   - PostgreSQL: Connects with `options=-cdefault_transaction_read_only=on`.
-   - MySQL / MariaDB: Pins connection with `SET SESSION TRANSACTION READ ONLY`.
-   - Neo4j: Uses `neo4j.WithSessionMode(neo4j.AccessModeRead)`. The Neo4j server strictly rejects writes.
+    - SQLite: Opens file with `mode=ro`.
+    - PostgreSQL: Connects with `options=-cdefault_transaction_read_only=on`.
+    - MySQL / MariaDB: Pins connection with `SET SESSION TRANSACTION READ ONLY`.
+    - Neo4j: Uses `neo4j.WithSessionMode(neo4j.AccessModeRead)`. The Neo4j server strictly rejects writes.
 2. **Tier 2 — Client-Blocked (Command & Statement Guard)**:
-   - Redis: Relm's client-side executor checks the command keyword against a mutation blacklist (`SET`, `DEL`, `HDEL`, `LPUSH`, `LPOP`, `SADD`, `SREM`, `ZADD`, `ZREM`, `FLUSHDB`, `FLUSHALL`, `MSET`, `RENAME`, etc.) and blocks execution immediately with `"operation rejected: connection is read-only"`.
-   - Cassandra: Relm's CQL executor blocks `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, `ALTER`.
+    - Redis: Relm's client-side executor checks the command keyword against a mutation blacklist (`SET`, `DEL`, `HDEL`, `LPUSH`, `LPOP`, `SADD`, `SREM`, `ZADD`, `ZREM`, `FLUSHDB`, `FLUSHALL`, `MSET`, `RENAME`, etc.) and blocks execution immediately with `"operation rejected: connection is read-only"`.
+    - Cassandra: Relm's CQL executor blocks `INSERT`, `UPDATE`, `DELETE`, `DROP`, `TRUNCATE`, `ALTER`.
+    - SQL Server: Relm's SQL executor blocks `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `DROP` etc. via `IsSQLWrite` when `read_only` is set.
 3. **Tier 3 — Advisory Notice**:
-   - SQL Server: Shows amber notice: `read-only is not enforced on mssql — connect with a read-only user`.
-   - Cassandra: Shows amber notice: `read-only is client-guarded on cassandra — connect with a read-only role for full enforcement`.
+    - Cassandra: Shows amber notice: `read-only is client-guarded on cassandra — connect with a read-only role for full server enforcement`.

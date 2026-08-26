@@ -566,4 +566,3 @@ func TestConnScreen_EnterAtEngineSelectorConnects(t *testing.T) {
 		t.Errorf("Path = %q, want /tmp/test.db", cm.Cfg.Path)
 	}
 }
-

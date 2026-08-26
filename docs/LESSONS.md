@@ -324,9 +324,9 @@ This file documents crossroads and decisions the agent makes during development,
 
 **Decision:** enforce where each driver allows it and be honest where it does not:
 - MySQL/MariaDB: `SET SESSION TRANSACTION READ ONLY` is per-connection, and the `database/sql` pool hands statements to arbitrary connections. `Exec`/`ExecContext` in read-only mode pin one connection (`db.Conn`), set the session var there, and run the statement on it — the server rejects the write. Reads stay on the normal pool.
-- SQL Server: no equivalent exists. The TUI shows an amber warning ("read-only is not enforced on mssql — connect with a read-only user") instead of pretending the flag protects the database.
+- SQL Server: the driver has no server-side read-only session mode, so relm now enforces read-only at the application level — `IsSQLWrite` blocks `INSERT`/`UPDATE`/`DELETE`/`CREATE`/`DROP`/etc. when `read_only` is set, mirroring the Redis/Cassandra guards.
 
-**Lesson:** a feature named the same across engines is really per-engine behavior; map it to each driver's actual mechanism and surface the gap visibly (warning) rather than failing silently — a silent no-op on MSSQL would defeat the entire purpose of the flag.
+**Lesson:** a feature named the same across engines is really per-engine behavior; map it to each driver's actual mechanism and surface the gap visibly — for MSSQL the gap is now closed by an app-level guard instead of a warning.
 
 ---
 

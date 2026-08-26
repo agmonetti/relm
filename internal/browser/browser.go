@@ -36,8 +36,12 @@ type Browser struct {
 	TotalRows int
 	Cursor    int // Row/Item cursor within visible page
 
-	// Cursor stack for backward pagination across keyset/cursor engines
-	cur     []string // cur[p] = cursor of page p; cur[0] = ""
+	// Cursor stack for backward pagination across keyset/cursor engines.
+	// cur[p] is the cursor used to REQUEST page p (cur[0] = ""); next[p] is the
+	// cursor returned by the engine after fetching page p, i.e. the cursor that
+	// yields page p+1 ("" if unknown / engine ignores cursors).
+	cur     []string
+	next    []string
 	hasNext bool
 }
 
@@ -46,6 +50,7 @@ func New(ctx context.Context, ds store.DataSource) (*Browser, error) {
 	b := &Browser{
 		PageSize: PageSizeDefault,
 		cur:      []string{""},
+		next:     []string{""},
 	}
 	if err := b.Load(ctx, ds); err != nil {
 		return nil, err
@@ -88,6 +93,7 @@ func (b *Browser) SelectItem(ctx context.Context, name string, ds store.DataSour
 	b.Page = 0
 	b.Cursor = 0
 	b.cur = []string{""}
+	b.next = []string{""}
 	b.hasNext = false
 
 	// Inspect structure
@@ -134,6 +140,12 @@ func (b *Browser) fetchPage(ctx context.Context, ds store.DataSource) error {
 	b.hasNext = resp.HasNext
 	b.TotalRows = int(resp.TotalCount)
 
+	// Record the cursor that yields the next page, if the engine provided one.
+	for len(b.next) <= b.Page {
+		b.next = append(b.next, "")
+	}
+	b.next[b.Page] = resp.NextCursor
+
 	// Populate convenience tabular fields if data is TabularData
 	if tab, ok := resp.Data.(*store.TabularData); ok {
 		b.Rows = tab.Rows
@@ -177,6 +189,7 @@ func (b *Browser) Reload(ctx context.Context, ds store.DataSource) error {
 		b.Page = 0
 		b.Cursor = 0
 		b.cur = []string{""}
+		b.next = []string{""}
 		b.hasNext = false
 		return nil
 	}
@@ -190,6 +203,14 @@ func (b *Browser) Reload(ctx context.Context, ds store.DataSource) error {
 			b.Indexes = rel.Indexes
 		}
 	}
+	// Reset pagination to avoid landing on an empty page after a mutation
+	// (e.g. DELETE reduced total rows). Keep stack consistent for cursor
+	// engines by clearing cur/next.
+	b.Page = 0
+	b.Cursor = 0
+	b.cur = []string{""}
+	b.next = []string{""}
+	b.hasNext = false
 	return b.fetchPage(ctx, ds)
 }
 
@@ -207,23 +228,14 @@ func (b *Browser) NextPage(ctx context.Context, ds store.DataSource) error {
 	if !b.HasNextPage() {
 		return nil
 	}
-	// Record next cursor if available from browse response
+	// The cursor that yields page p+1 was recorded when page p was fetched.
 	nextCursor := ""
-	if tab, ok := b.Data.(*store.TabularData); ok && len(tab.Rows) > 0 {
-		pkIdx := -1
-		for i, c := range b.Columns {
-			if c.PK {
-				pkIdx = i
-				break
-			}
-		}
-		if pkIdx >= 0 && pkIdx < len(tab.Rows[len(tab.Rows)-1]) {
-			nextCursor = tab.Rows[len(tab.Rows)-1][pkIdx]
-		}
+	if b.Page < len(b.next) {
+		nextCursor = b.next[b.Page]
 	}
 
 	for len(b.cur) <= b.Page+1 {
-		b.cur = append(b.cur, nextCursor)
+		b.cur = append(b.cur, "")
 	}
 	b.cur[b.Page+1] = nextCursor
 	b.Page++
@@ -308,5 +320,6 @@ func (b *Browser) Clone() *Browser {
 		c.Nulls[i] = append([]bool(nil), r...)
 	}
 	c.cur = append([]string(nil), b.cur...)
+	c.next = append([]string(nil), b.next...)
 	return &c
 }

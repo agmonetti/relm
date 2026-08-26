@@ -15,7 +15,7 @@ import (
 func SidebarWindow(cursor, height int) (offset, visible int) {
 	offset = 0
 	if cursor >= height {
-		offset = cursor
+		offset = cursor - height + 1
 	}
 	visible = height
 	return

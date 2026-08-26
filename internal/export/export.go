@@ -94,6 +94,20 @@ func writeGraphCSV(g *store.GraphData, w io.Writer) error {
 			return err
 		}
 	}
+	if len(g.Edges) > 0 {
+		if err := cw.Write([]string{"", "", ""}); err != nil {
+			return err
+		}
+		if err := cw.Write([]string{"EDGE_ID", "TYPE", "START", "END", "PROPERTIES"}); err != nil {
+			return err
+		}
+		for _, e := range g.Edges {
+			props, _ := json.Marshal(e.Properties)
+			if err := cw.Write([]string{e.ID, e.Type, e.StartNode, e.EndNode, string(props)}); err != nil {
+				return err
+			}
+		}
+	}
 	cw.Flush()
 	return cw.Error()
 }
@@ -149,7 +163,7 @@ func writeTabularJSON(res *store.TabularData, w io.Writer) error {
 }
 
 func writeDocumentJSON(docs *store.DocumentData, w io.Writer) error {
-	var rawItems []json.RawMessage
+	rawItems := make([]json.RawMessage, 0)
 	for _, d := range docs.Documents {
 		if strings.TrimSpace(d.RawJSON) != "" {
 			rawItems = append(rawItems, json.RawMessage(d.RawJSON))

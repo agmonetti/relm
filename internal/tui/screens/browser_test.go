@@ -66,34 +66,40 @@ func TestRenderSidebar_ScrollsToCursor(t *testing.T) {
 		b.Tables = append(b.Tables, fmt.Sprintf("table_%03d", i))
 	}
 
-	// cursor at the top: no scrolling
+	// cursor near the top: no scrolling, window 0..4, cursor at bottom of window
 	out := RenderSidebar(b, 5, 20, 5)
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	if len(lines) != 5 {
 		t.Fatalf("lines = %d, want 5", len(lines))
 	}
-	if !strings.Contains(lines[0], ">") || !strings.Contains(lines[0], "table_005") {
-		t.Errorf("cursor line = %q, want >table_005", lines[0])
+	if !strings.Contains(lines[4], ">") || !strings.Contains(lines[4], "table_005") {
+		t.Errorf("cursor line = %q, want >table_005 at last visible line", lines[4])
+	}
+	if !strings.Contains(lines[0], "table_001") {
+		t.Errorf("first visible line = %q, want table_001", lines[0])
 	}
 
-	// cursor far away: scroll so it stays visible
+	// cursor far away: scroll so it stays visible at bottom of window (146..150)
 	out = RenderSidebar(b, 150, 20, 5)
 	lines = strings.Split(strings.TrimRight(out, "\n"), "\n")
 	if len(lines) != 5 {
 		t.Fatalf("lines = %d, want 5 (scrolled)", len(lines))
 	}
-	if !strings.Contains(lines[0], ">") || !strings.Contains(lines[0], "table_150") {
-		t.Errorf("first visible line = %q, want >table_150", lines[0])
+	if !strings.Contains(lines[4], ">") || !strings.Contains(lines[4], "table_150") {
+		t.Errorf("last visible line = %q, want >table_150", lines[4])
 	}
-	if !strings.Contains(lines[4], "table_154") {
-		t.Errorf("last visible line = %q, want table_154", lines[4])
+	if !strings.Contains(lines[0], "table_146") {
+		t.Errorf("first visible line = %q, want table_146", lines[0])
 	}
 
-	// cursor at the very end: the last table alone is visible
+	// cursor at the very end: window shows last 5 tables, cursor at bottom
 	out = RenderSidebar(b, 199, 20, 5)
 	lines = strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != 1 || !strings.Contains(lines[0], "table_199") {
-		t.Errorf("last table line = %q, want a single >table_199", strings.Join(lines, "|"))
+	if len(lines) != 5 || !strings.Contains(lines[4], "table_199") || !strings.Contains(lines[4], ">") {
+		t.Errorf("last table lines = %q, want 5 lines ending in >table_199", strings.Join(lines, "|"))
+	}
+	if !strings.Contains(lines[0], "table_195") {
+		t.Errorf("first visible line = %q, want table_195", lines[0])
 	}
 }
 

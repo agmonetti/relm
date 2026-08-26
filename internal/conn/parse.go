@@ -29,7 +29,7 @@ func ParseDSN(dsn string) (ConnectionConfig, error) {
 
 	u, err := url.Parse(dsn)
 	if err != nil {
-		return ConnectionConfig{}, fmt.Errorf("invalid DSN %q: %v", dsn, err)
+		return ConnectionConfig{}, fmt.Errorf("invalid DSN %q: %v", redactURI(dsn), err)
 	}
 
 	var cfg ConnectionConfig
@@ -43,15 +43,18 @@ func ParseDSN(dsn string) (ConnectionConfig, error) {
 		if cfg.Path == "" {
 			cfg.Path = u.Opaque // e.g. "sqlite:relm.db", "file:relm.db"
 		}
+		if u.Host != "" {
+			return ConnectionConfig{}, fmt.Errorf("invalid DSN %q: sqlite path must not have a host", redactURI(dsn))
+		}
 		return cfg, nil
 
-	case "postgres":
+	case "postgres", "postgresql":
 		cfg.Driver = DriverPostgres
 	case "mysql":
 		cfg.Driver = DriverMySQL
 	case "mariadb":
 		cfg.Driver = DriverMariaDB
-	case "sqlserver":
+	case "sqlserver", "mssql":
 		cfg.Driver = DriverMSSQL
 	case "mongodb", "mongodb+srv":
 		cfg.Driver = DriverMongo
@@ -88,13 +91,28 @@ func ParseDSN(dsn string) (ConnectionConfig, error) {
 	if p := u.Port(); p != "" {
 		n, err := strconv.Atoi(p)
 		if err != nil || n <= 0 || n > 65535 {
-			return ConnectionConfig{}, fmt.Errorf("invalid DSN %q: bad port %q", dsn, p)
+			return ConnectionConfig{}, fmt.Errorf("invalid DSN %q: bad port %q", redactURI(dsn), p)
 		}
 		cfg.Port = n
 	}
 
 	if cfg.Driver == DriverMSSQL {
 		cfg.Database = q.Get("database")
+		if cfg.Database == "" {
+			cfg.Database = q.Get("Database")
+		}
+		if cfg.Database == "" {
+			cfg.Database = q.Get("initial catalog")
+		}
+		if cfg.Database == "" {
+			cfg.Database = q.Get("Initial Catalog")
+		}
+		if cfg.Database == "" && u.Path != "" {
+			cfg.Database = strings.TrimPrefix(u.Path, "/")
+			if decoded, err := url.PathUnescape(cfg.Database); err == nil {
+				cfg.Database = decoded
+			}
+		}
 	} else if u.Path != "" {
 		cfg.Database = strings.TrimPrefix(u.Path, "/")
 		if decoded, err := url.PathUnescape(cfg.Database); err == nil {

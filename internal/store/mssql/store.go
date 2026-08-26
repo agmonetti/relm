@@ -15,7 +15,8 @@ import (
 
 // Store is the SQL Server implementation of store.Store.
 type Store struct {
-	db *sql.DB
+	db       *sql.DB
+	readOnly bool
 }
 
 // New opens a connection to SQL Server.
@@ -56,7 +57,7 @@ func New(cfg conn.ConnectionConfig) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("%w: %v", store.ErrConnection, err)
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, readOnly: cfg.ReadOnly}, nil
 }
 
 func init() {
@@ -191,6 +192,9 @@ func (s *Store) Query(sql string) (*store.Result, error) {
 // QueryContext runs arbitrary SQL with a context, so it can be cancelled or
 // bounded by a timeout.
 func (s *Store) QueryContext(ctx context.Context, sql string) (*store.Result, error) {
+	if s.readOnly && store.IsSQLWrite(sql) {
+		return nil, fmt.Errorf("mutations are blocked in read-only mode")
+	}
 	rows, err := s.db.QueryContext(ctx, sql)
 	if err != nil {
 		return nil, err
@@ -202,6 +206,9 @@ func (s *Store) QueryContext(ctx context.Context, sql string) (*store.Result, er
 // QueryContextMax runs a query that returns rows, stopping after max rows
 // (0 = unlimited) and marking Result.Truncated when the result is longer.
 func (s *Store) QueryContextMax(ctx context.Context, sql string, max int) (*store.Result, error) {
+	if s.readOnly && store.IsSQLWrite(sql) {
+		return nil, fmt.Errorf("mutations are blocked in read-only mode")
+	}
 	rows, err := s.db.QueryContext(ctx, sql)
 	if err != nil {
 		return nil, err
@@ -217,6 +224,9 @@ func (s *Store) Exec(sql string) (int64, error) {
 
 // ExecContext runs SQL without a result with a context.
 func (s *Store) ExecContext(ctx context.Context, sql string) (int64, error) {
+	if s.readOnly {
+		return 0, fmt.Errorf("mutations are blocked in read-only mode")
+	}
 	res, err := s.db.ExecContext(ctx, sql)
 	if err != nil {
 		return 0, err
