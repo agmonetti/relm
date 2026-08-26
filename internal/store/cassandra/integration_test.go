@@ -181,6 +181,40 @@ func TestIntegration(t *testing.T) {
 	if tabs, ok := data.(*store.TabularData); !ok || len(tabs.Rows) != 6 {
 		t.Errorf("predicate query = %T rows=%d, want 6", data, cassRows(data))
 	}
+
+	// An empty table must still expose its schema columns: the browser and
+	// the editor draw the headers even with zero rows (same contract as the
+	// relational engines, where columns come from the schema, not the rows).
+	if err := ds.(*CassandraSource).session.Query(
+		"CREATE TABLE IF NOT EXISTS it_empty (k text PRIMARY KEY, v int)").Exec(); err != nil {
+		t.Fatalf("create it_empty: %v", err)
+	}
+	respE, err := ds.Browse(ctx, store.BrowseRequest{ObjectName: "it_empty", PageSize: 2})
+	if err != nil {
+		t.Fatalf("Browse empty table: %v", err)
+	}
+	tabE, ok := respE.Data.(*store.TabularData)
+	if !ok || len(tabE.Rows) != 0 {
+		t.Fatalf("empty browse = %T rows=%d, want TabularData with 0 rows", respE.Data, cassRows(respE.Data))
+	}
+	if len(tabE.Columns) != 2 || tabE.Columns[0] != "k" || tabE.Columns[1] != "v" {
+		t.Errorf("empty table columns = %v, want [k v]", tabE.Columns)
+	}
+	data, err = exec.Execute(ctx, "SELECT * FROM it_empty", 0, 10)
+	if err != nil {
+		t.Fatalf("SELECT empty table: %v", err)
+	}
+	if tab, ok := data.(*store.TabularData); !ok || len(tab.Columns) != 2 || len(tab.Rows) != 0 {
+		t.Errorf("SELECT empty = %T columns=%v rows=%d, want headers [k v] and 0 rows",
+			data, cassCols(data), cassRows(data))
+	}
+}
+
+func cassCols(v store.DataView) []string {
+	if tab, ok := v.(*store.TabularData); ok {
+		return tab.Columns
+	}
+	return nil
 }
 
 func cassHasTable(items []store.CatalogItem, name string) bool {

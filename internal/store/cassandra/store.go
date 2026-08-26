@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -149,6 +150,14 @@ func (s *CassandraSource) Browse(ctx context.Context, req store.BrowseRequest) (
 	for i, c := range iter.Columns() {
 		cols[i] = c.Name
 	}
+	if len(cols) == 0 {
+		// An empty table can come back without column metadata: fall back to
+		// the schema, mirroring the relational engines (columns come from the
+		// schema, never from the row data).
+		if sc, err := s.schemaColumns(ctx, s.keyspace, req.ObjectName); err == nil {
+			cols = sc
+		}
+	}
 
 	// Read exactly one page: gocql transparently fetches subsequent pages as
 	// they are scanned, so stop after pageSize rows to keep the PageState
@@ -195,6 +204,25 @@ func (s *CassandraSource) Browse(ctx context.Context, req store.BrowseRequest) (
 		NextCursor: nextCursor,
 		TotalCount: -1,
 	}, nil
+}
+
+// schemaColumns returns the column names of a table from system_schema,
+// independent of whether the table has rows. Relational engines read columns
+// from the schema (never from the rows), so an empty table still exposes its
+// columns to the browser and the editor.
+func (s *CassandraSource) schemaColumns(ctx context.Context, keyspace, table string) ([]string, error) {
+	query := "SELECT column_name FROM system_schema.columns WHERE keyspace_name = ? AND table_name = ?"
+	iter := s.session.Query(query, keyspace, table).WithContext(ctx).Iter()
+
+	var names []string
+	var name string
+	for iter.Scan(&name) {
+		names = append(names, name)
+	}
+	if err := iter.Close(); err != nil {
+		return nil, fmt.Errorf("schema columns: %w", err)
+	}
+	return names, nil
 }
 
 func (s *CassandraSource) Inspect(ctx context.Context, name string) (store.InspectionView, error) {
@@ -277,6 +305,28 @@ func (e *CassandraExecutor) IsMutation(stmt string) bool {
 	return false
 }
 
+var cqlFromRe = regexp.MustCompile(`(?i)\bFROM\s+([A-Za-z_][A-Za-z0-9_.]*)`)
+
+// schemaColumnsFor resolves the FROM target of a CQL SELECT against the schema
+// and returns its column names, or nil when the target cannot be resolved.
+func (e *CassandraExecutor) schemaColumnsFor(ctx context.Context, stmt string) []string {
+	m := cqlFromRe.FindStringSubmatch(stmt)
+	if m == nil {
+		return nil
+	}
+	target := m[1]
+	keyspace := e.source.keyspace
+	if i := strings.LastIndex(target, "."); i >= 0 {
+		keyspace = target[:i]
+		target = target[i+1:]
+	}
+	names, err := e.source.schemaColumns(ctx, keyspace, target)
+	if err != nil {
+		return nil
+	}
+	return names
+}
+
 // Execute runs a CQL statement. The QueryExecutor contract passes
 // (buffer, line, maxRows): line is the cursor line (unused) and maxRows caps
 // how many rows a read query loads into memory (a hard breaker, since gocql
@@ -311,6 +361,14 @@ func (e *CassandraExecutor) Execute(ctx context.Context, buffer string, _line in
 	cols := make([]string, len(iter.Columns()))
 	for i, c := range iter.Columns() {
 		cols[i] = c.Name
+	}
+	if len(cols) == 0 {
+		// Empty result without column metadata (e.g. SELECT * on a table with
+		// no rows): derive the header from the schema. CQL SELECTs reference a
+		// single table, so the FROM target is unambiguous.
+		if sc := e.schemaColumnsFor(ctx, trimmed); sc != nil {
+			cols = sc
+		}
 	}
 
 	var rows [][]string

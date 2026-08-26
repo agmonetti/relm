@@ -10,6 +10,7 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/agmonetti/relm/internal/browser"
+	"github.com/agmonetti/relm/internal/store"
 )
 
 func init() {
@@ -58,6 +59,100 @@ func TestRenderDataTable_NoSelectionHighlightsNothing(t *testing.T) {
 // hasBackground reports whether an ANSI string sets a background color.
 func hasBackground(s string) bool {
 	return strings.Contains(s, "48;")
+}
+
+func TestRenderMainBrowser_EmptyTabularDataShowsColumns(t *testing.T) {
+	// The real browse flow always sets Data to a TabularData, even when the
+	// table has zero rows: the empty table must still draw its column header.
+	b := &browser.Browser{
+		Tables:      []string{"users"},
+		ActiveTable: "users",
+		Data: &store.TabularData{
+			Columns: []string{"id", "name", "email"},
+			Rows:    nil,
+		},
+		Columns: []store.Column{
+			{Name: "id", Type: "INTEGER", PK: true},
+			{Name: "name", Type: "TEXT"},
+			{Name: "email", Type: "TEXT"},
+		},
+		PageSize: 50,
+	}
+
+	out := RenderMainBrowser(b, 96, 20)
+	foundHeader := false
+	foundHint := false
+	for _, l := range strings.Split(out, "\n") {
+		s := ansi.Strip(l)
+		if strings.Contains(s, "id") && strings.Contains(s, "name") && strings.Contains(s, "email") {
+			foundHeader = true
+		}
+		if strings.Contains(s, "0 rows returned") {
+			foundHint = true
+		}
+	}
+	if !foundHeader {
+		t.Error("empty table must still show the column headers")
+	}
+	if !foundHint {
+		t.Error("empty table must show the '( 0 rows returned )' hint")
+	}
+}
+
+func TestRenderMainBrowser_EmptyTabularDataFallsBackToSchemaColumns(t *testing.T) {
+	// Cassandra SELECT * on an empty table can come back without column
+	// metadata; the renderer must fall back to the schema columns (b.Columns).
+	b := &browser.Browser{
+		Tables:      []string{"users"},
+		ActiveTable: "users",
+		Data: &store.TabularData{
+			Columns: nil, // empty result set carried no column metadata
+			Rows:    nil,
+		},
+		Columns: []store.Column{
+			{Name: "id", Type: "INT", PK: true},
+			{Name: "name", Type: "TEXT"},
+		},
+		PageSize: 50,
+	}
+
+	out := RenderMainBrowser(b, 96, 20)
+	foundHeader := false
+	foundHint := false
+	for _, l := range strings.Split(out, "\n") {
+		s := ansi.Strip(l)
+		if strings.Contains(s, "id") && strings.Contains(s, "name") {
+			foundHeader = true
+		}
+		if strings.Contains(s, "0 rows returned") {
+			foundHint = true
+		}
+	}
+	if !foundHeader {
+		t.Error("empty table without result metadata must still show the schema column headers")
+	}
+	if !foundHint {
+		t.Error("empty table must show the '( 0 rows returned )' hint")
+	}
+}
+
+func TestRenderMainBrowser_EmptyTabularDataWithoutAnyColumnsShowsOnlyHint(t *testing.T) {
+	// No schema available (e.g. a view that has neither result metadata nor
+	// an inspection view): only the empty-state box is drawn, no dead header.
+	b := &browser.Browser{
+		Tables:      []string{"users"},
+		ActiveTable: "users",
+		Data: &store.TabularData{
+			Columns: nil,
+			Rows:    nil,
+		},
+		PageSize: 50,
+	}
+
+	out := RenderMainBrowser(b, 96, 20)
+	if !strings.Contains(out, "0 rows returned") {
+		t.Error("empty table must show the '( 0 rows returned )' hint")
+	}
 }
 
 func TestRenderSidebar_ScrollsToCursor(t *testing.T) {

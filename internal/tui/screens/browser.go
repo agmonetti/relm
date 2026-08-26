@@ -113,7 +113,7 @@ func RenderMainBrowser(b *browser.Browser, width, height int) string {
 				cols[i] = c.Name
 			}
 			if len(b.Rows) == 0 {
-				return RenderDataTable(cols, nil, b.Cursor, width, 2) + "\n\n" + RenderEmptyTable(cols, width)
+				return renderEmptyTable(cols, b.Cursor, width)
 			}
 			return RenderDataTable(cols, b.Rows, b.Cursor, width, height)
 		}
@@ -130,7 +130,7 @@ func RenderMainBrowser(b *browser.Browser, width, height int) string {
 			}
 		}
 		if len(v.Rows) == 0 {
-			return RenderEmptyTable(cols, width)
+			return renderEmptyTable(cols, b.Cursor, width)
 		}
 		return RenderDataTable(cols, v.Rows, b.Cursor, width, height)
 
@@ -154,12 +154,24 @@ func RenderMainBrowser(b *browser.Browser, width, height int) string {
 				cols[i] = c.Name
 			}
 			if len(b.Rows) == 0 {
-				return RenderEmptyTable(cols, width)
+				return renderEmptyTable(cols, b.Cursor, width)
 			}
 			return RenderDataTable(cols, b.Rows, b.Cursor, width, height)
 		}
 		return styles.StyleHeaderDim.Render("unsupported view format")
 	}
+}
+
+// renderEmptyTable draws an empty table while keeping the column header and
+// separator above the empty-state box, per the documented design ("An empty
+// table keeps the header and the separator and draws a centered empty-table
+// ASCII box"). When no column names are known (e.g. a view without schema
+// metadata), only the box is drawn.
+func renderEmptyTable(cols []string, cursor, width int) string {
+	if len(cols) == 0 {
+		return RenderEmptyTable(cols, width)
+	}
+	return RenderDataTable(cols, nil, cursor, width, 2) + "\n\n" + RenderEmptyTable(cols, width)
 }
 
 // RenderDocumentList renders a list of BSON/JSON documents.
