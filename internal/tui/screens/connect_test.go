@@ -97,12 +97,38 @@ func TestConnScreen_ValidateSSLMode(t *testing.T) {
 func TestConnScreen_DriverCyclesAll(t *testing.T) {
 	c := NewConnScreen(nil)
 	seen := map[conn.Driver]bool{}
-	for range conn.Drivers {
+	for range conn.RelationalDrivers {
+		seen[c.driver()] = true
+		c.cycleDriver(true)
+	}
+	c.toggleParadigm()
+	for range conn.NonRelationalDrivers {
 		seen[c.driver()] = true
 		c.cycleDriver(true)
 	}
 	if len(seen) != len(conn.Drivers) {
 		t.Errorf("drivers seen = %d, want %d", len(seen), len(conn.Drivers))
+	}
+}
+
+func TestConnScreen_ToggleParadigm(t *testing.T) {
+	c := NewConnScreen(nil)
+	if !conn.IsRelational(c.driver()) {
+		t.Fatalf("expected initial driver %q to be relational", c.driver())
+	}
+	// Space when focus == 0 toggles paradigm
+	c.focus = 0
+	c.Update(tea.KeyMsg{Type: tea.KeySpace})
+	if conn.IsRelational(c.driver()) {
+		t.Fatalf("expected driver %q to be non-relational after Space toggle", c.driver())
+	}
+	if c.driver() != conn.DriverMongo {
+		t.Errorf("expected first non-relational to be mongo, got %q", c.driver())
+	}
+	// Toggle back
+	c.Update(tea.KeyMsg{Type: tea.KeySpace})
+	if !conn.IsRelational(c.driver()) {
+		t.Fatalf("expected driver %q to be relational after second toggle", c.driver())
 	}
 }
 
@@ -128,16 +154,34 @@ func TestConnScreen_FieldHelper(t *testing.T) {
 func TestConnScreen_SSLAvailableForAllNetworkEngines(t *testing.T) {
 	c := NewConnScreen(nil)
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	// cycle from sqlite to each network engine and check the SSL field is there
-	for range conn.Drivers {
+	// Check relational network engines
+	for range conn.RelationalDrivers {
 		if c.driver() != conn.DriverSQLite {
+			found := false
 			for _, f := range c.fieldsVisible() {
 				if f.label == "SSL" {
-					goto ok
+					found = true
+					break
 				}
 			}
+			if !found {
+				t.Errorf("%s: SSL field missing", c.driver())
+			}
+		}
+		c.cycleDriver(true)
+	}
+	// Check non-relational network engines
+	c.toggleParadigm()
+	for range conn.NonRelationalDrivers {
+		found := false
+		for _, f := range c.fieldsVisible() {
+			if f.label == "SSL" {
+				found = true
+				break
+			}
+		}
+		if !found {
 			t.Errorf("%s: SSL field missing", c.driver())
-		ok:
 		}
 		c.cycleDriver(true)
 	}

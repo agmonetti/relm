@@ -131,6 +131,7 @@ func (m *Model) renderFooter() string {
 			{"↑↓", "saved"},
 			{"tab", "engine/fields"},
 			{"←→", "engine"},
+			{"space", "SQL/NoSQL"},
 			{"enter", "connect"},
 			{"ctrl+s", "save"},
 			{"d", "delete"},

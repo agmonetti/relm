@@ -199,13 +199,55 @@ func (c *ConnScreen) nextFocus() tea.Cmd {
 	return c.applyFocus()
 }
 
+func (c *ConnScreen) toggleParadigm() tea.Cmd {
+	prevDefault := conn.DefaultPort(c.driver())
+	if conn.IsRelational(c.driver()) {
+		c.driverIdx = len(conn.RelationalDrivers)
+	} else {
+		c.driverIdx = 0
+	}
+	c.rebuildFields()
+	if p := c.field("Port"); p != nil {
+		if v := p.input.Value(); v == "" || v == strconv.Itoa(prevDefault) {
+			p.input.SetValue("")
+		}
+	}
+	c.focus = 0
+	return c.applyFocus()
+}
+
 func (c *ConnScreen) cycleDriver(right bool) tea.Cmd {
 	prevDefault := conn.DefaultPort(c.driver())
-	n := len(conn.Drivers)
-	if right {
-		c.driverIdx = (c.driverIdx + 1) % n
+	if conn.IsRelational(c.driver()) {
+		n := len(conn.RelationalDrivers)
+		curr := 0
+		for i, d := range conn.RelationalDrivers {
+			if d == c.driver() {
+				curr = i
+				break
+			}
+		}
+		if right {
+			curr = (curr + 1) % n
+		} else {
+			curr = (curr - 1 + n) % n
+		}
+		c.driverIdx = curr
 	} else {
-		c.driverIdx = (c.driverIdx - 1 + n) % n
+		n := len(conn.NonRelationalDrivers)
+		curr := 0
+		for i, d := range conn.NonRelationalDrivers {
+			if d == c.driver() {
+				curr = i
+				break
+			}
+		}
+		if right {
+			curr = (curr + 1) % n
+		} else {
+			curr = (curr - 1 + n) % n
+		}
+		c.driverIdx = len(conn.RelationalDrivers) + curr
 	}
 	c.rebuildFields()
 	// Reset the port when it still holds the previous engine's default (or is
@@ -364,6 +406,11 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 		case "left", "right":
 			if c.focus == 0 {
 				cmds = append(cmds, c.cycleDriver(msg.String() == "right"))
+				handled = true
+			}
+		case " ", "p", "t":
+			if c.focus == 0 {
+				cmds = append(cmds, c.toggleParadigm())
 				handled = true
 			}
 		case "up", "down":
@@ -603,6 +650,9 @@ func (c *ConnScreen) HitTest(x, y int) clickable {
 func (c *ConnScreen) Activate(k clickable) tea.Cmd {
 	switch k.kind {
 	case clickEngine:
+		if c.focus == 0 {
+			return c.toggleParadigm()
+		}
 		c.focus = 0
 		return c.applyFocus()
 	case clickField:
@@ -732,15 +782,17 @@ func fieldRow(label, box string, width int) string {
 	return strings.Repeat(" ", left) + lbl + " " + box + strings.Repeat(" ", right)
 }
 
-// renderMotorSelector draws the engine selector as a focusable box.
+// renderMotorSelector draws the engine selector as a focusable box with SQL/NoSQL toggle.
 func (c *ConnScreen) renderMotorSelector() string {
 	style := styles.StyleInputBox
 	if c.focus == 0 {
 		style = styles.StyleInputBoxFocus
 	}
-	// the hint lives inside the fixed-width box so its [ aligns with the
-	// other fields' brackets
-	content := fmt.Sprintf("%-17s ←→ switch", string(c.driver()))
+	tag := "SQL"
+	if !conn.IsRelational(c.driver()) {
+		tag = "NoSQL"
+	}
+	content := fmt.Sprintf("%-16s ←→/space", tag+": "+string(c.driver()))
 	return style.Render(fmt.Sprintf("[ %-*s ]", boxInner, content))
 }
 

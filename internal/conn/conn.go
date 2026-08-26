@@ -21,7 +21,24 @@ const (
 	DriverNeo4j     Driver = "neo4j"
 )
 
-// Drivers is the list of supported engines.
+// RelationalDrivers lists the SQL relational engines.
+var RelationalDrivers = []Driver{
+	DriverSQLite,
+	DriverPostgres,
+	DriverMySQL,
+	DriverMariaDB,
+	DriverMSSQL,
+}
+
+// NonRelationalDrivers lists document, key-value, wide-column, and graph engines.
+var NonRelationalDrivers = []Driver{
+	DriverMongo,
+	DriverRedis,
+	DriverCassandra,
+	DriverNeo4j,
+}
+
+// Drivers is the list of all supported engines.
 var Drivers = []Driver{
 	DriverSQLite,
 	DriverPostgres,
@@ -32,6 +49,16 @@ var Drivers = []Driver{
 	DriverRedis,
 	DriverCassandra,
 	DriverNeo4j,
+}
+
+// IsRelational reports whether a driver is a relational SQL engine.
+func IsRelational(d Driver) bool {
+	switch d {
+	case DriverSQLite, DriverPostgres, DriverMySQL, DriverMariaDB, DriverMSSQL:
+		return true
+	default:
+		return false
+	}
 }
 
 // DefaultPort returns the default network port for each engine.
