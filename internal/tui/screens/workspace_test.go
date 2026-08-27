@@ -274,3 +274,44 @@ func TestComputeLayout_TogglePanels(t *testing.T) {
 		t.Errorf("All false guard: ShowMain must be true")
 	}
 }
+
+func TestComputeLayout_ExtremeResizeNeverOverflows(t *testing.T) {
+	// Extreme Editor resizing up and down
+	for _, h := range []int{15, 25, 40} {
+		for _, edH := range []int{-50, 1, 3, 5, 20, 100, 1000} {
+			l := ComputeLayout(100, h, true, true, true, 20, edH)
+			if l.EditorH < EditorMinH {
+				t.Errorf("h=%d edH=%d: EditorH=%d below EditorMinH %d", h, edH, l.EditorH, EditorMinH)
+			}
+			if l.MainH < MainMinH {
+				t.Errorf("h=%d edH=%d: MainH=%d below MainMinH %d", h, edH, l.MainH, MainMinH)
+			}
+			if total := l.MainH + 1 + l.EditorH; total != h {
+				t.Errorf("h=%d edH=%d: total vertical = %d, want %d", h, edH, total, h)
+			}
+
+			out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
+				FocusMain, false, l, 0, 100, h)
+			if lines := len(strings.Split(out, "\n")); lines != h {
+				t.Errorf("h=%d edH=%d: rendered lines = %d, want %d", h, edH, lines, h)
+			}
+		}
+	}
+
+	// Extreme Sidebar resizing
+	for _, w := range []int{70, 100, 150} {
+		for _, sideW := range []int{-50, 0, 5, 10, 50, 120, 1000} {
+			l := ComputeLayout(w, 25, true, true, true, sideW, 10)
+			if l.SidebarW < SidebarMinW {
+				t.Errorf("w=%d sideW=%d: SidebarW=%d below SidebarMinW %d", w, sideW, l.SidebarW, SidebarMinW)
+			}
+			if l.RightW < RightMinW {
+				t.Errorf("w=%d sideW=%d: RightW=%d below RightMinW %d", w, sideW, l.RightW, RightMinW)
+			}
+			if total := l.SidebarW + 1 + l.RightW; total != w {
+				t.Errorf("w=%d sideW=%d: total horizontal = %d, want %d", w, sideW, total, w)
+			}
+		}
+	}
+}
+

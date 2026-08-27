@@ -29,7 +29,7 @@ const (
 	SidebarMinW = 10
 	EditorMinH  = 5
 	RightMinW   = 20
-	MainMinH    = 2
+	MainMinH    = 5
 )
 
 // WorkspaceLayout is the resolved geometry of the workspace panes.
@@ -63,26 +63,28 @@ func ComputeLayout(width, height int, showSidebar, showMain, showEditor bool, si
 
 	switch {
 	case showMain && showEditor:
-		if editorH > 0 {
-			l.EditorH = clampInt(editorH, EditorMinH, height-MainMinH-1)
+		maxEditorH := height - MainMinH - 1
+		minEditorH := EditorMinH
+		if maxEditorH < minEditorH {
+			l.EditorH = height / 2
 			if l.EditorH < 2 {
 				l.EditorH = 2
+			}
+			l.MainH = height - l.EditorH - 1
+			if l.MainH < 2 {
+				l.MainH = 2
 			}
 		} else {
-			l.EditorH = height / 4
-			if l.EditorH < 9 {
-				l.EditorH = 9
+			if editorH > 0 {
+				l.EditorH = clampInt(editorH, minEditorH, maxEditorH)
+			} else {
+				l.EditorH = height / 4
+				if l.EditorH < 9 {
+					l.EditorH = 9
+				}
+				l.EditorH = clampInt(l.EditorH, minEditorH, maxEditorH)
 			}
-			if l.EditorH > height-5 {
-				l.EditorH = height - 5
-			}
-			if l.EditorH < 2 {
-				l.EditorH = 2
-			}
-		}
-		l.MainH = height - l.EditorH - 1
-		if l.MainH < MainMinH {
-			l.MainH = MainMinH
+			l.MainH = height - l.EditorH - 1
 		}
 	case showMain && !showEditor:
 		l.MainH = height
@@ -100,14 +102,25 @@ func ComputeLayout(width, height int, showSidebar, showMain, showEditor bool, si
 			l.SidebarW = width
 			l.RightW = 0
 		} else {
-			if sidebarW > 0 {
-				l.SidebarW = clampInt(sidebarW, SidebarMinW, width-RightMinW-1)
+			maxSidebarW := width - RightMinW - 1
+			minSidebarW := SidebarMinW
+			if maxSidebarW < minSidebarW {
+				l.SidebarW = width / 2
+				if l.SidebarW < 2 {
+					l.SidebarW = 2
+				}
+				l.RightW = width - l.SidebarW - 1
+				if l.RightW < 2 {
+					l.RightW = 2
+				}
 			} else {
-				l.SidebarW = clampInt(width/5, 14, 20)
-			}
-			l.RightW = width - l.SidebarW - 1
-			if l.RightW < 4 {
-				l.RightW = 4
+				if sidebarW > 0 {
+					l.SidebarW = clampInt(sidebarW, minSidebarW, maxSidebarW)
+				} else {
+					l.SidebarW = clampInt(width/5, 14, 20)
+					l.SidebarW = clampInt(l.SidebarW, minSidebarW, maxSidebarW)
+				}
+				l.RightW = width - l.SidebarW - 1
 			}
 		}
 	} else {
@@ -240,26 +253,31 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 }
 
 func boxed(content, title string, width, height int, focused bool) string {
+	if width < 2 || height < 2 {
+		return ""
+	}
 	innerW := width - 2
 	innerH := height - 2
 	if innerW < 0 {
 		innerW = 0
 	}
-	if innerH > 0 {
-		if lines := strings.Split(content, "\n"); len(lines) > innerH {
-			content = strings.Join(lines[:innerH], "\n")
-		}
+	if innerH <= 0 {
+		content = ""
+	} else if lines := strings.Split(content, "\n"); len(lines) > innerH {
+		content = strings.Join(lines[:innerH], "\n")
 	}
 	style := styles.StylePane
 	if focused {
 		style = styles.StylePaneFocus
 	}
 	box := style.Width(innerW).Height(innerH).Padding(0, 1).Render(content)
-	if title == "" {
-		return box
-	}
 	lines := strings.Split(box, "\n")
-	lines[0] = topBorder(title, width, focused)
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	if title != "" && len(lines) > 0 {
+		lines[0] = topBorder(title, width, focused)
+	}
 	return strings.Join(lines, "\n")
 }
 
