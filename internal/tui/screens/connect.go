@@ -54,9 +54,11 @@ type ConnScreen struct {
 	driverIdx int
 	saved     []conn.SavedConnection
 	savedIdx  int
-	focus     int // 0 = engine, 1..len(fields) = fields, len(fields)+1 = saved
+	focus     int // 0 = engine, 1..len(fields) = fields, len(fields)+1 = saved button (if saved > 0)
 	fields    []field
 	err       string
+
+	showSaved bool // whether the saved connections modal overlay is open
 
 	width  int
 	height int
@@ -177,24 +179,12 @@ func (c *ConnScreen) field(label string) *field {
 // driver returns the selected engine.
 func (c *ConnScreen) driver() conn.Driver { return conn.Drivers[c.driverIdx] }
 
-// savedFocus is the focus index of the first saved connection.
+// savedFocus is the focus index of the saved connections button.
 func (c *ConnScreen) savedFocus() int { return len(c.fieldsVisible()) + 1 }
 
-func (c *ConnScreen) isSavedFocus() bool {
-	vis := len(c.fieldsVisible())
-	return len(c.saved) > 0 && c.focus > vis && c.focus <= vis+len(c.saved)
-}
-
-func (c *ConnScreen) currentSavedIdx() int {
-	vis := len(c.fieldsVisible())
-	idx := c.focus - (vis + 1)
-	if idx < 0 {
-		return 0
-	}
-	if idx >= len(c.saved) {
-		return len(c.saved) - 1
-	}
-	return idx
+// isSavedBtnFocused reports whether the focus is on the saved connections button.
+func (c *ConnScreen) isSavedBtnFocused() bool {
+	return len(c.saved) > 0 && c.focus == c.savedFocus()
 }
 
 // applyFocus focuses the active input and blurs the rest.
@@ -207,14 +197,14 @@ func (c *ConnScreen) applyFocus() tea.Cmd {
 	if idx := c.focus - 1; idx >= 0 && idx < len(vis) && !vis[idx].isToggle {
 		cmds = append(cmds, vis[idx].input.Focus())
 	}
-	if c.isSavedFocus() {
-		c.savedIdx = c.currentSavedIdx()
-	}
 	return tea.Batch(cmds...)
 }
 
 func (c *ConnScreen) totalFocus() int {
-	return 1 + len(c.fieldsVisible()) + len(c.saved)
+	if len(c.saved) > 0 {
+		return len(c.fieldsVisible()) + 2
+	}
+	return len(c.fieldsVisible()) + 1
 }
 
 func (c *ConnScreen) nextFocus() tea.Cmd {
@@ -233,6 +223,52 @@ func (c *ConnScreen) prevFocus() tea.Cmd {
 	}
 	c.focus = (c.focus - 1 + total) % total
 	return c.applyFocus()
+}
+
+// OpenSaved opens the saved connections modal overlay.
+func (c *ConnScreen) OpenSaved() {
+	if len(c.saved) > 0 {
+		c.showSaved = true
+		if c.savedIdx < 0 || c.savedIdx >= len(c.saved) {
+			c.savedIdx = 0
+		}
+	}
+}
+
+// CloseSaved closes the saved connections modal overlay.
+func (c *ConnScreen) CloseSaved() {
+	c.showSaved = false
+}
+
+// ShowSaved reports whether the saved connections modal overlay is visible.
+func (c *ConnScreen) ShowSaved() bool {
+	return c.showSaved
+}
+
+func (c *ConnScreen) moveSaved(up bool) {
+	n := len(c.saved)
+	if n == 0 {
+		return
+	}
+	if up {
+		c.savedIdx = (c.savedIdx - 1 + n) % n
+	} else {
+		c.savedIdx = (c.savedIdx + 1) % n
+	}
+}
+
+func (c *ConnScreen) pageSaved(delta int) {
+	n := len(c.saved)
+	if n == 0 {
+		return
+	}
+	c.savedIdx += delta
+	if c.savedIdx < 0 {
+		c.savedIdx = 0
+	}
+	if c.savedIdx >= n {
+		c.savedIdx = n - 1
+	}
 }
 
 func (c *ConnScreen) toggleParadigm() tea.Cmd {
@@ -296,22 +332,6 @@ func (c *ConnScreen) cycleDriver(right bool) tea.Cmd {
 	}
 	c.focus = 0
 	return c.applyFocus()
-}
-
-func (c *ConnScreen) moveSaved(up bool) {
-	n := len(c.saved)
-	if n == 0 {
-		return
-	}
-	vis := len(c.fieldsVisible())
-	curr := c.currentSavedIdx()
-	if up {
-		curr = (curr - 1 + n) % n
-	} else {
-		curr = (curr + 1) % n
-	}
-	c.savedIdx = curr
-	c.focus = vis + 1 + curr
 }
 
 // cfg builds the current config of the form.
@@ -415,6 +435,57 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 		c.width, c.height = msg.Width, msg.Height
 
 	case tea.KeyMsg:
+		if c.showSaved {
+			switch {
+			case msg.Type == tea.KeyEsc || msg.String() == "esc" || msg.String() == "q":
+				c.CloseSaved()
+				handled = true
+			case msg.Type == tea.KeyUp || msg.String() == "up" || msg.String() == "k":
+				c.moveSaved(true)
+				handled = true
+			case msg.Type == tea.KeyDown || msg.String() == "down" || msg.String() == "j":
+				c.moveSaved(false)
+				handled = true
+			case msg.Type == tea.KeyPgUp || msg.String() == "pgup" || msg.String() == "ctrl+u":
+				c.pageSaved(-5)
+				handled = true
+			case msg.Type == tea.KeyPgDown || msg.String() == "pgdown" || msg.String() == "ctrl+d":
+				c.pageSaved(5)
+				handled = true
+			case msg.Type == tea.KeyHome || msg.String() == "home" || msg.String() == "g":
+				c.savedIdx = 0
+				handled = true
+			case msg.Type == tea.KeyEnd || msg.String() == "end" || msg.String() == "G":
+				if len(c.saved) > 0 {
+					c.savedIdx = len(c.saved) - 1
+				}
+				handled = true
+			case msg.Type == tea.KeyEnter || msg.String() == "enter":
+				if cmd := c.savedCmd(); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				handled = true
+			case msg.String() == "d":
+				if len(c.saved) > 0 && c.savedIdx >= 0 && c.savedIdx < len(c.saved) {
+					name := c.saved[c.savedIdx].Name
+					cmds = append(cmds, func() tea.Msg {
+						return DeleteConnectionMsg{Name: name}
+					})
+					handled = true
+				}
+			default:
+				if len(msg.Runes) == 1 && msg.Runes[0] >= '1' && msg.Runes[0] <= '9' {
+					digit := int(msg.Runes[0] - '1')
+					if digit < len(c.saved) {
+						c.savedIdx = digit
+						handled = true
+					}
+				}
+			}
+			return c, tea.Batch(cmds...)
+		}
+
+		// Main Form Key Handling (c.showSaved == false)
 		switch {
 		case msg.Type == tea.KeyTab || msg.String() == "tab":
 			cmds = append(cmds, c.nextFocus())
@@ -423,16 +494,15 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 			cmds = append(cmds, c.prevFocus())
 			handled = true
 		case msg.Type == tea.KeyEnter || msg.String() == "enter":
-			if c.focus == 0 {
+			if c.isSavedBtnFocused() {
+				c.OpenSaved()
+			} else if c.focus == 0 {
 				cmd, err := c.connect()
 				if err != nil {
 					c.err = err.Error()
 				} else if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
-			} else if c.isSavedFocus() && len(c.saved) > 0 {
-				cfg := c.saved[c.currentSavedIdx()].ToConfig()
-				cmds = append(cmds, func() tea.Msg { return ConnectMsg{Cfg: cfg} })
 			} else if idx := c.focus - 1; idx >= 0 {
 				vis := c.fieldsVisible()
 				if idx < len(vis) && vis[idx].isToggle {
@@ -447,6 +517,11 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 				}
 			}
 			handled = true
+		case msg.String() == "s" || msg.String() == "ctrl+o":
+			if len(c.saved) > 0 && !c.FocusOnField() {
+				c.OpenSaved()
+				handled = true
+			}
 		case msg.String() == "left" || msg.String() == "right":
 			if c.focus == 0 {
 				cmds = append(cmds, c.cycleDriver(msg.String() == "right"))
@@ -458,17 +533,12 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 				handled = true
 			}
 		case msg.String() == "up" || msg.String() == "down":
-			if c.isSavedFocus() {
-				c.moveSaved(msg.String() == "up")
-				handled = true
+			if msg.String() == "up" {
+				cmds = append(cmds, c.prevFocus())
 			} else {
-				if msg.String() == "up" {
-					cmds = append(cmds, c.prevFocus())
-				} else {
-					cmds = append(cmds, c.nextFocus())
-				}
-				handled = true
+				cmds = append(cmds, c.nextFocus())
 			}
+			handled = true
 		case msg.Type == tea.KeyCtrlS || msg.String() == "ctrl+s":
 			if err := c.validate(); err != nil {
 				c.err = err.Error()
@@ -477,13 +547,6 @@ func (c *ConnScreen) Update(msg tea.Msg) (*ConnScreen, tea.Cmd) {
 				cmds = append(cmds, func() tea.Msg { return SaveConnectionMsg{Cfg: cfg} })
 			}
 			handled = true
-		case msg.String() == "d":
-			if c.isSavedFocus() && len(c.saved) > 0 {
-				cmds = append(cmds, func() tea.Msg {
-					return DeleteConnectionMsg{Name: c.saved[c.currentSavedIdx()].Name}
-				})
-				handled = true
-			}
 		case msg.String() == "r":
 			if c.focus == 0 {
 				c.reset()
@@ -522,16 +585,18 @@ func (c *ConnScreen) reset() {
 }
 
 // ResetForm clears the form (for a new session).
-func (c *ConnScreen) ResetForm() { c.reset() }
+func (c *ConnScreen) ResetForm() {
+	c.reset()
+	c.showSaved = false
+}
 
 // SetSaved updates the list of saved connections.
 func (c *ConnScreen) SetSaved(saved []conn.SavedConnection) {
-	wasSaved := c.isSavedFocus()
 	c.saved = saved
-	vis := len(c.fieldsVisible())
 	if len(c.saved) == 0 {
 		c.savedIdx = 0
-		if wasSaved || c.focus > vis {
+		c.showSaved = false
+		if c.focus > len(c.fieldsVisible()) {
 			c.focus = 0
 			c.applyFocus()
 		}
@@ -540,8 +605,8 @@ func (c *ConnScreen) SetSaved(saved []conn.SavedConnection) {
 	if c.savedIdx >= len(c.saved) {
 		c.savedIdx = len(c.saved) - 1
 	}
-	if wasSaved {
-		c.focus = vis + 1 + c.savedIdx
+	if c.savedIdx < 0 {
+		c.savedIdx = 0
 	}
 }
 
@@ -564,6 +629,9 @@ func (c *ConnScreen) FieldValue(label string) string {
 // FocusOnField reports whether the focus is on a text input (not the engine,
 // a toggle checkbox, or the saved list).
 func (c *ConnScreen) FocusOnField() bool {
+	if c.showSaved {
+		return false
+	}
 	vis := c.fieldsVisible()
 	idx := c.focus - 1
 	return idx >= 0 && idx < len(vis) && !vis[idx].isToggle
@@ -577,11 +645,12 @@ func (c *ConnScreen) FocusIndex() int { return c.focus }
 type clickKind int
 
 const (
-	clickNone    clickKind = iota
-	clickEngine            // the engine selector
-	clickField             // a form field (idx = field index, 0-based)
-	clickConnect           // the "Enter · Connect" button
-	clickSaved             // a saved connection (idx = saved index)
+	clickNone      clickKind = iota
+	clickEngine              // the engine selector
+	clickField               // a form field (idx = field index, 0-based)
+	clickConnect             // the "Enter · Connect" button
+	clickOpenSaved           // the "Saved connections (N)" button on main form
+	clickSaved               // a saved connection row in modal (idx = saved index)
 )
 
 // clickable is a row of the connection screen that reacts to a mouse click.
@@ -593,13 +662,19 @@ type clickable struct {
 }
 
 // View renders the lazyvim-style centered menu: logo on top and below the form
-// and the saved connections, all centered in the available area.
+// with a button to open the saved connections modal overlay.
 func (c *ConnScreen) View(width, height int) string {
 	if width > 0 {
 		c.width = width
 	}
 	if height > 0 {
 		c.height = height
+	}
+
+	if c.showSaved && len(c.saved) > 0 {
+		content, clicks := c.renderSavedModal(c.width, c.height)
+		c.clicks = clicks
+		return content
 	}
 
 	// the layout is built as plain lines here so the clickable rows can be
@@ -628,6 +703,8 @@ func (c *ConnScreen) View(width, height int) string {
 			clicks = append(clicks, clickable{kind: clickEngine, y: y})
 		case strings.HasPrefix(trim, "Enter · Connect"):
 			clicks = append(clicks, clickable{kind: clickConnect, y: y})
+		case strings.Contains(trim, "Saved connections"):
+			clicks = append(clicks, clickable{kind: clickOpenSaved, y: y})
 		default:
 			for fi, f := range vis {
 				if strings.HasPrefix(trim, f.label) {
@@ -638,22 +715,6 @@ func (c *ConnScreen) View(width, height int) string {
 		}
 	}
 	lines = append(lines, form...)
-
-	// Saved connections are only shown if there is room next to the form;
-	// otherwise they are omitted so they don't hide it.
-	if len(c.saved) > 0 {
-		saved := strings.Split(c.renderSaved(), "\n")
-		if len(lines)+2+len(saved) <= c.height {
-			lines = append(lines, "", "")
-			savedY := len(lines) // items start 2 lines down, after "Saved"+blank
-			for i, l := range saved {
-				lines = append(lines, l)
-				if i >= 2 && strings.TrimSpace(ansi.Strip(l)) != "" {
-					clicks = append(clicks, clickable{kind: clickSaved, idx: i - 2, y: savedY + i})
-				}
-			}
-		}
-	}
 
 	if c.err != "" {
 		lines = append(lines, "", "")
@@ -735,10 +796,11 @@ func (c *ConnScreen) Activate(k clickable) tea.Cmd {
 			return nil
 		}
 		return cmd
+	case clickOpenSaved:
+		c.OpenSaved()
+		return nil
 	case clickSaved:
 		c.savedIdx = k.idx
-		vis := len(c.fieldsVisible())
-		c.focus = vis + 1 + k.idx
 		return c.savedCmd()
 	}
 	return nil
@@ -828,6 +890,19 @@ func (c *ConnScreen) renderForm() string {
 		styles.StyleBtnSecondary.Render("r  clear"),
 	}, "  "))
 	b.WriteString("\n")
+
+	// saved connections button (if any saved)
+	if len(c.saved) > 0 {
+		b.WriteString("\n")
+		btnText := fmt.Sprintf("Saved connections (%d) · s / Enter", len(c.saved))
+		if c.isSavedBtnFocused() {
+			b.WriteString(styles.StyleInputBoxFocus.Render(fmt.Sprintf("> [ %s ]", btnText)))
+		} else {
+			b.WriteString(styles.StyleInputBox.Render(fmt.Sprintf("  [ %s ]", btnText)))
+		}
+		b.WriteString("\n")
+	}
+
 	return b.String()
 }
 
@@ -864,19 +939,95 @@ func (c *ConnScreen) renderMotorSelector() string {
 	return style.Render(fmt.Sprintf("[ %-*s ]", boxInner, content))
 }
 
-func (c *ConnScreen) renderSaved() string {
+// renderSavedModal renders the saved connections modal overlay.
+func (c *ConnScreen) renderSavedModal(width, height int) (string, []clickable) {
+	var clicks []clickable
+	modalW := 74
+	if width-4 < modalW {
+		modalW = width - 4
+	}
+	if modalW < 40 {
+		modalW = 40
+	}
+
+	innerW := modalW - 6 // border (2) + padding (4)
+	if innerW < 34 {
+		innerW = 34
+	}
+
+	n := len(c.saved)
+	maxListH := 10
+	if height-8 < maxListH {
+		maxListH = height - 8
+	}
+	if maxListH < 3 {
+		maxListH = 3
+	}
+
+	offset, count := ListWindow(n, c.savedIdx, maxListH)
+
 	var b strings.Builder
-	b.WriteString(styles.StyleHeader.Render("Saved"))
+	title := fmt.Sprintf("Saved Connections (%d)", n)
+	if n > count {
+		title += fmt.Sprintf("  (showing %d-%d of %d)", offset+1, offset+count, n)
+	}
+	b.WriteString(styles.StyleHeader.Render(title))
 	b.WriteString("\n\n")
-	vis := len(c.fieldsVisible())
-	for i, s := range c.saved {
-		line := fmt.Sprintf("%s  %s", s.Name, s.ToConfig().Label())
-		if c.isSavedFocus() && c.focus == vis+1+i {
-			b.WriteString(styles.StyleSidebarActive.Render("> " + line))
+
+	nameW := 16
+	drvW := 10
+	targetW := innerW - 5 - nameW - drvW - 4
+	if targetW < 12 {
+		targetW = 12
+	}
+
+	for i := 0; i < count; i++ {
+		idx := offset + i
+		s := c.saved[idx]
+		cfg := s.ToConfig()
+
+		numStr := fmt.Sprintf("%2d. ", idx+1)
+		nameStr := truncate(s.Name, nameW)
+		namePadded := fmt.Sprintf("%-*s", nameW, nameStr)
+
+		drvTag := fmt.Sprintf("[%s]", string(cfg.Driver))
+		drvPadded := fmt.Sprintf("%-*s", drvW, drvTag)
+
+		targetStr := cfg.Label()
+		if cfg.ReadOnly {
+			targetStr += " (ro)"
+		}
+		targetPadded := truncate(targetStr, targetW)
+
+		rowText := fmt.Sprintf("%s%s  %s  %s", numStr, namePadded, drvPadded, targetPadded)
+
+		if idx == c.savedIdx {
+			b.WriteString(styles.StyleSidebarActive.Render("> " + rowText))
 		} else {
-			b.WriteString(styles.StyleSidebarItem.Render(line))
+			b.WriteString(styles.StyleSidebarItem.Render("  " + rowText))
 		}
 		b.WriteString("\n")
 	}
-	return b.String()
+
+	b.WriteString("\n")
+	b.WriteString(styles.StyleBorder.Render(strings.Repeat("─", innerW)))
+	b.WriteString("\n")
+	b.WriteString(styles.StyleFooter.Render("↑/↓ / j/k navigate · enter connect · d delete · esc back"))
+
+	modalBox := styles.StylePaneFocus.Width(modalW).Padding(1, 2).Render(b.String())
+
+	content := lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, modalBox)
+
+	boxH := lipgloss.Height(modalBox)
+	topY := (height - boxH) / 2
+	if topY < 0 {
+		topY = 0
+	}
+	// items start: top border (1) + top padding (1) + header (1) + blank (1) = +4
+	itemsStartY := topY + 4
+	for i := 0; i < count; i++ {
+		clicks = append(clicks, clickable{kind: clickSaved, idx: offset + i, y: itemsStartY + i})
+	}
+
+	return content, clicks
 }

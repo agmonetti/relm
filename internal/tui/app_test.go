@@ -843,9 +843,10 @@ func TestModel_SaveAndDeleteSavedConnection(t *testing.T) {
 		t.Fatalf("saved = %+v, want one /data/app.db", saved)
 	}
 
-	// sqlite: File(1), Read-only(2) -> saved list(3); "d" deletes it
+	// sqlite: File(1), Read-only(2) -> saved button(3); enter opens modal, "d" deletes it
 	pressKey(t, m, "tab")
 	pressKey(t, m, "tab")
+	pressKey(t, m, "enter")
 	press(t, m, "d")
 
 	saved, err = conn.LoadSaved()

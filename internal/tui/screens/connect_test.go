@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -193,12 +194,18 @@ func TestConnScreen_DeleteSavedConnection(t *testing.T) {
 	})
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
-	// sqlite: engine(0) + File(1) + Read-only(2) -> saved list(3)
+	// sqlite: engine(0) + File(1) + Read-only(2) -> saved button(3)
 	for i := 0; i < 3; i++ {
 		c.nextFocus()
 	}
 	if c.focus != c.savedFocus() {
 		t.Fatalf("focus = %d, want saved %d", c.focus, c.savedFocus())
+	}
+
+	// Press Enter on the saved button to open the modal
+	c.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !c.ShowSaved() {
+		t.Fatal("expected saved connections modal to be open")
 	}
 
 	updated, cmd := c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
@@ -494,11 +501,27 @@ func TestConnScreen_MouseClickSavedConnects(t *testing.T) {
 	c := NewConnScreen([]conn.SavedConnection{
 		{Name: "dev", Driver: conn.DriverSQLite, Path: "/tmp/dev.db"},
 	})
-	out := c.View(80, 30)
-	_ = out // the saved list fits below the form on 30 rows
+	c.View(80, 30)
 
-	// the saved list starts below the form: form ends around base+16 (8 logo +
-	// "Saved" + blank + item). Find the item row via the recorded clicks.
+	// In the main form, find the "Saved connections" button clickable row
+	var openBtnRow int
+	for _, cl := range c.clicks {
+		if cl.kind == clickOpenSaved {
+			openBtnRow = cl.y
+		}
+	}
+	if openBtnRow == 0 {
+		t.Fatal("no clickOpenSaved clickable recorded on main form")
+	}
+
+	// Click the button to open the modal
+	c.Activate(c.HitTest(40, openBtnRow))
+	if !c.ShowSaved() {
+		t.Fatal("expected modal to be open after clicking saved button")
+	}
+
+	// In the modal, render and find the saved connection item row
+	c.View(80, 30)
 	var itemRow int
 	for _, cl := range c.clicks {
 		if cl.kind == clickSaved && cl.idx == 0 {
@@ -506,11 +529,12 @@ func TestConnScreen_MouseClickSavedConnects(t *testing.T) {
 		}
 	}
 	if itemRow == 0 {
-		t.Fatal("no saved clickable recorded")
+		t.Fatal("no clickSaved clickable recorded in modal")
 	}
+
 	cmd := c.Activate(c.HitTest(40, itemRow))
 	if cmd == nil {
-		t.Fatal("clicking a saved connection must return a connect command")
+		t.Fatal("clicking a saved connection in modal must return a connect command")
 	}
 	msg := cmd()
 	if msg == nil {
@@ -567,124 +591,154 @@ func TestConnScreen_EnterAtEngineSelectorConnects(t *testing.T) {
 	}
 }
 
-func TestConnScreen_MultipleSavedConnectionsTabNavigation(t *testing.T) {
-	c := NewConnScreen([]conn.SavedConnection{
-		{Name: "local", Driver: conn.DriverSQLite, Path: "/data/local.db"},
-		{Name: "remote", Driver: conn.DriverSQLite, Path: "/data/remote.db"},
-	})
+func TestConnScreen_MultipleSavedConnectionsModal(t *testing.T) {
+	savedConns := make([]conn.SavedConnection, 10)
+	for i := 0; i < 10; i++ {
+		savedConns[i] = conn.SavedConnection{
+			Name:   fmt.Sprintf("conn-%02d", i+1),
+			Driver: conn.DriverSQLite,
+			Path:   fmt.Sprintf("/data/db%d.db", i+1),
+		}
+	}
+	c := NewConnScreen(savedConns)
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
-	// SQLite has 2 fields (File, Read-only). Focus sequence:
-	// 0: Engine, 1: File, 2: Read-only, 3: "local", 4: "remote", then wrap to 0.
-	if c.focus != 0 {
-		t.Fatalf("initial focus = %d, want 0", c.focus)
+	// Main view shows the button with total count
+	mainOut := ansi.Strip(c.View(100, 30))
+	if !strings.Contains(mainOut, "Saved connections (10)") {
+		t.Fatalf("expected main view to show 'Saved connections (10)', got:\n%s", mainOut)
 	}
 
-	// Tab through form to 1st saved
-	c.Update(tea.KeyMsg{Type: tea.KeyTab}) // -> 1: File
-	c.Update(tea.KeyMsg{Type: tea.KeyTab}) // -> 2: Read-only
-	c.Update(tea.KeyMsg{Type: tea.KeyTab}) // -> 3: "local"
-
-	if c.focus != 3 || !c.isSavedFocus() || c.currentSavedIdx() != 0 {
-		t.Fatalf("focus = %d, isSaved = %v, savedIdx = %d; want focus=3, isSaved=true, savedIdx=0",
-			c.focus, c.isSavedFocus(), c.currentSavedIdx())
+	// Press 's' to open the modal
+	c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	if !c.ShowSaved() {
+		t.Fatal("expected modal to be open after pressing 's'")
 	}
 
-	// Tab from 1st saved to 2nd saved
-	c.Update(tea.KeyMsg{Type: tea.KeyTab}) // -> 4: "remote"
-	if c.focus != 4 || !c.isSavedFocus() || c.currentSavedIdx() != 1 {
-		t.Fatalf("focus after Tab from 1st saved = %d, savedIdx = %d; want focus=4, savedIdx=1",
-			c.focus, c.currentSavedIdx())
+	// View in modal shows the modal box with numbered items
+	modalOut := ansi.Strip(c.View(100, 30))
+	if !strings.Contains(modalOut, "Saved Connections (10)") {
+		t.Errorf("expected modal header 'Saved Connections (10)', got:\n%s", modalOut)
+	}
+	if !strings.Contains(modalOut, ">  1. conn-01") {
+		t.Errorf("expected active first item '>  1. conn-01', got:\n%s", modalOut)
 	}
 
-	// View output should highlight "> remote"
-	out := ansi.Strip(c.View(100, 30))
-	if !strings.Contains(out, "> remote") {
-		t.Errorf("expected view to contain '> remote', got:\n%s", out)
+	// Down/j moves down
+	c.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if c.savedIdx != 1 {
+		t.Errorf("savedIdx = %d, want 1", c.savedIdx)
 	}
-	if strings.Contains(out, "> local") {
-		t.Errorf("expected view not to highlight '> local' when remote is selected, got:\n%s", out)
-	}
-
-	// Pressing Enter on the 2nd saved connection must connect to "remote"
-	_, cmd := c.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd == nil {
-		t.Fatal("expected connect cmd on enter for 2nd saved connection")
-	}
-	msg := cmd()
-	cm, ok := msg.(ConnectMsg)
-	if !ok || cm.Cfg.Path != "/data/remote.db" {
-		t.Fatalf("ConnectMsg = %#v, want path /data/remote.db", msg)
+	c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if c.savedIdx != 2 {
+		t.Errorf("savedIdx = %d, want 2", c.savedIdx)
 	}
 
-	// Pressing 'd' on 2nd saved connection must emit DeleteConnectionMsg for "remote"
+	// Up/k moves up
+	c.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if c.savedIdx != 1 {
+		t.Errorf("savedIdx = %d, want 1", c.savedIdx)
+	}
+	c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	if c.savedIdx != 0 {
+		t.Errorf("savedIdx = %d, want 0", c.savedIdx)
+	}
+
+	// 'G' (End) moves to last item
+	c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+	if c.savedIdx != 9 {
+		t.Errorf("savedIdx = %d, want 9 (last item)", c.savedIdx)
+	}
+
+	// 'g' (Home) moves to first item
+	c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+	if c.savedIdx != 0 {
+		t.Errorf("savedIdx = %d, want 0", c.savedIdx)
+	}
+
+	// Number key '3' jumps to 3rd item (index 2)
+	c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	if c.savedIdx != 2 {
+		t.Errorf("savedIdx after '3' = %d, want 2", c.savedIdx)
+	}
+
+	// Enter connects to selected item
+	_, enterCmd := c.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if enterCmd == nil {
+		t.Fatal("expected enterCmd on Enter in modal")
+	}
+	cm, ok := enterCmd().(ConnectMsg)
+	if !ok || cm.Cfg.Path != "/data/db3.db" {
+		t.Fatalf("expected ConnectMsg with path /data/db3.db, got %#v", cm)
+	}
+
+	// 'd' deletes selected item
 	_, delCmd := c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
 	if delCmd == nil {
-		t.Fatal("expected delete cmd on 'd'")
+		t.Fatal("expected delCmd on 'd' in modal")
 	}
-	delMsg, ok := delCmd().(DeleteConnectionMsg)
-	if !ok || delMsg.Name != "remote" {
-		t.Fatalf("DeleteConnectionMsg = %#v, want Name: remote", delMsg)
-	}
-
-	// Up arrow moves back to 1st saved ("local")
-	c.Update(tea.KeyMsg{Type: tea.KeyUp})
-	if c.focus != 3 || c.currentSavedIdx() != 0 {
-		t.Fatalf("focus after Up = %d, savedIdx = %d; want focus=3, savedIdx=0",
-			c.focus, c.currentSavedIdx())
+	dm, ok := delCmd().(DeleteConnectionMsg)
+	if !ok || dm.Name != "conn-03" {
+		t.Fatalf("expected DeleteConnectionMsg for conn-03, got %#v", dm)
 	}
 
-	// Down arrow moves to 2nd saved ("remote")
-	c.Update(tea.KeyMsg{Type: tea.KeyDown})
-	if c.focus != 4 || c.currentSavedIdx() != 1 {
-		t.Fatalf("focus after Down = %d, savedIdx = %d; want focus=4, savedIdx=1",
-			c.focus, c.currentSavedIdx())
-	}
-
-	// Tab wraps back to 0 (Engine)
-	c.Update(tea.KeyMsg{Type: tea.KeyTab})
-	if c.focus != 0 {
-		t.Fatalf("focus after Tab from last saved = %d, want 0", c.focus)
-	}
-
-	// Shift+Tab from Engine goes to last saved ("remote")
-	c.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
-	if c.focus != 4 || c.currentSavedIdx() != 1 {
-		t.Fatalf("focus after Shift+Tab from Engine = %d, want 4", c.focus)
-	}
-
-	// Shift+Tab again goes to 1st saved ("local")
-	c.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
-	if c.focus != 3 || c.currentSavedIdx() != 0 {
-		t.Fatalf("focus after Shift+Tab from 2nd saved = %d, want 3", c.focus)
+	// 'Esc' closes the modal
+	c.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if c.ShowSaved() {
+		t.Fatal("expected modal to close after Esc")
 	}
 }
 
-func TestConnScreen_SetSavedClampsFocus(t *testing.T) {
+func TestConnScreen_TabToSavedButtonAndOpen(t *testing.T) {
 	c := NewConnScreen([]conn.SavedConnection{
 		{Name: "c1", Driver: conn.DriverSQLite, Path: "/data/c1.db"},
 		{Name: "c2", Driver: conn.DriverSQLite, Path: "/data/c2.db"},
 	})
 	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
-	// Focus on 2nd saved ("c2")
-	c.focus = 4
+	// SQLite: 0: Engine -> Tab -> 1: File -> Tab -> 2: Read-only -> Tab -> 3: Saved button -> Tab -> 0: Engine
+	c.Update(tea.KeyMsg{Type: tea.KeyTab}) // 1
+	c.Update(tea.KeyMsg{Type: tea.KeyTab}) // 2
+	c.Update(tea.KeyMsg{Type: tea.KeyTab}) // 3: Saved button
+
+	if !c.isSavedBtnFocused() {
+		t.Fatalf("expected isSavedBtnFocused() to be true at focus = %d", c.focus)
+	}
+
+	// Enter on saved button opens modal
+	c.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !c.ShowSaved() {
+		t.Fatal("expected modal to open after Enter on saved button")
+	}
+
+	// Close modal with 'q'
+	c.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	if c.ShowSaved() {
+		t.Fatal("expected modal to close after 'q'")
+	}
+}
+
+func TestConnScreen_SetSavedClosesModalWhenEmpty(t *testing.T) {
+	c := NewConnScreen([]conn.SavedConnection{
+		{Name: "c1", Driver: conn.DriverSQLite, Path: "/data/c1.db"},
+		{Name: "c2", Driver: conn.DriverSQLite, Path: "/data/c2.db"},
+	})
+	c.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	c.OpenSaved()
 	c.savedIdx = 1
 
-	// Delete "c2", 1 item remains
+	// Delete c2 (1 item remains)
 	c.SetSaved([]conn.SavedConnection{
 		{Name: "c1", Driver: conn.DriverSQLite, Path: "/data/c1.db"},
 	})
-	if c.focus != 3 || c.currentSavedIdx() != 0 {
-		t.Fatalf("after deleting c2: focus = %d, savedIdx = %d; want focus=3, savedIdx=0",
-			c.focus, c.currentSavedIdx())
+	if !c.ShowSaved() || c.savedIdx != 0 {
+		t.Fatalf("expected modal open and savedIdx=0, got show=%v, idx=%d", c.ShowSaved(), c.savedIdx)
 	}
 
-	// Delete "c1", 0 items remain
+	// Delete c1 (0 items remain)
 	c.SetSaved(nil)
-	if c.focus != 0 || c.isSavedFocus() {
-		t.Fatalf("after deleting all saved: focus = %d, isSaved = %v; want focus=0, isSaved=false",
-			c.focus, c.isSavedFocus())
+	if c.ShowSaved() {
+		t.Fatal("expected modal to close automatically when saved becomes empty")
 	}
 }
 
