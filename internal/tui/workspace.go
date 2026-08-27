@@ -19,21 +19,31 @@ func (m *Model) handleWorkspaceKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch {
 	case key.Matches(msg, m.keys.ToggleSidebar):
-		m.showSidebar = !m.showSidebar
+		m.toggleSidebar()
+		return m, nil
+	case key.Matches(msg, m.keys.ToggleMain):
+		m.toggleMain()
+		return m, nil
+	case key.Matches(msg, m.keys.ToggleEditor):
+		m.toggleEditor()
 		return m, nil
 	case key.Matches(msg, m.keys.FocusSidebar):
+		m.showSidebar = true
 		m.setFocus(screens.FocusSidebar)
 		return m, nil
 	case key.Matches(msg, m.keys.FocusMain):
+		m.showMain = true
 		m.setFocus(screens.FocusMain)
 		return m, nil
 	case key.Matches(msg, m.keys.FocusEditor):
+		m.showEditor = true
 		m.setFocus(screens.FocusEditor)
 		return m, nil
 	case key.Matches(msg, m.keys.Switch):
 		m.cycleFocus()
 		return m, nil
 	case !typingEditor && key.Matches(msg, m.keys.Inspect):
+		m.showMain = true
 		m.structure = true
 		m.setFocus(screens.FocusMain)
 		return m, nil
@@ -59,18 +69,92 @@ func (m *Model) handleWorkspaceKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// cycleFocus moves the focus to the next workspace pane.
-func (m *Model) cycleFocus() {
-	var next screens.WorkspaceFocus
-	switch m.focus {
-	case screens.FocusSidebar:
-		next = screens.FocusMain
-	case screens.FocusMain:
-		next = screens.FocusEditor
-	case screens.FocusEditor:
-		next = screens.FocusSidebar
+// visiblePanels returns how many workspace panes are currently visible.
+func (m *Model) visiblePanels() int {
+	count := 0
+	if m.showSidebar {
+		count++
 	}
-	m.setFocus(next)
+	if m.showMain {
+		count++
+	}
+	if m.showEditor {
+		count++
+	}
+	return count
+}
+
+// isPaneVisible returns whether a workspace pane is currently visible.
+func (m *Model) isPaneVisible(f screens.WorkspaceFocus) bool {
+	switch f {
+	case screens.FocusSidebar:
+		return m.showSidebar
+	case screens.FocusMain:
+		return m.showMain
+	case screens.FocusEditor:
+		return m.showEditor
+	}
+	return false
+}
+
+// ensureValidFocus moves focus to a visible pane if the current focused pane became hidden.
+func (m *Model) ensureValidFocus() {
+	if m.isPaneVisible(m.focus) {
+		return
+	}
+	if m.showMain {
+		m.setFocus(screens.FocusMain)
+	} else if m.showEditor {
+		m.setFocus(screens.FocusEditor)
+	} else if m.showSidebar {
+		m.setFocus(screens.FocusSidebar)
+	}
+}
+
+// toggleSidebar toggles the sidebar visibility if at least one pane remains.
+func (m *Model) toggleSidebar() {
+	if m.showSidebar && m.visiblePanels() <= 1 {
+		return
+	}
+	m.showSidebar = !m.showSidebar
+	m.ensureValidFocus()
+}
+
+// toggleMain toggles the main data view visibility if at least one pane remains.
+func (m *Model) toggleMain() {
+	if m.showMain && m.visiblePanels() <= 1 {
+		return
+	}
+	m.showMain = !m.showMain
+	m.ensureValidFocus()
+}
+
+// toggleEditor toggles the query editor visibility if at least one pane remains.
+func (m *Model) toggleEditor() {
+	if m.showEditor && m.visiblePanels() <= 1 {
+		return
+	}
+	m.showEditor = !m.showEditor
+	m.ensureValidFocus()
+}
+
+// cycleFocus moves the focus to the next visible workspace pane.
+func (m *Model) cycleFocus() {
+	order := []screens.WorkspaceFocus{screens.FocusSidebar, screens.FocusMain, screens.FocusEditor}
+	curIdx := 0
+	for i, f := range order {
+		if f == m.focus {
+			curIdx = i
+			break
+		}
+	}
+	for i := 1; i <= len(order); i++ {
+		next := order[(curIdx+i)%len(order)]
+		if m.isPaneVisible(next) {
+			m.setFocus(next)
+			return
+		}
+	}
 }
 
 // setFocus moves the focus to a pane.

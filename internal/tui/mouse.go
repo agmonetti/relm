@@ -66,7 +66,7 @@ func (m *Model) handleWorkspaceMouse(msg tea.MouseMsg) tea.Cmd {
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
-	layout := screens.ComputeLayout(innerW, contentHeight, m.showSidebar, m.sidebarW, m.editorH)
+	layout := screens.ComputeLayout(innerW, contentHeight, m.showSidebar, m.showMain, m.showEditor, m.sidebarW, m.editorH)
 
 	// the workspace content starts at terminal cell (1, 2): the frame adds a
 	// blank line, the header and a one-column left margin
@@ -133,7 +133,13 @@ func (m *Model) handleWorkspaceMouse(msg tea.MouseMsg) tea.Cmd {
 
 // resolveEditorPos maps workspace cell coordinates to (line, col) inside the query editor textarea.
 func (m *Model) resolveEditorPos(wx, wy int, layout screens.WorkspaceLayout) (line, col int, inInput bool) {
-	editorTop := layout.MainH + 1
+	if !layout.ShowEditor {
+		return 0, 0, false
+	}
+	editorTop := 0
+	if layout.ShowMain {
+		editorTop = layout.MainH + 1
+	}
 	editorContentTop := editorTop + 1
 	inputHeight := screens.EditorInputHeight(layout.EditorH - 2)
 	editorLeft := 0
@@ -185,9 +191,9 @@ func (m *Model) scrollAt(wx, wy int, layout screens.WorkspaceLayout, btn tea.Mou
 	switch {
 	case layout.ShowSidebar && wx < layout.SidebarW:
 		m.scrollSidebar(delta * wheelStep)
-	case wy > layout.MainH:
+	case layout.ShowEditor && (!layout.ShowMain || wy > layout.MainH):
 		m.scrollResults(delta*wheelStep, layout)
-	default:
+	case layout.ShowMain:
 		return m.scrollMain(delta * wheelStep)
 	}
 	return nil
@@ -260,9 +266,9 @@ func (m *Model) selectAt(wx, wy int, layout screens.WorkspaceLayout) {
 		if idx >= 0 && idx < len(m.browser.Tables) {
 			m.sidebarCursor = idx
 		}
-	case wy > layout.MainH:
+	case layout.ShowEditor && (!layout.ShowMain || wy > layout.MainH):
 		m.selectResultRow(wy, layout)
-	default:
+	case layout.ShowMain:
 		if m.browser == nil {
 			return
 		}
@@ -282,7 +288,10 @@ func (m *Model) selectResultRow(wy int, layout screens.WorkspaceLayout) {
 	if !ok || len(tab.Rows) == 0 {
 		return
 	}
-	editorTop := layout.MainH + 1
+	editorTop := 0
+	if layout.ShowMain {
+		editorTop = layout.MainH + 1
+	}
 	startLine, dataRows := screens.EditorResultsLayout(layout.EditorH - 2)
 	rel := (wy - editorTop - 1) - startLine - 2 // header + sep line above data rows
 	if rel < 0 || rel >= dataRows {
@@ -301,15 +310,17 @@ func (m *Model) selectResultRow(wy int, layout screens.WorkspaceLayout) {
 func (m *Model) pickResizeDivider(wx, wy int, layout screens.WorkspaceLayout) int {
 	best := resizeNone
 	bestDist := 1 << 30
-	if layout.ShowSidebar {
+	if layout.ShowSidebar && (layout.ShowMain || layout.ShowEditor) {
 		if d := absInt(wx - layout.SidebarW); d < bestDist {
 			bestDist = d
 			best = resizeSidebar
 		}
 	}
-	if d := absInt(wy - layout.MainH); d < bestDist {
-		bestDist = d
-		best = resizeEditor
+	if layout.ShowMain && layout.ShowEditor {
+		if d := absInt(wy - layout.MainH); d < bestDist {
+			bestDist = d
+			best = resizeEditor
+		}
 	}
 	if bestDist > 2 {
 		return resizeNone
@@ -333,9 +344,9 @@ func (m *Model) focusPaneAt(wx, wy int, layout screens.WorkspaceLayout) {
 	switch {
 	case layout.ShowSidebar && wx < layout.SidebarW:
 		m.setFocus(screens.FocusSidebar)
-	case wy > layout.MainH:
+	case layout.ShowEditor && (!layout.ShowMain || wy > layout.MainH):
 		m.setFocus(screens.FocusEditor)
-	default:
+	case layout.ShowMain:
 		m.setFocus(screens.FocusMain)
 	}
 }

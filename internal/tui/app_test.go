@@ -825,6 +825,142 @@ func TestModel_ToggleSidebar(t *testing.T) {
 	}
 }
 
+func TestModel_ToggleMain(t *testing.T) {
+	m := connect(t)
+	press(t, m, "2") // open users
+	if !m.showMain {
+		t.Fatal("setup: showMain should be true")
+	}
+
+	pressAlt(t, m, "m")
+	if m.showMain {
+		t.Error("showMain should be false after alt+m")
+	}
+	if m.focus == screens.FocusMain {
+		t.Errorf("focus should not stay on hidden main panel, got %v", m.focus)
+	}
+	v := m.View()
+	if strings.Contains(v, "Alice") {
+		t.Errorf("table rows should not render when main is hidden: %q", v)
+	}
+	if !strings.Contains(v, "SQL EDITOR") {
+		t.Errorf("editor should render when main is hidden: %q", v)
+	}
+
+	pressAlt(t, m, "m")
+	if !m.showMain {
+		t.Error("showMain should be true after second alt+m")
+	}
+}
+
+func TestModel_ToggleEditor(t *testing.T) {
+	m := connect(t)
+	press(t, m, "2") // open users
+	if !m.showEditor {
+		t.Fatal("setup: showEditor should be true")
+	}
+
+	pressAlt(t, m, "q")
+	if m.showEditor {
+		t.Error("showEditor should be false after alt+q")
+	}
+	v := m.View()
+	if strings.Contains(v, "SQL EDITOR") {
+		t.Errorf("editor should not render when hidden: %q", v)
+	}
+	if !strings.Contains(v, "Alice") {
+		t.Errorf("table rows should render when editor is hidden: %q", v)
+	}
+
+	pressAlt(t, m, "q")
+	if !m.showEditor {
+		t.Error("showEditor should be true after second alt+q")
+	}
+}
+
+func TestModel_ToggleMinimumOneGuard(t *testing.T) {
+	m := connect(t)
+	pressAlt(t, m, "b") // hide sidebar
+	pressAlt(t, m, "q") // hide editor
+	if m.showSidebar || m.showEditor || !m.showMain {
+		t.Fatalf("expected only main to be visible: sidebar=%v, main=%v, editor=%v",
+			m.showSidebar, m.showMain, m.showEditor)
+	}
+
+	// Try to hide the last visible panel (main)
+	pressAlt(t, m, "m")
+	if !m.showMain {
+		t.Error("guard failed: main should remain visible when it is the only visible panel")
+	}
+}
+
+func TestModel_FocusUnhidesPanel(t *testing.T) {
+	m := connect(t)
+	// Hide editor
+	pressAlt(t, m, "q")
+	if m.showEditor {
+		t.Fatal("setup: editor should be hidden")
+	}
+
+	// Jump to editor with Alt+3
+	pressAlt(t, m, "3")
+	if !m.showEditor {
+		t.Error("Alt+3 should unhide the editor")
+	}
+	if m.focus != screens.FocusEditor {
+		t.Errorf("focus = %v, want FocusEditor", m.focus)
+	}
+
+	// Hide sidebar
+	pressAlt(t, m, "b")
+	if m.showSidebar {
+		t.Fatal("setup: sidebar should be hidden")
+	}
+
+	// Jump to sidebar with Alt+1
+	pressAlt(t, m, "1")
+	if !m.showSidebar {
+		t.Error("Alt+1 should unhide the sidebar")
+	}
+	if m.focus != screens.FocusSidebar {
+		t.Errorf("focus = %v, want FocusSidebar", m.focus)
+	}
+
+	// Hide main
+	pressAlt(t, m, "m")
+	if m.showMain {
+		t.Fatal("setup: main should be hidden")
+	}
+
+	// Jump to main with Alt+2
+	pressAlt(t, m, "2")
+	if !m.showMain {
+		t.Error("Alt+2 should unhide the main panel")
+	}
+	if m.focus != screens.FocusMain {
+		t.Errorf("focus = %v, want FocusMain", m.focus)
+	}
+}
+
+func TestModel_CycleFocus_SkipsHiddenPanels(t *testing.T) {
+	m := connect(t)
+	// Hide editor
+	pressAlt(t, m, "q")
+	m.setFocus(screens.FocusSidebar)
+
+	// Press Tab from Sidebar -> should focus Main
+	pressKey(t, m, "tab")
+	if m.focus != screens.FocusMain {
+		t.Errorf("after tab: focus = %v, want FocusMain", m.focus)
+	}
+
+	// Press Tab from Main -> should skip hidden Editor and focus Sidebar
+	pressKey(t, m, "tab")
+	if m.focus != screens.FocusSidebar {
+		t.Errorf("after second tab: focus = %v, want FocusSidebar (skipped hidden editor)", m.focus)
+	}
+}
+
 func TestModel_SaveAndDeleteSavedConnection(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
 

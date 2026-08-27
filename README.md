@@ -107,6 +107,8 @@ relm --read-only redis://localhost:6379/0
 | `Alt+E` | Export result / current page to CSV or JSON |
 | `Alt+C` / `Ctrl+Y` | Copy active query to clipboard |
 | `Alt+B` | Toggle sidebar |
+| `Alt+M` | Toggle main data view |
+| `Alt+Q` | Toggle query editor |
 | `Ctrl+R` | Run query (SQL / MQL / RESP / CQL / Cypher) |
 | `Esc` | Cancel running query or return from detail/structure |
 | `Ctrl+L` | Clear editor |

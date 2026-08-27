@@ -14,7 +14,7 @@ import (
 
 func TestRenderWorkspace_ShowsPaneTitles(t *testing.T) {
 	out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-		FocusSidebar, false, ComputeLayout(100, 24, true, 0, 0), 0, 100, 24)
+		FocusSidebar, false, ComputeLayout(100, 24, true, true, true, 0, 0), 0, 100, 24)
 
 	if !strings.Contains(out, "TABLES") {
 		t.Error("workspace must show the TABLES sidebar title")
@@ -53,7 +53,7 @@ func TestRenderWorkspace_EmptyTableShowsColumns(t *testing.T) {
 		PageSize:  50,
 	}
 	out := RenderWorkspace(b, NewEditorScreen(), sampleTestEditor(),
-		FocusMain, false, ComputeLayout(100, 24, true, 0, 0), 0, 100, 24)
+		FocusMain, false, ComputeLayout(100, 24, true, true, true, 0, 0), 0, 100, 24)
 
 	foundHeader := false
 	foundHint := false
@@ -77,7 +77,7 @@ func TestRenderWorkspace_EmptyTableShowsColumns(t *testing.T) {
 func TestRenderWorkspace_ExactHeight(t *testing.T) {
 	for _, h := range []int{12, 20, 30} {
 		out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-			FocusSidebar, false, ComputeLayout(100, h, true, 0, 0), 0, 100, h)
+			FocusSidebar, false, ComputeLayout(100, h, true, true, true, 0, 0), 0, 100, h)
 		if n := len(strings.Split(out, "\n")); n != h {
 			t.Errorf("height=%d: got %d lines", h, n)
 		}
@@ -87,7 +87,7 @@ func TestRenderWorkspace_ExactHeight(t *testing.T) {
 func TestRenderWorkspace_ExactWidth(t *testing.T) {
 	for _, w := range []int{60, 100, 150} {
 		out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-			FocusSidebar, false, ComputeLayout(w, 20, true, 0, 0), 0, w, 20)
+			FocusSidebar, false, ComputeLayout(w, 20, true, true, true, 0, 0), 0, w, 20)
 		for i, line := range strings.Split(out, "\n") {
 			if got := runewidth.StringWidth(ansi.Strip(line)); got != w {
 				t.Errorf("width=%d: line %d is %d cols", w, i, got)
@@ -98,7 +98,7 @@ func TestRenderWorkspace_ExactWidth(t *testing.T) {
 
 func TestRenderWorkspace_HasPanelGapsAndPadding(t *testing.T) {
 	out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-		FocusSidebar, false, ComputeLayout(100, 24, true, 0, 0), 0, 100, 24)
+		FocusSidebar, false, ComputeLayout(100, 24, true, true, true, 0, 0), 0, 100, 24)
 	lines := strings.Split(out, "\n")
 
 	// the sidebar and main boxes are separated by exactly one char
@@ -124,9 +124,55 @@ func TestRenderWorkspace_HasPanelGapsAndPadding(t *testing.T) {
 func TestRenderWorkspace_WithoutSidebarSpansWidth(t *testing.T) {
 	// with the sidebar hidden the output must not contain the sidebar tables
 	out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-		FocusSidebar, false, ComputeLayout(100, 20, false, 0, 0), 0, 100, 20)
+		FocusSidebar, false, ComputeLayout(100, 20, false, true, true, 0, 0), 0, 100, 20)
 	if strings.Contains(out, "TABLES") {
 		t.Error("sidebar must be hidden")
+	}
+}
+
+func TestRenderWorkspace_ToggleCombinations(t *testing.T) {
+	b := sampleTestBrowser()
+	es := NewEditorScreen()
+	ed := sampleTestEditor()
+
+	// Only Main visible
+	lMainOnly := ComputeLayout(100, 24, false, true, false, 0, 0)
+	outMainOnly := RenderWorkspace(b, es, ed, FocusMain, false, lMainOnly, 0, 100, 24)
+	if !strings.Contains(outMainOnly, "users") || strings.Contains(outMainOnly, "SQL EDITOR") {
+		t.Errorf("main only: should have users, not SQL EDITOR: %q", outMainOnly)
+	}
+	if n := len(strings.Split(outMainOnly, "\n")); n != 24 {
+		t.Errorf("main only: height = %d, want 24", n)
+	}
+
+	// Only Editor visible
+	lEdOnly := ComputeLayout(100, 24, false, false, true, 0, 0)
+	outEdOnly := RenderWorkspace(b, es, ed, FocusEditor, false, lEdOnly, 0, 100, 24)
+	if strings.Contains(outEdOnly, "users ·") || !strings.Contains(outEdOnly, "SQL EDITOR") {
+		t.Errorf("editor only: should have SQL EDITOR, not users: %q", outEdOnly)
+	}
+	if n := len(strings.Split(outEdOnly, "\n")); n != 24 {
+		t.Errorf("editor only: height = %d, want 24", n)
+	}
+
+	// Sidebar + Main (Editor hidden)
+	lSideMain := ComputeLayout(100, 24, true, true, false, 0, 0)
+	outSideMain := RenderWorkspace(b, es, ed, FocusMain, false, lSideMain, 0, 100, 24)
+	if !strings.Contains(outSideMain, "TABLES") || !strings.Contains(outSideMain, "users ·") || strings.Contains(outSideMain, "SQL EDITOR") {
+		t.Errorf("sidebar+main: unexpected output: %q", outSideMain)
+	}
+	if n := len(strings.Split(outSideMain, "\n")); n != 24 {
+		t.Errorf("sidebar+main: height = %d, want 24", n)
+	}
+
+	// Sidebar + Editor (Main hidden)
+	lSideEd := ComputeLayout(100, 24, true, false, true, 0, 0)
+	outSideEd := RenderWorkspace(b, es, ed, FocusEditor, false, lSideEd, 0, 100, 24)
+	if !strings.Contains(outSideEd, "TABLES") || strings.Contains(outSideEd, "users ·") || !strings.Contains(outSideEd, "SQL EDITOR") {
+		t.Errorf("sidebar+editor: unexpected output: %q", outSideEd)
+	}
+	if n := len(strings.Split(outSideEd, "\n")); n != 24 {
+		t.Errorf("sidebar+editor: height = %d, want 24", n)
 	}
 }
 
@@ -150,7 +196,7 @@ func sampleTestEditor() *editor.Editor {
 }
 
 func TestComputeLayout_Automatic(t *testing.T) {
-	l := ComputeLayout(100, 30, true, 0, 0)
+	l := ComputeLayout(100, 30, true, true, true, 0, 0)
 	if !l.ShowSidebar {
 		t.Fatal("sidebar should be shown")
 	}
@@ -169,7 +215,7 @@ func TestComputeLayout_Automatic(t *testing.T) {
 }
 
 func TestComputeLayout_CustomClamped(t *testing.T) {
-	l := ComputeLayout(100, 30, true, 200, 1000)
+	l := ComputeLayout(100, 30, true, true, true, 200, 1000)
 	if l.SidebarW > 100-RightMinW-1 {
 		t.Errorf("SidebarW = %d, not clamped to width", l.SidebarW)
 	}
@@ -177,7 +223,7 @@ func TestComputeLayout_CustomClamped(t *testing.T) {
 		t.Errorf("EditorH = %d, want %d", l.EditorH, 30-MainMinH-1)
 	}
 
-	l = ComputeLayout(100, 30, true, 3, 2)
+	l = ComputeLayout(100, 30, true, true, true, 3, 2)
 	if l.SidebarW < SidebarMinW {
 		t.Errorf("SidebarW = %d, below min %d", l.SidebarW, SidebarMinW)
 	}
@@ -187,7 +233,7 @@ func TestComputeLayout_CustomClamped(t *testing.T) {
 }
 
 func TestComputeLayout_RespectsCustomValue(t *testing.T) {
-	l := ComputeLayout(100, 30, true, 32, 14)
+	l := ComputeLayout(100, 30, true, true, true, 32, 14)
 	if l.SidebarW != 32 {
 		t.Errorf("SidebarW = %d, want 32", l.SidebarW)
 	}
@@ -200,11 +246,31 @@ func TestComputeLayout_RespectsCustomValue(t *testing.T) {
 }
 
 func TestComputeLayout_SidebarHiddenOnSmallWidth(t *testing.T) {
-	l := ComputeLayout(50, 20, true, 20, 8)
+	l := ComputeLayout(50, 20, true, true, true, 20, 8)
 	if l.ShowSidebar {
 		t.Error("sidebar must be hidden below 60 columns")
 	}
 	if l.RightW != 50 {
 		t.Errorf("RightW = %d, want full width", l.RightW)
+	}
+}
+
+func TestComputeLayout_TogglePanels(t *testing.T) {
+	// Editor hidden -> Main takes full height
+	l1 := ComputeLayout(100, 30, true, true, false, 20, 10)
+	if l1.EditorH != 0 || l1.MainH != 30 {
+		t.Errorf("Editor hidden: EditorH = %d, MainH = %d, want 0 and 30", l1.EditorH, l1.MainH)
+	}
+
+	// Main hidden -> Editor takes full height
+	l2 := ComputeLayout(100, 30, true, false, true, 20, 10)
+	if l2.MainH != 0 || l2.EditorH != 30 {
+		t.Errorf("Main hidden: MainH = %d, EditorH = %d, want 0 and 30", l2.MainH, l2.EditorH)
+	}
+
+	// All false -> guard defaults showMain = true
+	l3 := ComputeLayout(100, 30, false, false, false, 0, 0)
+	if !l3.ShowMain {
+		t.Errorf("All false guard: ShowMain must be true")
 	}
 }

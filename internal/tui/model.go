@@ -95,6 +95,8 @@ type Model struct {
 	width       int
 	height      int
 	showSidebar bool
+	showMain    bool
+	showEditor  bool
 	showHelp    bool
 	err         string
 	warn        string // advisory notice, rendered in amber below the content
@@ -149,6 +151,8 @@ func New(opts ...NewOpts) *Model {
 		keys:         DefaultKeyMap(),
 		spinner:      spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(styles.StyleHeaderDim)),
 		showSidebar:  true,
+		showMain:     true,
+		showEditor:   true,
 		prefs:        p,
 		sidebarW:     p.SidebarWidth,
 		editorH:      p.EditorHeight,

@@ -39,12 +39,12 @@ func PrintLayout(width, height int) int {
 	fmt.Println(screens.NewConnScreen(nil).View(w, h))
 
 	fmt.Println("\n--- workspace ---")
-	layout := screens.ComputeLayout(w, h-2, true, 0, 0)
+	layout := screens.ComputeLayout(w, h-2, true, true, true, 0, 0)
 	fmt.Println(screens.RenderWorkspace(sampleBrowser(), screens.NewEditorScreen(),
 		sampleEditor(), screens.FocusSidebar, false, layout, 0, w, h-2))
 
 	fmt.Println("\n--- workspace (no sidebar, small terminal) ---")
-	layout = screens.ComputeLayout(50, h-2, true, 0, 0)
+	layout = screens.ComputeLayout(50, h-2, true, true, true, 0, 0)
 	fmt.Println(screens.RenderWorkspace(sampleBrowser(), screens.NewEditorScreen(),
 		sampleEditor(), screens.FocusSidebar, false, layout, 0, 50, h-2))
 
