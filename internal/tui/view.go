@@ -143,39 +143,49 @@ func (m *Model) renderFooter() string {
 			{"esc", "back"},
 		})
 	case ScreenWorkspace:
-		switch m.focus {
-		case screens.FocusSidebar:
+		if m.showDetail {
 			left = footerBindings([]binding{
-				{"↑↓", sidebarNoun},
-				{"enter", "open"},
-				{"tab", "next"},
-				{"?", "help"},
-				{"ctrl+p", "settings"},
-			})
-		case screens.FocusMain:
-			if m.structure {
-				left = footerBindings([]binding{
-					{"esc", "back"},
-					{"tab", "next"},
-				})
-			} else {
-				left = footerBindings([]binding{
-					{"↑↓", "navigate"},
-					{"i", "structure"},
-					{"v", "detail"},
-					{"r", "refresh"},
-					{"pgup/pgdn", "page"},
-					{"tab", "next"},
-					{"right-click", "resize"},
-				})
-			}
-		case screens.FocusEditor:
-			left = footerBindings([]binding{
-				{"ctrl+r", "run"},
-				{"alt+c", "copy"},
-				{"ctrl+l", "clear"},
+				{"↑↓", "fields"},
+				{"c", "copy val"},
+				{"C", "copy field"},
+				{"a", "copy all"},
 				{"esc", "back"},
 			})
+		} else {
+			switch m.focus {
+			case screens.FocusSidebar:
+				left = footerBindings([]binding{
+					{"↑↓", sidebarNoun},
+					{"enter", "open"},
+					{"tab", "next"},
+					{"?", "help"},
+					{"ctrl+p", "settings"},
+				})
+			case screens.FocusMain:
+				if m.structure {
+					left = footerBindings([]binding{
+						{"esc", "back"},
+						{"tab", "next"},
+					})
+				} else {
+					left = footerBindings([]binding{
+						{"↑↓", "navigate"},
+						{"i", "structure"},
+						{"v", "detail"},
+						{"r", "refresh"},
+						{"pgup/pgdn", "page"},
+						{"tab", "next"},
+						{"right-click", "resize"},
+					})
+				}
+			case screens.FocusEditor:
+				left = footerBindings([]binding{
+					{"ctrl+r", "run"},
+					{"alt+c", "copy"},
+					{"ctrl+l", "clear"},
+					{"esc", "back"},
+				})
+			}
 		}
 	}
 

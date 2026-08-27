@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -16,25 +17,70 @@ import (
 // handleDetailKeys handles the keys of the detail view.
 func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case msg.Type == tea.KeyEsc || key.Matches(msg, m.keys.Back):
+	case msg.Type == tea.KeyEsc || key.Matches(msg, m.keys.Back) || msg.String() == "q" || msg.String() == "v":
 		m.showDetail = false
+		m.detailCursor = 0
 		m.detailScroll = 0
 		m.detailDoc = ""
 		m.detailGraph = nil
 		m.detailCols = nil
 		m.detailVals = nil
 	case key.Matches(msg, m.keys.Up):
-		m.detailScroll--
+		if len(m.detailCols) > 0 {
+			m.detailCursor--
+			if m.detailCursor < 0 {
+				m.detailCursor = 0
+			}
+			m.adjustDetailScroll()
+		} else {
+			m.detailScroll--
+		}
 	case key.Matches(msg, m.keys.Down):
-		m.detailScroll++
+		if len(m.detailCols) > 0 {
+			m.detailCursor++
+			if m.detailCursor >= len(m.detailCols) {
+				m.detailCursor = len(m.detailCols) - 1
+			}
+			m.adjustDetailScroll()
+		} else {
+			m.detailScroll++
+		}
 	case key.Matches(msg, m.keys.PageUp):
-		m.detailScroll -= 10
+		if len(m.detailCols) > 0 {
+			m.detailCursor -= 5
+			if m.detailCursor < 0 {
+				m.detailCursor = 0
+			}
+			m.adjustDetailScroll()
+		} else {
+			m.detailScroll -= 10
+		}
 	case key.Matches(msg, m.keys.PageDown):
-		m.detailScroll += 10
+		if len(m.detailCols) > 0 {
+			m.detailCursor += 5
+			if m.detailCursor >= len(m.detailCols) {
+				m.detailCursor = len(m.detailCols) - 1
+			}
+			m.adjustDetailScroll()
+		} else {
+			m.detailScroll += 10
+		}
 	case key.Matches(msg, m.keys.First):
+		m.detailCursor = 0
 		m.detailScroll = 0
 	case key.Matches(msg, m.keys.Last):
-		m.detailScroll = 1 << 30 // clamped in the renderer
+		if len(m.detailCols) > 0 {
+			m.detailCursor = len(m.detailCols) - 1
+			m.adjustDetailScroll()
+		} else {
+			m.detailScroll = 1 << 30
+		}
+	case msg.String() == "c" || msg.String() == "y" || msg.Type == tea.KeyEnter:
+		m.copyDetailValue()
+	case msg.String() == "C" || msg.String() == "Y":
+		m.copyDetailField()
+	case msg.String() == "a" || msg.String() == "A" || key.Matches(msg, m.keys.CopyQuery):
+		m.copyDetailAll()
 	}
 	return m, nil
 }
@@ -46,6 +92,7 @@ func (m *Model) openDetail(title string, cols, vals []string) {
 	m.detailVals = vals
 	m.detailDoc = ""
 	m.detailGraph = nil
+	m.detailCursor = 0
 	m.detailScroll = 0
 	m.showDetail = true
 }
@@ -75,6 +122,7 @@ func (m *Model) openDetailFromBrowser(b *browser.Browser) {
 			m.detailCols = nil
 			m.detailVals = nil
 			m.detailGraph = nil
+			m.detailCursor = 0
 			m.detailScroll = 0
 			m.showDetail = true
 		}
@@ -97,6 +145,7 @@ func (m *Model) openDetailFromBrowser(b *browser.Browser) {
 		m.detailCols = nil
 		m.detailVals = nil
 		m.detailGraph = nil
+		m.detailCursor = 0
 		m.detailScroll = 0
 		m.showDetail = true
 	case *store.GraphData:
@@ -107,8 +156,131 @@ func (m *Model) openDetailFromBrowser(b *browser.Browser) {
 			m.detailDoc = ""
 			m.detailCols = nil
 			m.detailVals = nil
+			m.detailCursor = 0
 			m.detailScroll = 0
 			m.showDetail = true
+		}
+	}
+}
+
+func (m *Model) adjustDetailScroll() {
+	if len(m.detailCols) == 0 {
+		return
+	}
+	contentW := m.width - 6
+	if contentW < 4 {
+		contentW = 4
+	}
+	contentH := m.height - 4
+	if contentH < 4 {
+		contentH = 4
+	}
+
+	lineOffset := 2 // title + blank line
+	for i := 0; i < len(m.detailCols); i++ {
+		val := ""
+		if i < len(m.detailVals) {
+			val = m.detailVals[i]
+		}
+		wrappedCount := 1
+		if val != "" {
+			wrappedCount = len(screens.WrapCells(val, contentW-4))
+		}
+		fieldHeight := 1 + wrappedCount + 1
+
+		if i == m.detailCursor {
+			if lineOffset < m.detailScroll {
+				m.detailScroll = lineOffset
+			} else if lineOffset+fieldHeight > m.detailScroll+contentH {
+				m.detailScroll = (lineOffset + fieldHeight) - contentH
+			}
+			break
+		}
+		lineOffset += fieldHeight
+	}
+	if m.detailScroll < 0 {
+		m.detailScroll = 0
+	}
+}
+
+func (m *Model) copyDetailValue() {
+	if len(m.detailCols) > 0 {
+		if m.detailCursor >= 0 && m.detailCursor < len(m.detailCols) {
+			col := m.detailCols[m.detailCursor]
+			val := ""
+			if m.detailCursor < len(m.detailVals) {
+				val = m.detailVals[m.detailCursor]
+			}
+			if err := clipboard.WriteAll(val); err == nil {
+				m.exported = fmt.Sprintf("copied '%s' value to clipboard", col)
+			}
+		}
+		return
+	}
+	if m.detailDoc != "" {
+		if err := clipboard.WriteAll(m.detailDoc); err == nil {
+			m.exported = "document copied to clipboard"
+		}
+		return
+	}
+	if m.detailGraph != nil {
+		var b strings.Builder
+		for k, v := range m.detailGraph.Properties {
+			b.WriteString(fmt.Sprintf("%s: %s\n", k, v))
+		}
+		if err := clipboard.WriteAll(b.String()); err == nil {
+			m.exported = "node details copied to clipboard"
+		}
+	}
+}
+
+func (m *Model) copyDetailField() {
+	if len(m.detailCols) > 0 {
+		if m.detailCursor >= 0 && m.detailCursor < len(m.detailCols) {
+			col := m.detailCols[m.detailCursor]
+			val := ""
+			if m.detailCursor < len(m.detailVals) {
+				val = m.detailVals[m.detailCursor]
+			}
+			text := fmt.Sprintf("%s: %s", col, val)
+			if err := clipboard.WriteAll(text); err == nil {
+				m.exported = fmt.Sprintf("copied field '%s' to clipboard", col)
+			}
+		}
+		return
+	}
+	m.copyDetailValue()
+}
+
+func (m *Model) copyDetailAll() {
+	if len(m.detailCols) > 0 {
+		var b strings.Builder
+		for i, c := range m.detailCols {
+			val := ""
+			if i < len(m.detailVals) {
+				val = m.detailVals[i]
+			}
+			b.WriteString(fmt.Sprintf("%s: %s\n", c, val))
+		}
+		if err := clipboard.WriteAll(strings.TrimSpace(b.String())); err == nil {
+			m.exported = "all fields copied to clipboard"
+		}
+		return
+	}
+	if m.detailDoc != "" {
+		if err := clipboard.WriteAll(m.detailDoc); err == nil {
+			m.exported = "document copied to clipboard"
+		}
+		return
+	}
+	if m.detailGraph != nil {
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("ID: %s\nLabels: %s\n", m.detailGraph.ID, strings.Join(m.detailGraph.Labels, ":")))
+		for k, v := range m.detailGraph.Properties {
+			b.WriteString(fmt.Sprintf("%s: %s\n", k, v))
+		}
+		if err := clipboard.WriteAll(strings.TrimSpace(b.String())); err == nil {
+			m.exported = "node details copied to clipboard"
 		}
 	}
 }
@@ -121,7 +293,7 @@ func (m *Model) renderActiveDetail(width, height int) string {
 	if m.detailGraph != nil {
 		return renderGraphNodeDetail(m.detailTitle, m.detailGraph, m.detailScroll, width, height)
 	}
-	return screens.RenderRowDetail(m.detailTitle, m.detailCols, m.detailVals, m.detailScroll, width, height)
+	return screens.RenderRowDetail(m.detailTitle, m.detailCols, m.detailVals, m.detailCursor, m.detailScroll, width, height)
 }
 
 func renderTextDetail(title, text string, scroll, width, height int) string {

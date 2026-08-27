@@ -103,6 +103,7 @@ type Model struct {
 
 	// detail view ("v"): a snapshot of the selected item with full values
 	showDetail   bool
+	detailCursor int
 	detailScroll int
 	detailTitle  string
 	detailCols   []string

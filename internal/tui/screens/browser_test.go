@@ -364,7 +364,7 @@ func TestColWidths_CapsSingleHugeColumn(t *testing.T) {
 
 func TestRenderRowDetail_ShowsFullValue(t *testing.T) {
 	val := strings.Repeat("z", 100)
-	out := RenderRowDetail("users", []string{"id", "text"}, []string{"1", val}, 0, 40, 20)
+	out := RenderRowDetail("users", []string{"id", "text"}, []string{"1", val}, 0, 0, 40, 20)
 	// the value is wrapped, so every character must still be present
 	if got := strings.Count(out, "z"); got != 100 {
 		t.Errorf("found %d 'z', want 100 (full value)", got)
@@ -374,10 +374,21 @@ func TestRenderRowDetail_ShowsFullValue(t *testing.T) {
 	}
 }
 
+func TestRenderRowDetail_HighlightsCursor(t *testing.T) {
+	out := RenderRowDetail("users", []string{"id", "text"}, []string{"1", "hello"}, 1, 0, 40, 20)
+	plain := ansi.Strip(out)
+	if !strings.Contains(plain, "> text:") {
+		t.Errorf("expected cursor '> text:' in plain output: %q", plain)
+	}
+	if !strings.Contains(plain, "  id:") {
+		t.Errorf("expected unselected '  id:' in plain output: %q", plain)
+	}
+}
+
 func TestRenderRowDetail_Scrolls(t *testing.T) {
 	val := strings.Repeat("y", 100)
-	out0 := RenderRowDetail("t", []string{"id", "body"}, []string{"1", val}, 0, 40, 3)
-	out1 := RenderRowDetail("t", []string{"id", "body"}, []string{"1", val}, 5, 40, 3)
+	out0 := RenderRowDetail("t", []string{"id", "body"}, []string{"1", val}, 0, 0, 40, 3)
+	out1 := RenderRowDetail("t", []string{"id", "body"}, []string{"1", val}, 0, 5, 40, 3)
 	if out0 == out1 {
 		t.Error("scrolling should change the visible content")
 	}

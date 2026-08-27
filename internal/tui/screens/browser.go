@@ -537,8 +537,8 @@ func RenderEmptyTable(cols []string, width int) string {
 		styles.StyleHeaderDim.Render(center(caption))
 }
 
-// RenderRowDetail renders a single row with every column and full value.
-func RenderRowDetail(title string, cols, vals []string, scroll, width, height int) string {
+// RenderRowDetail renders a single row with every column and full value, highlighting the cursor field.
+func RenderRowDetail(title string, cols, vals []string, cursor, scroll, width, height int) string {
 	if width < 4 {
 		width = 40
 	}
@@ -566,10 +566,14 @@ func RenderRowDetail(title string, cols, vals []string, scroll, width, height in
 		if val == "" {
 			val = styles.NullCell()
 		}
-		lines = append(lines, styles.StyleColHeader.Render(name)+":")
-		wrapped := wrapCells(val, contentW)
+		if i == cursor {
+			lines = append(lines, styles.StyleSidebarActive.Render("> ")+styles.StyleColHeader.Render(name+":"))
+		} else {
+			lines = append(lines, "  "+styles.StyleColHeader.Render(name+":"))
+		}
+		wrapped := WrapCells(val, contentW-4)
 		for _, wl := range wrapped {
-			lines = append(lines, "  "+wl)
+			lines = append(lines, "    "+wl)
 		}
 		lines = append(lines, "")
 	}
@@ -587,7 +591,8 @@ func RenderRowDetail(title string, cols, vals []string, scroll, width, height in
 	return strings.Join(lines[scroll:end], "\n")
 }
 
-func wrapCells(s string, max int) []string {
+// WrapCells splits a string into lines that do not exceed max width.
+func WrapCells(s string, max int) []string {
 	if max <= 0 {
 		return []string{""}
 	}

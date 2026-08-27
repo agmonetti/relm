@@ -6,6 +6,7 @@ import (
 
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/agmonetti/relm/internal/browser"
 	"github.com/agmonetti/relm/internal/store"
@@ -46,13 +47,7 @@ func (m *Model) handleConnectMouse(msg tea.MouseMsg) tea.Cmd {
 // handleWorkspaceMouse handles mouse events inside the workspace.
 func (m *Model) handleWorkspaceMouse(msg tea.MouseMsg) tea.Cmd {
 	if m.showDetail {
-		switch msg.Button {
-		case tea.MouseButtonWheelUp:
-			m.detailScroll--
-		case tea.MouseButtonWheelDown:
-			m.detailScroll++
-		}
-		return nil
+		return m.handleDetailMouse(msg)
 	}
 	if m.navigating {
 		// a navigation is in flight: ignore wheel/click row ops until it lands
@@ -364,3 +359,103 @@ func absInt(n int) int {
 	}
 	return n
 }
+
+func (m *Model) handleDetailMouse(msg tea.MouseMsg) tea.Cmd {
+	innerW := m.width - 2
+	if innerW < 1 {
+		innerW = 1
+	}
+
+	wx := msg.X - 1
+	wy := msg.Y - 2
+
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		m.detailScroll--
+		if m.detailScroll < 0 {
+			m.detailScroll = 0
+		}
+		return nil
+	case tea.MouseButtonWheelDown:
+		m.detailScroll++
+		return nil
+	}
+
+	switch msg.Action {
+	case tea.MouseActionPress:
+		if msg.Button == tea.MouseButtonLeft {
+			m.selectDetailFieldAt(wy)
+			m.dragSelecting = true
+			m.dragStartLine = wy + m.detailScroll
+			m.dragStartCol = wx
+			m.dragEndLine = m.dragStartLine
+			m.dragEndCol = m.dragStartCol
+		}
+	case tea.MouseActionMotion:
+		if m.dragSelecting {
+			m.dragEndLine = wy + m.detailScroll
+			m.dragEndCol = wx
+		}
+	case tea.MouseActionRelease:
+		if m.dragSelecting {
+			m.dragSelecting = false
+			m.dragEndLine = wy + m.detailScroll
+			m.dragEndCol = wx
+			if m.dragStartLine != m.dragEndLine || m.dragStartCol != m.dragEndCol {
+				text := m.detailPlainText(innerW)
+				if text != "" {
+					selected := screens.ExtractTextRange(text,
+						m.dragStartLine, m.dragStartCol, m.dragEndLine, m.dragEndCol)
+					if strings.TrimSpace(selected) != "" {
+						if err := clipboard.WriteAll(selected); err == nil {
+							m.exported = "selection copied to clipboard"
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (m *Model) selectDetailFieldAt(wy int) {
+	if len(m.detailCols) == 0 {
+		return
+	}
+	contentW := m.width - 6
+	if contentW < 4 {
+		contentW = 4
+	}
+
+	targetLine := wy + m.detailScroll - 2 // 2 lines: title + blank line
+	if targetLine < 0 {
+		return
+	}
+
+	currentLine := 0
+	for i := 0; i < len(m.detailCols); i++ {
+		val := ""
+		if i < len(m.detailVals) {
+			val = m.detailVals[i]
+		}
+		wrappedCount := 1
+		if val != "" {
+			wrappedCount = len(screens.WrapCells(val, contentW-4))
+		}
+		fieldHeight := 1 + wrappedCount + 1
+		if targetLine >= currentLine && targetLine < currentLine+fieldHeight {
+			m.detailCursor = i
+			break
+		}
+		currentLine += fieldHeight
+	}
+}
+
+func (m *Model) detailPlainText(innerW int) string {
+	if m.detailDoc != "" {
+		return m.detailDoc
+	}
+	rendered := m.renderActiveDetail(innerW, 10000)
+	return ansi.Strip(rendered)
+}
+

@@ -539,6 +539,69 @@ func TestModel_DetailView_ColumnOrdering(t *testing.T) {
 	}
 }
 
+func TestModel_DetailView_NavigateAndCopy(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+	press(t, m, "2")    // open users
+	pressAlt(t, m, "2") // focus main
+	press(t, m, "v")    // open detail
+
+	if !m.showDetail {
+		t.Fatal("detail should be open")
+	}
+	if m.detailCursor != 0 {
+		t.Fatalf("initial detailCursor = %d, want 0", m.detailCursor)
+	}
+
+	// Navigate down
+	press(t, m, "j")
+	if m.detailCursor != 1 {
+		t.Fatalf("detailCursor after j = %d, want 1", m.detailCursor)
+	}
+
+	// Copy value with 'c'
+	press(t, m, "c")
+	if !strings.Contains(m.exported, "copied") || !strings.Contains(m.exported, "value") {
+		t.Errorf("expected copied value notification, got: %q", m.exported)
+	}
+
+	// Copy field with 'C'
+	press(t, m, "C")
+	if !strings.Contains(m.exported, "copied field") {
+		t.Errorf("expected copied field notification, got: %q", m.exported)
+	}
+
+	// Copy all with 'a'
+	press(t, m, "a")
+	if m.exported != "all fields copied to clipboard" {
+		t.Errorf("expected all fields copied notification, got: %q", m.exported)
+	}
+
+	// Jump to end with 'G' and start with 'g'
+	press(t, m, "G")
+	if m.detailCursor != len(m.detailCols)-1 {
+		t.Errorf("detailCursor after G = %d, want %d", m.detailCursor, len(m.detailCols)-1)
+	}
+	press(t, m, "g")
+	if m.detailCursor != 0 {
+		t.Errorf("detailCursor after g = %d, want 0", m.detailCursor)
+	}
+
+	// Mouse click to select field 1 (terminal Y=7)
+	step(t, m, mouseMsg(20, 7, tea.MouseButtonLeft, tea.MouseActionPress))
+	step(t, m, mouseMsg(20, 7, tea.MouseButtonLeft, tea.MouseActionRelease))
+	if m.detailCursor != 1 {
+		t.Errorf("detailCursor after click = %d, want 1", m.detailCursor)
+	}
+
+	// Close with 'v'
+	press(t, m, "v")
+	if m.showDetail {
+		t.Error("detail should close on 'v'")
+	}
+}
+
+
 
 func TestModel_ClickFocusesConnectField(t *testing.T) {
 	m := newModel(t)
