@@ -499,6 +499,47 @@ func TestModel_DetailViewShowsLongValue(t *testing.T) {
 	}
 }
 
+func TestModel_DetailView_ColumnOrdering(t *testing.T) {
+	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
+	m := connect(t)
+	press(t, m, "2") // open users
+
+	// Simulate a situation where b.Columns (from schema/inspect) has different order than tab.Columns
+	m.browser.Columns = []store.Column{
+		{Name: "email"},
+		{Name: "id"},
+		{Name: "name"},
+	}
+	m.browser.Data = &store.TabularData{
+		Columns: []string{"id", "name", "email"},
+		Rows: [][]string{
+			{"42", "Arthur", "arthur@galaxy.org"},
+		},
+	}
+	m.browser.Cursor = 0
+
+	pressAlt(t, m, "2") // focus main
+	press(t, m, "v")    // open detail
+	if !m.showDetail {
+		t.Fatal("detail should be open")
+	}
+
+	if len(m.detailCols) != 3 || m.detailCols[0] != "id" || m.detailCols[1] != "name" || m.detailCols[2] != "email" {
+		t.Errorf("detailCols = %v, want [id name email]", m.detailCols)
+	}
+	if len(m.detailVals) != 3 || m.detailVals[0] != "42" || m.detailVals[1] != "Arthur" || m.detailVals[2] != "arthur@galaxy.org" {
+		t.Errorf("detailVals = %v, want [42 Arthur arthur@galaxy.org]", m.detailVals)
+	}
+
+	v := m.View()
+	if !strings.Contains(v, "id:") || !strings.Contains(v, "42") ||
+		!strings.Contains(v, "name:") || !strings.Contains(v, "Arthur") ||
+		!strings.Contains(v, "email:") || !strings.Contains(v, "arthur@galaxy.org") {
+		t.Errorf("rendered view missing expected column-value pairs: %q", v)
+	}
+}
+
+
 func TestModel_ClickFocusesConnectField(t *testing.T) {
 	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30}) // innerW=98, contentHeight=26

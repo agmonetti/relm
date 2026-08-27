@@ -58,12 +58,12 @@ func (m *Model) openDetailFromBrowser(b *browser.Browser) {
 	switch v := b.Data.(type) {
 	case *store.TabularData:
 		if len(v.Rows) > 0 && b.Cursor >= 0 && b.Cursor < len(v.Rows) {
-			cols := make([]string, len(b.Columns))
-			for i, c := range b.Columns {
-				cols[i] = c.Name
-			}
+			cols := v.Columns
 			if len(cols) == 0 {
-				cols = v.Columns
+				cols = make([]string, len(b.Columns))
+				for i, c := range b.Columns {
+					cols[i] = c.Name
+				}
 			}
 			m.openDetail(b.ActiveTable, cols, v.Rows[b.Cursor])
 		}

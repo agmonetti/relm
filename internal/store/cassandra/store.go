@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -206,21 +207,65 @@ func (s *CassandraSource) Browse(ctx context.Context, req store.BrowseRequest) (
 	}, nil
 }
 
+type cassColumnInfo struct {
+	name string
+	col  store.Column
+	kind string
+	pos  int
+}
+
+func cqlKindRank(kind string) int {
+	switch kind {
+	case "partition_key":
+		return 0
+	case "clustering":
+		return 1
+	default:
+		return 2
+	}
+}
+
+func sortCQLColumns(cols []cassColumnInfo) {
+	sort.SliceStable(cols, func(i, j int) bool {
+		rI, rJ := cqlKindRank(cols[i].kind), cqlKindRank(cols[j].kind)
+		if rI != rJ {
+			return rI < rJ
+		}
+		if rI < 2 {
+			if cols[i].pos != cols[j].pos {
+				return cols[i].pos < cols[j].pos
+			}
+		}
+		return cols[i].name < cols[j].name
+	})
+}
+
 // schemaColumns returns the column names of a table from system_schema,
 // independent of whether the table has rows. Relational engines read columns
 // from the schema (never from the rows), so an empty table still exposes its
 // columns to the browser and the editor.
 func (s *CassandraSource) schemaColumns(ctx context.Context, keyspace, table string) ([]string, error) {
-	query := "SELECT column_name FROM system_schema.columns WHERE keyspace_name = ? AND table_name = ?"
+	query := "SELECT column_name, kind, position FROM system_schema.columns WHERE keyspace_name = ? AND table_name = ?"
 	iter := s.session.Query(query, keyspace, table).WithContext(ctx).Iter()
 
-	var names []string
-	var name string
-	for iter.Scan(&name) {
-		names = append(names, name)
+	var raw []cassColumnInfo
+	var name, kind string
+	var pos int
+	for iter.Scan(&name, &kind, &pos) {
+		raw = append(raw, cassColumnInfo{
+			name: name,
+			kind: kind,
+			pos:  pos,
+		})
 	}
 	if err := iter.Close(); err != nil {
 		return nil, fmt.Errorf("schema columns: %w", err)
+	}
+
+	sortCQLColumns(raw)
+	names := make([]string, len(raw))
+	for i, c := range raw {
+		names[i] = c.name
 	}
 	return names, nil
 }
@@ -230,7 +275,7 @@ func (s *CassandraSource) Inspect(ctx context.Context, name string) (store.Inspe
 	colQuery := "SELECT column_name, type, kind, position FROM system_schema.columns WHERE keyspace_name = ? AND table_name = ?"
 	iter := s.session.Query(colQuery, s.keyspace, name).WithContext(ctx).Iter()
 
-	var cols []store.Column
+	var raw []cassColumnInfo
 	var colName, colType, kind string
 	var pos int
 
@@ -238,15 +283,26 @@ func (s *CassandraSource) Inspect(ctx context.Context, name string) (store.Inspe
 		isPK := kind == "partition_key"
 		isClustering := kind == "clustering"
 
-		cols = append(cols, store.Column{
-			Name:       colName,
-			Type:       colType,
-			PK:         isPK,
-			Clustering: isClustering,
+		raw = append(raw, cassColumnInfo{
+			name: colName,
+			col: store.Column{
+				Name:       colName,
+				Type:       colType,
+				PK:         isPK,
+				Clustering: isClustering,
+			},
+			kind: kind,
+			pos:  pos,
 		})
 	}
 	if err := iter.Close(); err != nil {
 		return nil, fmt.Errorf("inspect columns: %w", err)
+	}
+
+	sortCQLColumns(raw)
+	cols := make([]store.Column, len(raw))
+	for i, c := range raw {
+		cols[i] = c.col
 	}
 
 	// Query system_schema.indexes

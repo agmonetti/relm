@@ -60,3 +60,24 @@ func TestCassandra_LanguageAndTitle(t *testing.T) {
 		t.Errorf("PromptTitle = %q, want CQL QUERY", exec.PromptTitle())
 	}
 }
+
+func TestCassandra_SortCQLColumns(t *testing.T) {
+	// Sample schema like canciones_reproducidas_por_usuarios
+	input := []cassColumnInfo{
+		{name: "fecha_reproduccion", kind: "regular", pos: -1, col: store.Column{Name: "fecha_reproduccion"}},
+		{name: "genero", kind: "clustering", pos: 0, col: store.Column{Name: "genero", Clustering: true}},
+		{name: "id_cancion", kind: "regular", pos: -1, col: store.Column{Name: "id_cancion"}},
+		{name: "id_usuario", kind: "partition_key", pos: 0, col: store.Column{Name: "id_usuario", PK: true}},
+		{name: "nombre_cancion", kind: "regular", pos: -1, col: store.Column{Name: "nombre_cancion"}},
+	}
+
+	sortCQLColumns(input)
+
+	want := []string{"id_usuario", "genero", "fecha_reproduccion", "id_cancion", "nombre_cancion"}
+	for i, col := range input {
+		if col.name != want[i] {
+			t.Errorf("col %d = %q, want %q", i, col.name, want[i])
+		}
+	}
+}
+
