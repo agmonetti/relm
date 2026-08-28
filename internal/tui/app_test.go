@@ -24,10 +24,11 @@ import (
 	"github.com/agmonetti/relm/internal/tui/screens"
 )
 
-// Cursor blink and spinner wait commands would block the synchronous step()
-// helper for their real duration; a tiny blink keeps the tests fast.
+// Cursor blink, spinner wait, and flash message timers would block the synchronous step()
+// helper for their real duration; tiny durations keep the tests fast.
 func init() {
 	screens.CursorBlink = time.Millisecond
+	FlashMessageDuration = time.Millisecond
 }
 
 // TestMain isolates every test from the real user configuration: saved
@@ -166,13 +167,18 @@ func step(t *testing.T, m *Model, msg tea.Msg) {
 	*m = *m2
 	if cmd != nil {
 		if out := cmd(); out != nil {
+			if _, isClear := out.(clearMessageMsg); isClear {
+				return
+			}
 			if batch, ok := out.(tea.BatchMsg); ok {
 				for _, sub := range batch {
 					if sub == nil {
 						continue
 					}
 					if subMsg := sub(); subMsg != nil {
-						step(t, m, subMsg)
+						if _, isClear := subMsg.(clearMessageMsg); !isClear {
+							step(t, m, subMsg)
+						}
 					}
 				}
 			} else {
@@ -1351,6 +1357,7 @@ func TestModel_ConnectIsAsync(t *testing.T) {
 
 func TestModel_CopyQueryShortcut(t *testing.T) {
 	m := connect(t)
+	pressAlt(t, m, "3") // focus editor
 	m.editorScreen.SetValue("SELECT * FROM users")
 
 	pressAlt(t, m, "c")
@@ -1363,6 +1370,78 @@ func TestModel_CopyQueryShortcut(t *testing.T) {
 	pressAlt(t, m, "c")
 	if m.warn != "no query to copy" {
 		t.Errorf("warn = %q, want 'no query to copy'", m.warn)
+	}
+}
+
+func TestModel_CopyQueryIgnoredOutsideEditor(t *testing.T) {
+	m := connect(t)
+	m.editorScreen.SetValue("SELECT * FROM users")
+
+	// 1. Focus Main pane (panel 2)
+	pressAlt(t, m, "2")
+	if m.focus != screens.FocusMain {
+		t.Fatalf("focus = %v, want FocusMain", m.focus)
+	}
+
+	pressAlt(t, m, "c")
+	if m.exported != "" || m.warn != "" || m.err != "" {
+		t.Errorf("Alt+C in FocusMain should be ignored, got exported=%q, warn=%q, err=%q",
+			m.exported, m.warn, m.err)
+	}
+
+	// 2. Focus Sidebar pane (panel 1)
+	pressAlt(t, m, "1")
+	if m.focus != screens.FocusSidebar {
+		t.Fatalf("focus = %v, want FocusSidebar", m.focus)
+	}
+
+	pressAlt(t, m, "c")
+	if m.exported != "" || m.warn != "" || m.err != "" {
+		t.Errorf("Alt+C in FocusSidebar should be ignored, got exported=%q, warn=%q, err=%q",
+			m.exported, m.warn, m.err)
+	}
+}
+
+func TestModel_FlashMessageAutoClear(t *testing.T) {
+	m := connect(t)
+
+	// Test warning auto-clear
+	m.setWarn("transient warning")
+	if m.warn != "transient warning" {
+		t.Errorf("warn = %q, want 'transient warning'", m.warn)
+	}
+	// Simulate timer tick
+	step(t, m, clearMessageMsg{seq: m.msgSeq})
+	if m.warn != "" {
+		t.Errorf("warn should be cleared after timer tick, got: %q", m.warn)
+	}
+
+	// Test success/exported auto-clear
+	m.setSuccess("transient success")
+	if m.exported != "transient success" {
+		t.Errorf("exported = %q, want 'transient success'", m.exported)
+	}
+	step(t, m, clearMessageMsg{seq: m.msgSeq})
+	if m.exported != "" {
+		t.Errorf("exported should be cleared after timer tick, got: %q", m.exported)
+	}
+
+	// Test error auto-clear
+	m.setError("transient error")
+	if m.err != "transient error" {
+		t.Errorf("err = %q, want 'transient error'", m.err)
+	}
+	step(t, m, clearMessageMsg{seq: m.msgSeq})
+	if m.err != "" {
+		t.Errorf("err should be cleared after timer tick, got: %q", m.err)
+	}
+
+	// Stale timer sequence should NOT clear a newer message
+	m.setWarn("new warning")
+	staleSeq := m.msgSeq - 1
+	step(t, m, clearMessageMsg{seq: staleSeq})
+	if m.warn != "new warning" {
+		t.Errorf("stale timer cleared newer message: warn = %q", m.warn)
 	}
 }
 

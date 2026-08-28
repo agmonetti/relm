@@ -3,6 +3,7 @@ package tui
 
 import (
 	"context"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -16,6 +17,9 @@ import (
 	"github.com/agmonetti/relm/internal/tui/screens"
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
+
+// FlashMessageDuration defines how long flash notices (warnings, success, error) remain visible.
+var FlashMessageDuration = 3 * time.Second
 
 // Screen identifies the active screen.
 type Screen int
@@ -107,6 +111,7 @@ type Model struct {
 	showHelp        bool
 	err             string
 	warn            string // advisory notice, rendered in amber below the content
+	msgSeq          int    // sequence token to invalidate older clear timers
 
 	// detail view ("v"): a snapshot of the selected item with full values
 	showDetail   bool

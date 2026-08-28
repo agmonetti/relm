@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -142,7 +143,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		hist := m.editor.History
 		m.editor = msg.ed
 		m.editor.History = hist
-		m.setErr(friendlyErr(msg.err))
+		errCmd := m.setErr(friendlyErr(msg.err))
 		m.editorScreen.Focus()
 
 		if msg.err == nil && msg.ed.LastQuery != "" {
@@ -152,6 +153,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// A write query may have changed the schema or the data: refresh the catalog and active item in background
 		var cmds []tea.Cmd
+		if errCmd != nil {
+			cmds = append(cmds, errCmd)
+		}
 		if msg.err == nil && m.browser != nil && m.store != nil && msg.ed.Wrote {
 			if cmd := m.runBrowserOp(func(b *browser.Browser, st store.DataSource, ctx context.Context) error {
 				return b.Reload(ctx, st)
@@ -186,14 +190,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.screen = ScreenConnect
 				return m, nil
 			}
-			m.setErr(err)
-			return m, nil
+			return m, m.setErr(err)
 		}
 		m.browser = msg.b
 		if msg.load {
 			m.screen = ScreenWorkspace
 		}
 		m.clampSidebar()
+		return m, nil
+
+	case clearMessageMsg:
+		if msg.seq == m.msgSeq {
+			m.err = ""
+			m.warn = ""
+			m.exported = ""
+		}
 		return m, nil
 
 	case spinner.TickMsg:
@@ -208,6 +219,56 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// clearMessageMsg signals that the visibility timer for a flash notice expired.
+type clearMessageMsg struct {
+	seq int
+}
+
+// setWarn sets an advisory warning and returns a command to clear it after FlashMessageDuration.
+func (m *Model) setWarn(msg string) tea.Cmd {
+	m.warn = msg
+	m.err = ""
+	m.exported = ""
+	if msg == "" {
+		return nil
+	}
+	m.msgSeq++
+	seq := m.msgSeq
+	return tea.Tick(FlashMessageDuration, func(time.Time) tea.Msg {
+		return clearMessageMsg{seq: seq}
+	})
+}
+
+// setSuccess sets a confirmation message and returns a command to clear it after FlashMessageDuration.
+func (m *Model) setSuccess(msg string) tea.Cmd {
+	m.exported = msg
+	m.err = ""
+	m.warn = ""
+	if msg == "" {
+		return nil
+	}
+	m.msgSeq++
+	seq := m.msgSeq
+	return tea.Tick(FlashMessageDuration, func(time.Time) tea.Msg {
+		return clearMessageMsg{seq: seq}
+	})
+}
+
+// setError sets an error notice and returns a command to clear it after FlashMessageDuration.
+func (m *Model) setError(msg string) tea.Cmd {
+	m.err = msg
+	m.warn = ""
+	m.exported = ""
+	if msg == "" {
+		return nil
+	}
+	m.msgSeq++
+	seq := m.msgSeq
+	return tea.Tick(FlashMessageDuration, func(time.Time) tea.Msg {
+		return clearMessageMsg{seq: seq}
+	})
 }
 
 // typing reports whether the user is typing text (q/? must not quit).
@@ -240,11 +301,11 @@ func (m *Model) handleSettingsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// setErr stores or clears the current error message.
-func (m *Model) setErr(err error) {
+// setErr stores or clears the current error message, auto-clearing after FlashMessageDuration if non-nil.
+func (m *Model) setErr(err error) tea.Cmd {
 	if err != nil {
-		m.err = err.Error()
-	} else {
-		m.err = ""
+		return m.setError(err.Error())
 	}
+	m.err = ""
+	return nil
 }

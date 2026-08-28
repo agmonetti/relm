@@ -33,6 +33,8 @@ func (m *Model) handleEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.editor.Clear()
 		m.editorScreen.SetValue("")
 		return m, nil
+	case key.Matches(msg, m.keys.CopyQuery):
+		return m, m.copyQueryToClipboard()
 	case key.Matches(msg, m.keys.Up) && !m.loading && m.editorScreen.AtBoundary(true) &&
 		(m.editorScreen.Value() == "" || m.editor.History.InNavigation()):
 		m.editor.Buffer = m.editor.History.Prev()

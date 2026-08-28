@@ -65,10 +65,15 @@ func (m *Model) doConnect(cfg conn.ConnectionConfig) tea.Cmd {
 	m.editorScreen.SetTitle(q.PromptTitle())
 
 	// Read-only advisory warnings for engines without native session-level locking
+	var warnCmd tea.Cmd
 	if cfg.ReadOnly && cfg.Driver == conn.DriverCassandra {
-		m.warn = "read-only is client-guarded on cassandra — connect with a read-only role for full enforcement"
+		warnCmd = m.setWarn("read-only is client-guarded on cassandra — connect with a read-only role for full enforcement")
 	}
-	return m.loadBrowserCmd(st)
+	loadCmd := m.loadBrowserCmd(st)
+	if warnCmd != nil {
+		return tea.Batch(loadCmd, warnCmd)
+	}
+	return loadCmd
 }
 
 // saveConnection persists the current connection.

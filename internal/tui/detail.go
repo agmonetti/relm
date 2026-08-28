@@ -76,11 +76,11 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.detailScroll = 1 << 30
 		}
 	case msg.String() == "c" || msg.String() == "y" || msg.Type == tea.KeyEnter:
-		m.copyDetailValue()
+		return m, m.copyDetailValue()
 	case msg.String() == "C" || msg.String() == "Y":
-		m.copyDetailField()
+		return m, m.copyDetailField()
 	case msg.String() == "a" || msg.String() == "A" || key.Matches(msg, m.keys.CopyQuery):
-		m.copyDetailAll()
+		return m, m.copyDetailAll()
 	}
 	return m, nil
 }
@@ -203,7 +203,7 @@ func (m *Model) adjustDetailScroll() {
 	}
 }
 
-func (m *Model) copyDetailValue() {
+func (m *Model) copyDetailValue() tea.Cmd {
 	if len(m.detailCols) > 0 {
 		if m.detailCursor >= 0 && m.detailCursor < len(m.detailCols) {
 			col := m.detailCols[m.detailCursor]
@@ -212,16 +212,19 @@ func (m *Model) copyDetailValue() {
 				val = m.detailVals[m.detailCursor]
 			}
 			if err := clipboard.WriteAll(val); err == nil {
-				m.exported = fmt.Sprintf("copied '%s' value to clipboard", col)
+				return m.setSuccess(fmt.Sprintf("copied '%s' value to clipboard", col))
+			} else {
+				return m.setError("failed to copy: " + err.Error())
 			}
 		}
-		return
+		return nil
 	}
 	if m.detailDoc != "" {
 		if err := clipboard.WriteAll(m.detailDoc); err == nil {
-			m.exported = "document copied to clipboard"
+			return m.setSuccess("document copied to clipboard")
+		} else {
+			return m.setError("failed to copy: " + err.Error())
 		}
-		return
 	}
 	if m.detailGraph != nil {
 		var b strings.Builder
@@ -229,12 +232,15 @@ func (m *Model) copyDetailValue() {
 			b.WriteString(fmt.Sprintf("%s: %s\n", k, v))
 		}
 		if err := clipboard.WriteAll(b.String()); err == nil {
-			m.exported = "node details copied to clipboard"
+			return m.setSuccess("node details copied to clipboard")
+		} else {
+			return m.setError("failed to copy: " + err.Error())
 		}
 	}
+	return nil
 }
 
-func (m *Model) copyDetailField() {
+func (m *Model) copyDetailField() tea.Cmd {
 	if len(m.detailCols) > 0 {
 		if m.detailCursor >= 0 && m.detailCursor < len(m.detailCols) {
 			col := m.detailCols[m.detailCursor]
@@ -244,15 +250,17 @@ func (m *Model) copyDetailField() {
 			}
 			text := fmt.Sprintf("%s: %s", col, val)
 			if err := clipboard.WriteAll(text); err == nil {
-				m.exported = fmt.Sprintf("copied field '%s' to clipboard", col)
+				return m.setSuccess(fmt.Sprintf("copied field '%s' to clipboard", col))
+			} else {
+				return m.setError("failed to copy: " + err.Error())
 			}
 		}
-		return
+		return nil
 	}
-	m.copyDetailValue()
+	return m.copyDetailValue()
 }
 
-func (m *Model) copyDetailAll() {
+func (m *Model) copyDetailAll() tea.Cmd {
 	if len(m.detailCols) > 0 {
 		var b strings.Builder
 		for i, c := range m.detailCols {
@@ -263,15 +271,17 @@ func (m *Model) copyDetailAll() {
 			b.WriteString(fmt.Sprintf("%s: %s\n", c, val))
 		}
 		if err := clipboard.WriteAll(strings.TrimSpace(b.String())); err == nil {
-			m.exported = "all fields copied to clipboard"
+			return m.setSuccess("all fields copied to clipboard")
+		} else {
+			return m.setError("failed to copy: " + err.Error())
 		}
-		return
 	}
 	if m.detailDoc != "" {
 		if err := clipboard.WriteAll(m.detailDoc); err == nil {
-			m.exported = "document copied to clipboard"
+			return m.setSuccess("document copied to clipboard")
+		} else {
+			return m.setError("failed to copy: " + err.Error())
 		}
-		return
 	}
 	if m.detailGraph != nil {
 		var b strings.Builder
@@ -280,9 +290,12 @@ func (m *Model) copyDetailAll() {
 			b.WriteString(fmt.Sprintf("%s: %s\n", k, v))
 		}
 		if err := clipboard.WriteAll(strings.TrimSpace(b.String())); err == nil {
-			m.exported = "node details copied to clipboard"
+			return m.setSuccess("node details copied to clipboard")
+		} else {
+			return m.setError("failed to copy: " + err.Error())
 		}
 	}
+	return nil
 }
 
 // renderActiveDetail renders the active detail view.

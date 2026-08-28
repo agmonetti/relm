@@ -20,11 +20,10 @@ import (
 // openExport opens the export prompt for the data under the cursor: the last
 // query result when the editor has the focus, the active item's current page
 // otherwise.
-func (m *Model) openExport() {
+func (m *Model) openExport() tea.Cmd {
 	res, note, err := m.exportSource()
 	if err != nil {
-		m.err = err.Error()
-		return
+		return m.setError(err.Error())
 	}
 	m.exported = ""
 	m.exportErr = ""
@@ -33,6 +32,7 @@ func (m *Model) openExport() {
 	m.exportInput.SetValue(fmt.Sprintf("relm-export-%s.csv", time.Now().Format("20060102-150405")))
 	m.exportInput.Focus()
 	m.exporting = true
+	return nil
 }
 
 // exportSource snapshots the data to export according to the current focus.
@@ -71,9 +71,8 @@ func (m *Model) handleExportKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if note == "" {
 			note = m.exportNote
 		}
-		m.exported = fmt.Sprintf("exported %s → %s", note, path)
 		m.closeExport()
-		return m, nil
+		return m, m.setSuccess(fmt.Sprintf("exported %s → %s", note, path))
 	}
 	updated, cmd := m.exportInput.Update(msg)
 	m.exportInput = updated

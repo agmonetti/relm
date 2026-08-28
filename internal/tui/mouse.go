@@ -118,7 +118,7 @@ func (m *Model) handleWorkspaceMouse(msg tea.MouseMsg) tea.Cmd {
 					m.dragStartLine, m.dragStartCol, m.dragEndLine, m.dragEndCol)
 				if strings.TrimSpace(selected) != "" {
 					if err := clipboard.WriteAll(selected); err == nil {
-						m.exported = "selection copied to clipboard"
+						return m.setSuccess("selection copied to clipboard")
 					}
 				}
 			}
@@ -420,7 +420,7 @@ func (m *Model) handleDetailMouse(msg tea.MouseMsg) tea.Cmd {
 						m.dragStartLine, m.dragStartCol, m.dragEndLine, m.dragEndCol)
 					if strings.TrimSpace(selected) != "" {
 						if err := clipboard.WriteAll(selected); err == nil {
-							m.exported = "selection copied to clipboard"
+							return m.setSuccess("selection copied to clipboard")
 						}
 					}
 				}

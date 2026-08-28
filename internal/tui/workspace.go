@@ -58,10 +58,7 @@ func (m *Model) handleWorkspaceKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return b.Reload(ctx, st)
 		})
 	case !m.loading && !m.navigating && key.Matches(msg, m.keys.Export):
-		m.openExport()
-		return m, nil
-	case key.Matches(msg, m.keys.CopyQuery):
-		return m, m.copyQueryToClipboard()
+		return m, m.openExport()
 	}
 
 	switch m.focus {
@@ -371,13 +368,10 @@ func (m *Model) maxColScroll() int {
 func (m *Model) copyQueryToClipboard() tea.Cmd {
 	buf := m.editorScreen.Value()
 	if strings.TrimSpace(buf) == "" {
-		m.warn = "no query to copy"
-		return nil
+		return m.setWarn("no query to copy")
 	}
 	if err := clipboard.WriteAll(buf); err != nil {
-		m.err = "failed to copy: " + err.Error()
-		return nil
+		return m.setError("failed to copy: " + err.Error())
 	}
-	m.exported = "query copied to clipboard"
-	return nil
+	return m.setSuccess("query copied to clipboard")
 }
