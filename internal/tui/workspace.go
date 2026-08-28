@@ -27,15 +27,21 @@ func (m *Model) handleWorkspaceKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.ToggleEditor):
 		m.toggleEditor()
 		return m, nil
+	case key.Matches(msg, m.keys.ZoomPane):
+		m.toggleZoom()
+		return m, nil
 	case key.Matches(msg, m.keys.FocusSidebar):
+		m.maximized = false
 		m.showSidebar = true
 		m.setFocus(screens.FocusSidebar)
 		return m, nil
 	case key.Matches(msg, m.keys.FocusMain):
+		m.maximized = false
 		m.showMain = true
 		m.setFocus(screens.FocusMain)
 		return m, nil
 	case key.Matches(msg, m.keys.FocusEditor):
+		m.maximized = false
 		m.showEditor = true
 		m.setFocus(screens.FocusEditor)
 		return m, nil
@@ -116,6 +122,7 @@ func (m *Model) toggleSidebar() {
 	if m.showSidebar && m.visiblePanels() <= 1 {
 		return
 	}
+	m.maximized = false
 	m.showSidebar = !m.showSidebar
 	m.ensureValidFocus()
 }
@@ -125,6 +132,7 @@ func (m *Model) toggleMain() {
 	if m.showMain && m.visiblePanels() <= 1 {
 		return
 	}
+	m.maximized = false
 	m.showMain = !m.showMain
 	m.ensureValidFocus()
 }
@@ -134,8 +142,37 @@ func (m *Model) toggleEditor() {
 	if m.showEditor && m.visiblePanels() <= 1 {
 		return
 	}
+	m.maximized = false
 	m.showEditor = !m.showEditor
 	m.ensureValidFocus()
+}
+
+// toggleZoom maximizes the focused pane to take 100% of the workspace,
+// or restores the previous visibility layout when toggled again.
+func (m *Model) toggleZoom() {
+	if m.maximized || m.visiblePanels() == 1 {
+		if m.prevShowSidebar || m.prevShowMain || m.prevShowEditor {
+			m.showSidebar = m.prevShowSidebar
+			m.showMain = m.prevShowMain
+			m.showEditor = m.prevShowEditor
+		} else {
+			m.showSidebar = true
+			m.showMain = true
+			m.showEditor = true
+		}
+		m.maximized = false
+		m.ensureValidFocus()
+		return
+	}
+
+	m.prevShowSidebar = m.showSidebar
+	m.prevShowMain = m.showMain
+	m.prevShowEditor = m.showEditor
+
+	m.showSidebar = m.focus == screens.FocusSidebar
+	m.showMain = m.focus == screens.FocusMain
+	m.showEditor = m.focus == screens.FocusEditor
+	m.maximized = true
 }
 
 // cycleFocus moves the focus to the next visible workspace pane.
@@ -201,6 +238,8 @@ func (m *Model) handleSidebarKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case msg.Type == tea.KeyEnter:
+		m.maximized = false
+		m.showMain = true
 		m.setFocus(screens.FocusMain)
 		return m, m.selectTable(m.sidebarCursor)
 	case msg.Type == tea.KeyRunes && !msg.Alt && len(msg.Runes) == 1 &&

@@ -109,6 +109,7 @@ relm --read-only redis://localhost:6379/0
 | `Alt+B` | Toggle sidebar |
 | `Alt+M` | Toggle main data view |
 | `Alt+Q` | Toggle query editor |
+| `Alt+Z` | Zoom / maximize active pane |
 | `Ctrl+R` | Run query (SQL / MQL / RESP / CQL / Cypher) |
 | `Esc` | Cancel running query or return from detail/structure |
 | `Ctrl+L` | Clear editor |

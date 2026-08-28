@@ -95,14 +95,18 @@ type Model struct {
 	// horizontal column scroll in the main browser table (index of first visible column)
 	colScroll int
 
-	width       int
-	height      int
-	showSidebar bool
-	showMain    bool
-	showEditor  bool
-	showHelp    bool
-	err         string
-	warn        string // advisory notice, rendered in amber below the content
+	width           int
+	height          int
+	showSidebar     bool
+	showMain        bool
+	showEditor      bool
+	maximized       bool
+	prevShowSidebar bool
+	prevShowMain    bool
+	prevShowEditor  bool
+	showHelp        bool
+	err             string
+	warn            string // advisory notice, rendered in amber below the content
 
 	// detail view ("v"): a snapshot of the selected item with full values
 	showDetail   bool

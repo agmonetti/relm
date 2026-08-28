@@ -1065,6 +1065,69 @@ func TestModel_CycleFocus_SkipsHiddenPanels(t *testing.T) {
 	}
 }
 
+func TestModel_ZoomPane(t *testing.T) {
+	m := connect(t)
+	press(t, m, "2") // open users table
+	m.setFocus(screens.FocusMain)
+
+	if !m.showSidebar || !m.showMain || !m.showEditor {
+		t.Fatalf("setup: all panels should be visible initially")
+	}
+
+	// 1. Zoom Main pane
+	pressAlt(t, m, "z")
+	if m.showSidebar || !m.showMain || m.showEditor {
+		t.Errorf("after Alt+Z on main: sidebar=%v, main=%v, editor=%v, want false, true, false",
+			m.showSidebar, m.showMain, m.showEditor)
+	}
+	if !m.maximized {
+		t.Error("maximized flag should be true")
+	}
+
+	// Toggle again to un-zoom
+	pressAlt(t, m, "z")
+	if !m.showSidebar || !m.showMain || !m.showEditor {
+		t.Errorf("after second Alt+Z: sidebar=%v, main=%v, editor=%v, want true, true, true",
+			m.showSidebar, m.showMain, m.showEditor)
+	}
+	if m.maximized {
+		t.Error("maximized flag should be false")
+	}
+
+	// 2. Zoom Editor pane
+	m.setFocus(screens.FocusEditor)
+	pressAlt(t, m, "z")
+	if m.showSidebar || m.showMain || !m.showEditor {
+		t.Errorf("after Alt+Z on editor: sidebar=%v, main=%v, editor=%v, want false, false, true",
+			m.showSidebar, m.showMain, m.showEditor)
+	}
+
+	// Toggle again to un-zoom
+	pressAlt(t, m, "z")
+	if !m.showSidebar || !m.showMain || !m.showEditor {
+		t.Errorf("after un-zoom editor: sidebar=%v, main=%v, editor=%v, want true, true, true",
+			m.showSidebar, m.showMain, m.showEditor)
+	}
+
+	// 3. Zoom with custom initial state (sidebar was hidden before zoom)
+	pressAlt(t, m, "b") // hide sidebar
+	if m.showSidebar {
+		t.Fatal("setup: sidebar should be hidden")
+	}
+	m.setFocus(screens.FocusEditor)
+	pressAlt(t, m, "z") // zoom editor
+	if m.showSidebar || m.showMain || !m.showEditor {
+		t.Errorf("zoomed editor: sidebar=%v, main=%v, editor=%v",
+			m.showSidebar, m.showMain, m.showEditor)
+	}
+
+	pressAlt(t, m, "z") // un-zoom
+	if m.showSidebar || !m.showMain || !m.showEditor {
+		t.Errorf("restored custom layout: sidebar=%v (want false), main=%v (want true), editor=%v (want true)",
+			m.showSidebar, m.showMain, m.showEditor)
+	}
+}
+
 func TestModel_SaveAndDeleteSavedConnection(t *testing.T) {
 	t.Setenv("RELM_CONFIG_DIR", t.TempDir())
 

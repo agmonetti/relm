@@ -11,6 +11,7 @@ type KeyMap struct {
 	ToggleSidebar key.Binding
 	ToggleMain    key.Binding
 	ToggleEditor  key.Binding
+	ZoomPane      key.Binding
 	Help          key.Binding
 	Switch        key.Binding
 	Inspect       key.Binding
@@ -46,6 +47,7 @@ func DefaultKeyMap() KeyMap {
 		ToggleSidebar: key.NewBinding(key.WithKeys("alt+b"), key.WithHelp("alt+b", "sidebar")),
 		ToggleMain:    key.NewBinding(key.WithKeys("alt+m"), key.WithHelp("alt+m", "main view")),
 		ToggleEditor:  key.NewBinding(key.WithKeys("alt+q"), key.WithHelp("alt+q", "editor")),
+		ZoomPane:      key.NewBinding(key.WithKeys("alt+z"), key.WithHelp("alt+z", "zoom pane")),
 		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Switch:        key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next pane")),
 		Inspect:       key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "structure")),
@@ -85,6 +87,6 @@ func (k KeyMap) ShortHelp() []key.Binding {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Quit, k.NewSession, k.Switch, k.Settings, k.FocusSidebar, k.FocusMain, k.FocusEditor},
-		{k.ToggleSidebar, k.ToggleMain, k.ToggleEditor, k.Help, k.Back, k.Inspect, k.Detail, k.Refresh, k.Execute, k.ClearInput, k.Export, k.CopyQuery},
+		{k.ToggleSidebar, k.ToggleMain, k.ToggleEditor, k.ZoomPane, k.Help, k.Back, k.Inspect, k.Detail, k.Refresh, k.Execute, k.ClearInput, k.Export, k.CopyQuery},
 	}
 }
