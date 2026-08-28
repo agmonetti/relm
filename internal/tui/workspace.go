@@ -315,10 +315,10 @@ func (m *Model) handleMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Last):
 		b.MoveCursor(1000000)
 		return m, nil
-	case msg.Type == tea.KeyLeft:
+	case msg.Type == tea.KeyLeft || key.Matches(msg, m.keys.ScrollColLeft):
 		m.scrollColLeft()
 		return m, nil
-	case msg.Type == tea.KeyRight:
+	case msg.Type == tea.KeyRight || key.Matches(msg, m.keys.ScrollColRight):
 		m.scrollColRight()
 		return m, nil
 	}
@@ -362,6 +362,37 @@ func (m *Model) maxColScroll() int {
 		return 0
 	}
 	return n - 1
+}
+
+// scrollEditorColLeft shifts the editor result column viewport one column to the left.
+func (m *Model) scrollEditorColLeft() {
+	c := m.editorScreen.ColScroll() - 1
+	if c < 0 {
+		c = 0
+	}
+	m.editorScreen.SetColScroll(c)
+}
+
+// scrollEditorColRight shifts the editor result column viewport one column to the right.
+func (m *Model) scrollEditorColRight() {
+	max := m.maxEditorColScroll()
+	c := m.editorScreen.ColScroll() + 1
+	if c > max {
+		c = max
+	}
+	m.editorScreen.SetColScroll(c)
+}
+
+// maxEditorColScroll returns the maximum allowed colScroll for the current editor tabular result.
+func (m *Model) maxEditorColScroll() int {
+	if m.editor == nil || m.editor.Data == nil {
+		return 0
+	}
+	tab, ok := m.editor.Data.(*store.TabularData)
+	if !ok || len(tab.Columns) <= 1 {
+		return 0
+	}
+	return len(tab.Columns) - 1
 }
 
 // copyQueryToClipboard copies the current query editor buffer to the system clipboard.

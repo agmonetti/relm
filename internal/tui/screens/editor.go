@@ -21,6 +21,7 @@ type EditorScreen struct {
 
 	resultScroll int
 	resultCursor int
+	colScroll    int
 }
 
 // NewEditorScreen creates the editor textarea.
@@ -76,10 +77,17 @@ func (s *EditorScreen) SetResultCursor(n int) { s.resultCursor = n }
 // ResultCursor returns the selected row of the query results.
 func (s *EditorScreen) ResultCursor() int { return s.resultCursor }
 
+// SetColScroll sets the column horizontal scroll offset of the query results table.
+func (s *EditorScreen) SetColScroll(n int) { s.colScroll = n }
+
+// ColScroll returns the column horizontal scroll offset of the query results table.
+func (s *EditorScreen) ColScroll() int { return s.colScroll }
+
 // ResetResult resets the results viewport after a new query.
 func (s *EditorScreen) ResetResult() {
 	s.resultScroll = 0
 	s.resultCursor = -1
+	s.colScroll = 0
 }
 
 // EditorInputHeight returns the textarea height for an editor pane content height.
@@ -280,7 +288,7 @@ func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 					cursor = len(view) - 1
 				}
 			}
-			b.WriteString(RenderDataTable(v.Columns, view, cursor, 0, width-2, resH))
+			b.WriteString(RenderDataTable(v.Columns, view, cursor, s.colScroll, width-2, resH))
 			if v.Truncated {
 				b.WriteString(styles.StyleHeaderDim.Render(
 					fmt.Sprintf("  showing first %d rows (%s)", editor.MaxResultRows, formatDuration(e.Duration))) + "\n")

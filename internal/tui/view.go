@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/agmonetti/relm/internal/store"
 	"github.com/agmonetti/relm/internal/tui/screens"
 	"github.com/agmonetti/relm/internal/tui/styles"
 )
@@ -180,12 +181,24 @@ func (m *Model) renderFooter() string {
 					})
 				}
 			case screens.FocusEditor:
-				left = footerBindings([]binding{
+				bindings := []binding{
 					{"ctrl+r", "run"},
 					{"alt+c", "copy"},
 					{"ctrl+l", "clear"},
 					{"esc", "back"},
-				})
+				}
+				if m.editor != nil && m.editor.Data != nil {
+					if tab, ok := m.editor.Data.(*store.TabularData); ok && len(tab.Columns) > 1 {
+						bindings = []binding{
+							{"ctrl+r", "run"},
+							{"alt+←/→", "cols"},
+							{"alt+c", "copy"},
+							{"ctrl+l", "clear"},
+							{"esc", "back"},
+						}
+					}
+				}
+				left = footerBindings(bindings)
 			}
 		}
 	}

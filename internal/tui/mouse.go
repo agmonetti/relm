@@ -180,14 +180,17 @@ func (m *Model) scrollAt(wx, wy int, layout screens.WorkspaceLayout, btn tea.Mou
 	case tea.MouseButtonWheelDown:
 		delta = 1
 	case tea.MouseButtonWheelLeft:
-		// Horizontal scroll: only applies to the main panel (Panel 2)
 		if layout.ShowMain && (!layout.ShowSidebar || wx >= layout.SidebarW) && wy <= layout.MainH {
 			m.scrollColLeft()
+		} else if layout.ShowEditor && (!layout.ShowSidebar || wx >= layout.SidebarW) && (!layout.ShowMain || wy > layout.MainH) {
+			m.scrollEditorColLeft()
 		}
 		return nil
 	case tea.MouseButtonWheelRight:
 		if layout.ShowMain && (!layout.ShowSidebar || wx >= layout.SidebarW) && wy <= layout.MainH {
 			m.scrollColRight()
+		} else if layout.ShowEditor && (!layout.ShowSidebar || wx >= layout.SidebarW) && (!layout.ShowMain || wy > layout.MainH) {
+			m.scrollEditorColRight()
 		}
 		return nil
 	default:

@@ -35,6 +35,12 @@ func (m *Model) handleEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case key.Matches(msg, m.keys.CopyQuery):
 		return m, m.copyQueryToClipboard()
+	case key.Matches(msg, m.keys.ScrollColLeft) || (msg.Type == tea.KeyLeft && msg.Alt):
+		m.scrollEditorColLeft()
+		return m, nil
+	case key.Matches(msg, m.keys.ScrollColRight) || (msg.Type == tea.KeyRight && msg.Alt):
+		m.scrollEditorColRight()
+		return m, nil
 	case key.Matches(msg, m.keys.Up) && !m.loading && m.editorScreen.AtBoundary(true) &&
 		(m.editorScreen.Value() == "" || m.editor.History.InNavigation()):
 		m.editor.Buffer = m.editor.History.Prev()

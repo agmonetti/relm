@@ -1524,4 +1524,66 @@ func TestModel_HorizontalScroll_LeftRightKeysAndMouse(t *testing.T) {
 	}
 }
 
+func TestModel_EditorHorizontalScroll_KeysAndMouse(t *testing.T) {
+	m := connect(t)
+	pressAlt(t, m, "3") // focus editor
+	if m.focus != screens.FocusEditor {
+		t.Fatalf("focus = %v, want FocusEditor", m.focus)
+	}
+
+	m.editorScreen.SetValue("SELECT id, name, email, name AS extra1, email AS extra2 FROM users")
+	pressKey(t, m, "ctrl+r") // run query
+
+	if m.editor == nil || m.editor.Data == nil {
+		t.Fatal("query should have executed and returned data")
+	}
+
+	if m.editorScreen.ColScroll() != 0 {
+		t.Errorf("initial editor colScroll = %d, want 0", m.editorScreen.ColScroll())
+	}
+
+	// Pressing Alt+Left at col 0 should stay at 0
+	step(t, m, tea.KeyMsg{Type: tea.KeyLeft, Alt: true})
+	if m.editorScreen.ColScroll() != 0 {
+		t.Errorf("editor colScroll = %d, want 0", m.editorScreen.ColScroll())
+	}
+
+	// Pressing Alt+Right advances editor colScroll
+	step(t, m, tea.KeyMsg{Type: tea.KeyRight, Alt: true})
+	if m.editorScreen.ColScroll() != 1 {
+		t.Errorf("editor colScroll = %d, want 1 after Alt+Right", m.editorScreen.ColScroll())
+	}
+
+	// Pressing Alt+Right again advances
+	step(t, m, tea.KeyMsg{Type: tea.KeyRight, Alt: true})
+	if m.editorScreen.ColScroll() != 2 {
+		t.Errorf("editor colScroll = %d, want 2 after second Alt+Right", m.editorScreen.ColScroll())
+	}
+
+	// Pressing Alt+Left goes back
+	step(t, m, tea.KeyMsg{Type: tea.KeyLeft, Alt: true})
+	if m.editorScreen.ColScroll() != 1 {
+		t.Errorf("editor colScroll = %d, want 1 after Alt+Left", m.editorScreen.ColScroll())
+	}
+
+	// Horizontal wheel right over editor results pane (wy=24)
+	step(t, m, mouseMsg(40, 24, tea.MouseButtonWheelRight, tea.MouseActionPress))
+	if m.editorScreen.ColScroll() != 2 {
+		t.Errorf("editor colScroll = %d, want 2 after MouseButtonWheelRight", m.editorScreen.ColScroll())
+	}
+
+	// Horizontal wheel left over editor results pane
+	step(t, m, mouseMsg(40, 24, tea.MouseButtonWheelLeft, tea.MouseActionPress))
+	if m.editorScreen.ColScroll() != 1 {
+		t.Errorf("editor colScroll = %d, want 1 after MouseButtonWheelLeft", m.editorScreen.ColScroll())
+	}
+
+	// Running a new query resets colScroll to 0
+	m.editorScreen.SetValue("SELECT id FROM users")
+	pressKey(t, m, "ctrl+r")
+	if m.editorScreen.ColScroll() != 0 {
+		t.Errorf("editor colScroll = %d, want 0 after running new query", m.editorScreen.ColScroll())
+	}
+}
+
 

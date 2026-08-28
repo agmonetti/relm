@@ -114,6 +114,7 @@ relm --read-only redis://localhost:6379/0
 | `Esc` | Cancel running query or return from detail/structure |
 | `Ctrl+L` | Clear editor |
 | `↑↓` (editor) | Query history |
+| `←→` (main) / `Alt+←→` (editor) | Scroll table columns horizontally |
 | `Ctrl+N` | New connection |
 | `Ctrl+S` | Save connection |
 | `Ctrl+P` | Settings (query timeout) |
@@ -121,7 +122,7 @@ relm --read-only redis://localhost:6379/0
 | `Ctrl+C` / `q` | Quit |
 | click drag (editor) | Select & auto-copy query text |
 | right-click drag | Resize panes |
-| scroll wheel | Scroll pane under cursor |
+| scroll wheel / swipe | Scroll pane / table columns under cursor |
 
 ## Development
 

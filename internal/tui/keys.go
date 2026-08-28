@@ -21,9 +21,11 @@ type KeyMap struct {
 	ClearInput    key.Binding
 	LineStart     key.Binding
 	LineEnd       key.Binding
-	Back          key.Binding
-	Export        key.Binding
-	CopyQuery     key.Binding
+	Back           key.Binding
+	Export         key.Binding
+	CopyQuery      key.Binding
+	ScrollColLeft  key.Binding
+	ScrollColRight key.Binding
 
 	FocusSidebar key.Binding
 	FocusMain    key.Binding
@@ -60,6 +62,8 @@ func DefaultKeyMap() KeyMap {
 		Back:          key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
 		Export:        key.NewBinding(key.WithKeys("alt+e"), key.WithHelp("alt+e", "export result")),
 		CopyQuery:     key.NewBinding(key.WithKeys("alt+c", "ctrl+y"), key.WithHelp("alt+c", "copy query")),
+		ScrollColLeft:  key.NewBinding(key.WithKeys("alt+left", "alt+h", "shift+left"), key.WithHelp("alt+←", "scroll col left")),
+		ScrollColRight: key.NewBinding(key.WithKeys("alt+right", "alt+l", "shift+right"), key.WithHelp("alt+→", "scroll col right")),
 
 		// Alt+1..3 works on every terminal; Ctrl+1..3 is kept for terminals
 		// with CSI-u support (kitty, wezterm, ...).
@@ -87,6 +91,6 @@ func (k KeyMap) ShortHelp() []key.Binding {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Quit, k.NewSession, k.Switch, k.Settings, k.FocusSidebar, k.FocusMain, k.FocusEditor},
-		{k.ToggleSidebar, k.ToggleMain, k.ToggleEditor, k.ZoomPane, k.Help, k.Back, k.Inspect, k.Detail, k.Refresh, k.Execute, k.ClearInput, k.Export, k.CopyQuery},
+		{k.ToggleSidebar, k.ToggleMain, k.ToggleEditor, k.ZoomPane, k.Help, k.Back, k.Inspect, k.Detail, k.Refresh, k.Execute, k.ClearInput, k.Export, k.CopyQuery, k.ScrollColLeft, k.ScrollColRight},
 	}
 }
