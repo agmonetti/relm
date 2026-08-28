@@ -11,6 +11,7 @@ import (
 
 	"github.com/agmonetti/relm/internal/browser"
 	"github.com/agmonetti/relm/internal/store"
+	"github.com/mattn/go-runewidth"
 )
 
 func init() {
@@ -483,4 +484,100 @@ func TestColScrollWindow_BoundsAndClamping(t *testing.T) {
 		t.Errorf("out-of-bounds colScroll should clamp: got start=%d, len=%d, hasLeft=%v, hasRight=%v", start, len(widths), hasLeft, hasRight)
 	}
 }
+
+func TestRenderDataTable_RightIndicatorDoesNotWrapOrExceedWidth(t *testing.T) {
+	// 8 columns resembling empleado_con_skill
+	cols := []string{
+		"id_skill",
+		"deporte_empleado",
+		"nombre_empleado",
+		"id_empleado",
+		"apellido_empleado",
+		"ciudad_empleado",
+		"pais_empleado",
+		"federated",
+	}
+	rows := [][]string{
+		{
+			"00000000-0000-0000-0000-000000000001",
+			"Futbol",
+			"Agustin",
+			"11111111-1111-1111-1111-111111111111",
+			"Monetti",
+			"Lobos",
+			"Argentina",
+			"true",
+		},
+	}
+
+	// Compute natural widths:
+	// id_skill (36) + 3 + deporte_empleado (16) + 3 + nombre_empleado (15) + 3 +
+	// id_empleado (36) + 3 + apellido_empleado (17) + 3 + ciudad_empleado (15) = 151.
+	// If width is 151, the 6 columns take exactly 151.
+	// Adding " ▶" (2 chars) would make 153 > 151.
+	// colScrollWindow must NOT include ciudad_empleado in this width, so header fits <= 151.
+	width := 151
+	out := RenderDataTable(cols, rows, 0, 0, width, 10)
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+
+	// lines[0]: header
+	// lines[1]: separator
+	// lines[2]: row 0
+	if len(lines) != 3 {
+		t.Fatalf("expected exactly 3 lines (header, sep, row), got %d lines: %v", len(lines), lines)
+	}
+
+	headerPlain := ansi.Strip(lines[0])
+	if !strings.HasSuffix(headerPlain, " ▶") {
+		t.Errorf("header should end with ' ▶', got: %q", headerPlain)
+	}
+
+	for idx, line := range lines {
+		plain := ansi.Strip(line)
+		w := runewidth.StringWidth(plain)
+		if w > width {
+			t.Errorf("line %d width %d exceeds max width %d: %q", idx, w, width, plain)
+		}
+	}
+
+	// Also verify that inside boxed() (which wraps overflowing lines), no wrap occurs
+	box := boxed(out, "test", width+4, 10, false)
+	boxLines := strings.Split(box, "\n")
+	// Line 0 is top border, Line 1 is header. If wrapped, Line 2 would contain " ▶" alone.
+	for i, l := range boxLines {
+		plain := strings.TrimSpace(ansi.Strip(l))
+		if plain == "▶" || plain == "│ ▶" {
+			t.Errorf("box wrapped '▶' onto its own line %d: %s", i, l)
+		}
+	}
+}
+
+func TestRenderDataTable_LeftIndicatorAlignment(t *testing.T) {
+	cols := []string{"col0", "col1", "col2", "col3"}
+	rows := [][]string{
+		{"val0", "val1", "val2", "val3"},
+	}
+
+	// colScroll=1 hasLeft=true
+	out := RenderDataTable(cols, rows, 0, 1, 30, 10)
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("expected at least 3 lines, got %d", len(lines))
+	}
+
+	header := ansi.Strip(lines[0])
+	sep := ansi.Strip(lines[1])
+	row := ansi.Strip(lines[2])
+
+	if !strings.HasPrefix(header, "◀ ") {
+		t.Errorf("header should start with '◀ ', got %q", header)
+	}
+	if !strings.HasPrefix(sep, "--") {
+		t.Errorf("sep should start with '--', got %q", sep)
+	}
+	if !strings.HasPrefix(row, "  ") {
+		t.Errorf("row should start with '  ', got %q", row)
+	}
+}
+
 

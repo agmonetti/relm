@@ -298,7 +298,7 @@ func RenderDataTable(cols []string, rows [][]string, cursor, colScroll, width, h
 
 	var sb strings.Builder
 	sb.WriteString(renderHeaderScrolled(visCols, visWidths, hasLeft, hasRight) + "\n")
-	sb.WriteString(renderSep(visCols, visWidths) + "\n")
+	sb.WriteString(renderSep(visCols, visWidths, hasLeft) + "\n")
 
 	for i := 0; i < visible; i++ {
 		row := start + i
@@ -306,7 +306,7 @@ func RenderDataTable(cols []string, rows [][]string, cursor, colScroll, width, h
 			break
 		}
 		visRow := rows[row][visStart : visStart+len(visWidths)]
-		sb.WriteString(renderRow(visRow, visWidths, row == cursor) + "\n")
+		sb.WriteString(renderRow(visRow, visWidths, row == cursor, hasLeft) + "\n")
 	}
 	return sb.String()
 }
@@ -353,7 +353,7 @@ func colScrollWindow(naturalW []int, colScroll, width int) (start int, widths []
 		return 0, nil, false, false
 	}
 	// Reserve 2 chars for scroll indicator if needed (◀ / ▶ each take 1 rune = ~2 cells on some terminals)
-	// We use "◀ " / " ▶" as prefixes: each costs 2 visual chars in header.
+	// We use "◀ " / " ▶" as prefixes/suffixes: each costs 2 visual chars in header.
 	if colScroll < 0 {
 		colScroll = 0
 	}
@@ -368,27 +368,36 @@ func colScrollWindow(naturalW []int, colScroll, width int) (start int, widths []
 		leftReserve = 2
 	}
 
-	budget := width - leftReserve
 	var visible []int
-	used := 0
+	used := leftReserve
 	for i := colScroll; i < n; i++ {
 		w := naturalW[i]
 		sep := 0
 		if i > colScroll {
 			sep = colSepW
 		}
-		if used+sep+w > budget {
+
+		rightReserve := 0
+		if i < n-1 {
+			rightReserve = 2
+		}
+
+		if used+sep+w+rightReserve > width {
+			if len(visible) > 0 {
+				break
+			}
+			budget := width - leftReserve - rightReserve
+			if budget < 1 {
+				budget = 1
+			}
+			visible = append(visible, budget)
 			break
 		}
 		used += sep + w
 		visible = append(visible, w)
 	}
 	if len(visible) == 0 && colScroll < n {
-		// Always show at least one column
-		visible = []int{budget}
-		if budget < 1 {
-			visible = []int{1}
-		}
+		visible = []int{1}
 	}
 
 	lastVisible := colScroll + len(visible) - 1
@@ -431,8 +440,11 @@ func renderHeader(cells []string, widths []int) string {
 	return sb.String()
 }
 
-func renderSep(cells []string, widths []int) string {
+func renderSep(cells []string, widths []int, hasLeft bool) string {
 	var sb strings.Builder
+	if hasLeft {
+		sb.WriteString("--")
+	}
 	for i, w := range widths {
 		if i >= len(cells) {
 			break
@@ -560,8 +572,15 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 	return widths
 }
 
-func renderRow(cells []string, widths []int, selected bool) string {
+func renderRow(cells []string, widths []int, selected bool, hasLeft bool) string {
 	var sb strings.Builder
+	if hasLeft {
+		if selected {
+			sb.WriteString(styles.StyleCursor.Render("  "))
+		} else {
+			sb.WriteString("  ")
+		}
+	}
 	for i, cell := range cells {
 		if i >= len(widths) {
 			break
