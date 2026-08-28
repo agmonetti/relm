@@ -14,7 +14,7 @@ import (
 
 func TestRenderWorkspace_ShowsPaneTitles(t *testing.T) {
 	out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-		FocusSidebar, false, ComputeLayout(100, 24, true, true, true, 0, 0), 0, 100, 24)
+		FocusSidebar, false, ComputeLayout(100, 24, true, true, true, 0, 0), 0, 0, 100, 24)
 
 	if !strings.Contains(out, "TABLES") {
 		t.Error("workspace must show the TABLES sidebar title")
@@ -53,7 +53,7 @@ func TestRenderWorkspace_EmptyTableShowsColumns(t *testing.T) {
 		PageSize:  50,
 	}
 	out := RenderWorkspace(b, NewEditorScreen(), sampleTestEditor(),
-		FocusMain, false, ComputeLayout(100, 24, true, true, true, 0, 0), 0, 100, 24)
+		FocusMain, false, ComputeLayout(100, 24, true, true, true, 0, 0), 0, 0, 100, 24)
 
 	foundHeader := false
 	foundHint := false
@@ -77,7 +77,7 @@ func TestRenderWorkspace_EmptyTableShowsColumns(t *testing.T) {
 func TestRenderWorkspace_ExactHeight(t *testing.T) {
 	for _, h := range []int{12, 20, 30} {
 		out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-			FocusSidebar, false, ComputeLayout(100, h, true, true, true, 0, 0), 0, 100, h)
+			FocusSidebar, false, ComputeLayout(100, h, true, true, true, 0, 0), 0, 0, 100, h)
 		if n := len(strings.Split(out, "\n")); n != h {
 			t.Errorf("height=%d: got %d lines", h, n)
 		}
@@ -87,7 +87,7 @@ func TestRenderWorkspace_ExactHeight(t *testing.T) {
 func TestRenderWorkspace_ExactWidth(t *testing.T) {
 	for _, w := range []int{60, 100, 150} {
 		out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-			FocusSidebar, false, ComputeLayout(w, 20, true, true, true, 0, 0), 0, w, 20)
+			FocusSidebar, false, ComputeLayout(w, 20, true, true, true, 0, 0), 0, 0, w, 20)
 		for i, line := range strings.Split(out, "\n") {
 			if got := runewidth.StringWidth(ansi.Strip(line)); got != w {
 				t.Errorf("width=%d: line %d is %d cols", w, i, got)
@@ -98,7 +98,7 @@ func TestRenderWorkspace_ExactWidth(t *testing.T) {
 
 func TestRenderWorkspace_HasPanelGapsAndPadding(t *testing.T) {
 	out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-		FocusSidebar, false, ComputeLayout(100, 24, true, true, true, 0, 0), 0, 100, 24)
+		FocusSidebar, false, ComputeLayout(100, 24, true, true, true, 0, 0), 0, 0, 100, 24)
 	lines := strings.Split(out, "\n")
 
 	// the sidebar and main boxes are separated by exactly one char
@@ -124,7 +124,7 @@ func TestRenderWorkspace_HasPanelGapsAndPadding(t *testing.T) {
 func TestRenderWorkspace_WithoutSidebarSpansWidth(t *testing.T) {
 	// with the sidebar hidden the output must not contain the sidebar tables
 	out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-		FocusSidebar, false, ComputeLayout(100, 20, false, true, true, 0, 0), 0, 100, 20)
+		FocusSidebar, false, ComputeLayout(100, 20, false, true, true, 0, 0), 0, 0, 100, 20)
 	if strings.Contains(out, "TABLES") {
 		t.Error("sidebar must be hidden")
 	}
@@ -137,7 +137,7 @@ func TestRenderWorkspace_ToggleCombinations(t *testing.T) {
 
 	// Only Main visible
 	lMainOnly := ComputeLayout(100, 24, false, true, false, 0, 0)
-	outMainOnly := RenderWorkspace(b, es, ed, FocusMain, false, lMainOnly, 0, 100, 24)
+	outMainOnly := RenderWorkspace(b, es, ed, FocusMain, false, lMainOnly, 0, 0, 100, 24)
 	if !strings.Contains(outMainOnly, "users") || strings.Contains(outMainOnly, "SQL EDITOR") {
 		t.Errorf("main only: should have users, not SQL EDITOR: %q", outMainOnly)
 	}
@@ -147,7 +147,7 @@ func TestRenderWorkspace_ToggleCombinations(t *testing.T) {
 
 	// Only Editor visible
 	lEdOnly := ComputeLayout(100, 24, false, false, true, 0, 0)
-	outEdOnly := RenderWorkspace(b, es, ed, FocusEditor, false, lEdOnly, 0, 100, 24)
+	outEdOnly := RenderWorkspace(b, es, ed, FocusEditor, false, lEdOnly, 0, 0, 100, 24)
 	if strings.Contains(outEdOnly, "users ·") || !strings.Contains(outEdOnly, "SQL EDITOR") {
 		t.Errorf("editor only: should have SQL EDITOR, not users: %q", outEdOnly)
 	}
@@ -157,7 +157,7 @@ func TestRenderWorkspace_ToggleCombinations(t *testing.T) {
 
 	// Sidebar + Main (Editor hidden)
 	lSideMain := ComputeLayout(100, 24, true, true, false, 0, 0)
-	outSideMain := RenderWorkspace(b, es, ed, FocusMain, false, lSideMain, 0, 100, 24)
+	outSideMain := RenderWorkspace(b, es, ed, FocusMain, false, lSideMain, 0, 0, 100, 24)
 	if !strings.Contains(outSideMain, "TABLES") || !strings.Contains(outSideMain, "users ·") || strings.Contains(outSideMain, "SQL EDITOR") {
 		t.Errorf("sidebar+main: unexpected output: %q", outSideMain)
 	}
@@ -167,7 +167,7 @@ func TestRenderWorkspace_ToggleCombinations(t *testing.T) {
 
 	// Sidebar + Editor (Main hidden)
 	lSideEd := ComputeLayout(100, 24, true, false, true, 0, 0)
-	outSideEd := RenderWorkspace(b, es, ed, FocusEditor, false, lSideEd, 0, 100, 24)
+	outSideEd := RenderWorkspace(b, es, ed, FocusEditor, false, lSideEd, 0, 0, 100, 24)
 	if !strings.Contains(outSideEd, "TABLES") || strings.Contains(outSideEd, "users ·") || !strings.Contains(outSideEd, "SQL EDITOR") {
 		t.Errorf("sidebar+editor: unexpected output: %q", outSideEd)
 	}
@@ -291,7 +291,7 @@ func TestComputeLayout_ExtremeResizeNeverOverflows(t *testing.T) {
 			}
 
 			out := RenderWorkspace(sampleTestBrowser(), NewEditorScreen(), sampleTestEditor(),
-				FocusMain, false, l, 0, 100, h)
+				FocusMain, false, l, 0, 0, 100, h)
 			if lines := len(strings.Split(out, "\n")); lines != h {
 				t.Errorf("h=%d edH=%d: rendered lines = %d, want %d", h, edH, lines, h)
 			}

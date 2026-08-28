@@ -45,7 +45,7 @@ func (m *Model) render() string {
 		} else {
 			layout := screens.ComputeLayout(innerW, contentHeight, m.showSidebar, m.showMain, m.showEditor, m.sidebarW, m.editorH)
 			content = screens.RenderWorkspace(m.browser, m.editorScreen, m.editor,
-				m.focus, m.structure, layout, m.sidebarCursor, innerW, contentHeight)
+				m.focus, m.structure, layout, m.sidebarCursor, m.colScroll, innerW, contentHeight)
 		}
 	}
 
@@ -170,6 +170,7 @@ func (m *Model) renderFooter() string {
 				} else {
 					left = footerBindings([]binding{
 						{"↑↓", "navigate"},
+						{"←→", "columns"},
 						{"i", "structure"},
 						{"v", "detail"},
 						{"r", "refresh"},

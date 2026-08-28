@@ -68,7 +68,8 @@ func (m *Model) handleWorkspaceMouse(msg tea.MouseMsg) tea.Cmd {
 	wx := msg.X - 1
 	wy := msg.Y - 2
 
-	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
+	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown ||
+		msg.Button == tea.MouseButtonWheelLeft || msg.Button == tea.MouseButtonWheelRight {
 		return m.scrollAt(wx, wy, layout, msg.Button)
 	}
 
@@ -178,6 +179,17 @@ func (m *Model) scrollAt(wx, wy int, layout screens.WorkspaceLayout, btn tea.Mou
 		delta = -1
 	case tea.MouseButtonWheelDown:
 		delta = 1
+	case tea.MouseButtonWheelLeft:
+		// Horizontal scroll: only applies to the main panel (Panel 2)
+		if layout.ShowMain && (!layout.ShowSidebar || wx >= layout.SidebarW) && wy <= layout.MainH {
+			m.scrollColLeft()
+		}
+		return nil
+	case tea.MouseButtonWheelRight:
+		if layout.ShowMain && (!layout.ShowSidebar || wx >= layout.SidebarW) && wy <= layout.MainH {
+			m.scrollColRight()
+		}
+		return nil
 	default:
 		return nil
 	}

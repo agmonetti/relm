@@ -1317,3 +1317,69 @@ func TestModel_MouseDragSelectQuery(t *testing.T) {
 	}
 }
 
+func TestModel_HorizontalScroll_LeftRightKeysAndMouse(t *testing.T) {
+	m := connect(t)
+	// Select 'users' table which has 3 columns: id, name, email
+	pressAlt(t, m, "1") // focus sidebar
+	pressKey(t, m, "down")
+	pressKey(t, m, "enter")
+	if m.browser.ActiveTable != "users" {
+		t.Fatalf("setup: ActiveTable = %q, want users", m.browser.ActiveTable)
+	}
+
+	// Focus main pane
+	pressAlt(t, m, "2")
+	if m.focus != screens.FocusMain {
+		t.Fatalf("focus = %v, want FocusMain", m.focus)
+	}
+
+	if m.colScroll != 0 {
+		t.Errorf("initial colScroll = %d, want 0", m.colScroll)
+	}
+
+	// Pressing left when at 0 should stay at 0
+	pressKey(t, m, "left")
+	if m.colScroll != 0 {
+		t.Errorf("colScroll = %d, want 0 (clamped left)", m.colScroll)
+	}
+
+	// Pressing right advances colScroll
+	pressKey(t, m, "right")
+	if m.colScroll != 1 {
+		t.Errorf("colScroll = %d, want 1 after right arrow", m.colScroll)
+	}
+
+	// Pressing right again
+	pressKey(t, m, "right")
+	if m.colScroll != 2 {
+		t.Errorf("colScroll = %d, want 2 after second right arrow", m.colScroll)
+	}
+
+	// Pressing left goes back
+	pressKey(t, m, "left")
+	if m.colScroll != 1 {
+		t.Errorf("colScroll = %d, want 1 after left arrow", m.colScroll)
+	}
+
+	// Horizontal wheel right over main pane (wx=40, wy=5)
+	step(t, m, mouseMsg(40, 5, tea.MouseButtonWheelRight, tea.MouseActionPress))
+	if m.colScroll != 2 {
+		t.Errorf("colScroll = %d, want 2 after MouseButtonWheelRight", m.colScroll)
+	}
+
+	// Horizontal wheel left over main pane
+	step(t, m, mouseMsg(40, 5, tea.MouseButtonWheelLeft, tea.MouseActionPress))
+	if m.colScroll != 1 {
+		t.Errorf("colScroll = %d, want 1 after MouseButtonWheelLeft", m.colScroll)
+	}
+
+	// Switching tables resets colScroll to 0
+	pressAlt(t, m, "1") // focus sidebar
+	pressKey(t, m, "up")
+	pressKey(t, m, "enter")
+	if m.colScroll != 0 {
+		t.Errorf("colScroll = %d, want 0 after opening new table", m.colScroll)
+	}
+}
+
+

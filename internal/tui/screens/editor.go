@@ -280,7 +280,7 @@ func (s *EditorScreen) View(e *editor.Editor, width, height int) string {
 					cursor = len(view) - 1
 				}
 			}
-			b.WriteString(RenderDataTable(v.Columns, view, cursor, width-2, resH))
+			b.WriteString(RenderDataTable(v.Columns, view, cursor, 0, width-2, resH))
 			if v.Truncated {
 				b.WriteString(styles.StyleHeaderDim.Render(
 					fmt.Sprintf("  showing first %d rows (%s)", editor.MaxResultRows, formatDuration(e.Duration))) + "\n")

@@ -143,7 +143,7 @@ func clampInt(v, lo, hi int) int {
 
 // RenderWorkspace renders the single working screen.
 func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
-	focus WorkspaceFocus, structure bool, layout WorkspaceLayout, sidebarCursor int,
+	focus WorkspaceFocus, structure bool, layout WorkspaceLayout, sidebarCursor, colScroll int,
 	width, height int) string {
 	if width < 10 || height < 3 {
 		return styles.StyleHeaderDim.Render("terminal too small")
@@ -188,7 +188,7 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		} else if structure {
 			mainContent = RenderStructure(b, contentW(rightW), mainBodyH)
 		} else {
-			mainContent = RenderMainBrowser(b, contentW(rightW), mainBodyH)
+			mainContent = RenderMainBrowser(b, colScroll, contentW(rightW), mainBodyH)
 		}
 
 		editorContent := es.View(e, contentW(rightW), editorH-2)
@@ -222,7 +222,7 @@ func RenderWorkspace(b *browser.Browser, es *EditorScreen, e *editor.Editor,
 		} else if structure {
 			mainContent = RenderStructure(b, contentW(rightW), mainBodyH)
 		} else {
-			mainContent = RenderMainBrowser(b, contentW(rightW), mainBodyH)
+			mainContent = RenderMainBrowser(b, colScroll, contentW(rightW), mainBodyH)
 		}
 		right = boxed(mainContent, mainTitle, rightW, mainH, focus == FocusMain)
 	} else if showEditor {

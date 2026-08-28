@@ -92,6 +92,9 @@ type Model struct {
 	resizing  bool
 	resizeDiv int // resizeNone, resizeSidebar or resizeEditor
 
+	// horizontal column scroll in the main browser table (index of first visible column)
+	colScroll int
+
 	width       int
 	height      int
 	showSidebar bool

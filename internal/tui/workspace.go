@@ -218,6 +218,7 @@ func (m *Model) selectTable(idx int) tea.Cmd {
 	}
 	m.sidebarCursor = idx
 	m.structure = false
+	m.colScroll = 0 // reset horizontal scroll when opening a new table
 	name := m.browser.Tables[idx]
 	return m.runBrowserOp(func(b *browser.Browser, st store.DataSource, ctx context.Context) error {
 		return b.SelectItem(ctx, name, st)
@@ -278,8 +279,53 @@ func (m *Model) handleMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Last):
 		b.MoveCursor(1000000)
 		return m, nil
+	case msg.Type == tea.KeyLeft:
+		m.scrollColLeft()
+		return m, nil
+	case msg.Type == tea.KeyRight:
+		m.scrollColRight()
+		return m, nil
 	}
 	return m, nil
+}
+
+// scrollColLeft shifts the column viewport one column to the left.
+func (m *Model) scrollColLeft() {
+	m.colScroll--
+	if m.colScroll < 0 {
+		m.colScroll = 0
+	}
+}
+
+// scrollColRight shifts the column viewport one column to the right.
+func (m *Model) scrollColRight() {
+	max := m.maxColScroll()
+	m.colScroll++
+	if m.colScroll > max {
+		m.colScroll = max
+	}
+}
+
+// maxColScroll returns the maximum allowed colScroll for the current browser data.
+func (m *Model) maxColScroll() int {
+	if m.browser == nil {
+		return 0
+	}
+	b := m.browser
+	var n int
+	switch v := b.Data.(type) {
+	case *store.TabularData:
+		n = len(v.Columns)
+		if n == 0 {
+			n = len(b.Columns)
+		}
+	default:
+		n = len(b.Columns)
+	}
+	if n <= 1 {
+		return 0
+	}
+	return n - 1
 }
 
 // copyQueryToClipboard copies the current query editor buffer to the system clipboard.

@@ -24,7 +24,7 @@ func TestRenderDataTable_HighlightsOnlyCursorRow(t *testing.T) {
 	cols := []string{"a", "b", "c"}
 	rows := [][]string{{"1", "2", "3"}, {"4", "5", "6"}, {"7", "8", "9"}}
 
-	out := RenderDataTable(cols, rows, 1, 40, 10)
+	out := RenderDataTable(cols, rows, 1, 0, 40, 10)
 	lines := strings.Split(out, "\n")
 
 	// lines[0] = header, lines[1] = separator, lines[2..4] = the three rows
@@ -43,7 +43,7 @@ func TestRenderDataTable_NoSelectionHighlightsNothing(t *testing.T) {
 	cols := []string{"a", "b", "c"}
 	rows := [][]string{{"1", "2", "3"}, {"4", "5", "6"}}
 
-	out := RenderDataTable(cols, rows, -1, 40, 10)
+	out := RenderDataTable(cols, rows, -1, 0, 40, 10)
 	// lines[0] is the column header (styled by design); the separator is a
 	// foreground-only line; the data rows must not carry a selection background
 	for i, line := range strings.Split(out, "\n") {
@@ -79,7 +79,7 @@ func TestRenderMainBrowser_EmptyTabularDataShowsColumns(t *testing.T) {
 		PageSize: 50,
 	}
 
-	out := RenderMainBrowser(b, 96, 20)
+	out := RenderMainBrowser(b, 0, 96, 20)
 	foundHeader := false
 	foundHint := false
 	for _, l := range strings.Split(out, "\n") {
@@ -116,7 +116,7 @@ func TestRenderMainBrowser_EmptyTabularDataFallsBackToSchemaColumns(t *testing.T
 		PageSize: 50,
 	}
 
-	out := RenderMainBrowser(b, 96, 20)
+	out := RenderMainBrowser(b, 0, 96, 20)
 	foundHeader := false
 	foundHint := false
 	for _, l := range strings.Split(out, "\n") {
@@ -149,7 +149,7 @@ func TestRenderMainBrowser_EmptyTabularDataWithoutAnyColumnsShowsOnlyHint(t *tes
 		PageSize: 50,
 	}
 
-	out := RenderMainBrowser(b, 96, 20)
+	out := RenderMainBrowser(b, 0, 96, 20)
 	if !strings.Contains(out, "0 rows returned") {
 		t.Error("empty table must show the '( 0 rows returned )' hint")
 	}
@@ -223,7 +223,7 @@ func TestRenderDataTable_CursorStaysVisible(t *testing.T) {
 	}
 
 	// height=6 -> 4 visible rows (6 minus 2 for header/separator). Total lines produced must be 6.
-	out := RenderDataTable(cols, rows, 0, 20, 6)
+	out := RenderDataTable(cols, rows, 0, 0, 20, 6)
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
 	if len(lines) != 6 {
 		t.Fatalf("total lines = %d, want 6", len(lines))
@@ -237,7 +237,7 @@ func TestRenderDataTable_CursorStaysVisible(t *testing.T) {
 	}
 
 	// Cursor 3 (last visible row in initial window): window 0..3 (rows a-d)
-	out = RenderDataTable(cols, rows, 3, 20, 6)
+	out = RenderDataTable(cols, rows, 3, 0, 20, 6)
 	data = dataLines(out, 6)
 	if len(data) != 4 {
 		t.Fatalf("data rows = %d, want 4", len(data))
@@ -247,7 +247,7 @@ func TestRenderDataTable_CursorStaysVisible(t *testing.T) {
 	}
 
 	// Cursor 4: window must displace by 1 so row 4 (e) is visible at bottom (rows b-e)
-	out = RenderDataTable(cols, rows, 4, 20, 6)
+	out = RenderDataTable(cols, rows, 4, 0, 20, 6)
 	data = dataLines(out, 6)
 	if len(data) != 4 {
 		t.Fatalf("data rows = %d, want 4", len(data))
@@ -257,7 +257,7 @@ func TestRenderDataTable_CursorStaysVisible(t *testing.T) {
 	}
 
 	// Cursor 7: window must scroll so row 7 (h) is visible (rows e-h).
-	out = RenderDataTable(cols, rows, 7, 20, 6)
+	out = RenderDataTable(cols, rows, 7, 0, 20, 6)
 	data = dataLines(out, 6)
 	if len(data) != 4 {
 		t.Fatalf("data rows = %d, want 4", len(data))
@@ -401,3 +401,86 @@ func ansiStripLines(s string) []string {
 	}
 	return out
 }
+
+func TestRenderDataTable_HorizontalScroll(t *testing.T) {
+	cols := []string{"id", "col_alpha", "col_beta", "col_gamma"}
+	rows := [][]string{
+		{"1", "alpha_val", "beta_val", "gamma_val"},
+		{"2", "alpha_two", "beta_two", "gamma_two"},
+	}
+
+	// Width 25 only fits ~2 columns.
+	// At colScroll = 0: id and col_alpha should be visible.
+	out0 := RenderDataTable(cols, rows, 0, 0, 25, 10)
+	plain0 := ansi.Strip(out0)
+	if !strings.Contains(plain0, "id") || !strings.Contains(plain0, "col_alpha") {
+		t.Errorf("colScroll=0 should show 'id' and 'col_alpha': %s", plain0)
+	}
+	if strings.Contains(plain0, "col_beta") {
+		t.Errorf("colScroll=0 should not show 'col_beta' in narrow width: %s", plain0)
+	}
+
+	// At colScroll = 1: col_alpha and col_beta should be visible, id should not.
+	out1 := RenderDataTable(cols, rows, 0, 1, 25, 10)
+	plain1 := ansi.Strip(out1)
+	if strings.Contains(plain1, "id |") {
+		t.Errorf("colScroll=1 should not show 'id' column: %s", plain1)
+	}
+	if !strings.Contains(plain1, "col_alpha") {
+		t.Errorf("colScroll=1 should show 'col_alpha': %s", plain1)
+	}
+}
+
+func TestRenderDataTable_ScrollIndicators(t *testing.T) {
+	cols := []string{"col1", "col2", "col3", "col4", "col5"}
+	rows := [][]string{
+		{"v1", "v2", "v3", "v4", "v5"},
+	}
+
+	// colScroll=0 with narrow width (20) has more columns to right -> should contain ▶
+	out0 := RenderDataTable(cols, rows, 0, 0, 20, 10)
+	plain0 := ansi.Strip(out0)
+	if !strings.Contains(plain0, "▶") {
+		t.Errorf("colScroll=0 with remaining cols should show ▶: %s", plain0)
+	}
+	if strings.Contains(plain0, "◀") {
+		t.Errorf("colScroll=0 should not show ◀: %s", plain0)
+	}
+
+	// colScroll=2 in the middle -> should show both ◀ and ▶
+	outMid := RenderDataTable(cols, rows, 0, 2, 15, 10)
+	plainMid := ansi.Strip(outMid)
+	if !strings.Contains(plainMid, "◀") {
+		t.Errorf("colScroll=2 should show ◀: %s", plainMid)
+	}
+	if !strings.Contains(plainMid, "▶") {
+		t.Errorf("colScroll=2 with remaining cols should show ▶: %s", plainMid)
+	}
+
+	// colScroll at the last column -> should show ◀ and no ▶
+	outEnd := RenderDataTable(cols, rows, 0, 4, 20, 10)
+	plainEnd := ansi.Strip(outEnd)
+	if !strings.Contains(plainEnd, "◀") {
+		t.Errorf("colScroll at end should show ◀: %s", plainEnd)
+	}
+	if strings.Contains(plainEnd, "▶") {
+		t.Errorf("colScroll at end should not show ▶: %s", plainEnd)
+	}
+}
+
+func TestColScrollWindow_BoundsAndClamping(t *testing.T) {
+	naturalW := []int{10, 10, 10}
+
+	// colScroll < 0 clamped to 0
+	start, widths, hasLeft, _ := colScrollWindow(naturalW, -5, 50)
+	if start != 0 || len(widths) != 3 || hasLeft {
+		t.Errorf("negative colScroll should clamp to 0: got start=%d, len=%d, hasLeft=%v", start, len(widths), hasLeft)
+	}
+
+	// colScroll >= len clamped to last
+	start, widths, hasLeft, hasRight := colScrollWindow(naturalW, 10, 50)
+	if start != 2 || len(widths) != 1 || !hasLeft || hasRight {
+		t.Errorf("out-of-bounds colScroll should clamp: got start=%d, len=%d, hasLeft=%v, hasRight=%v", start, len(widths), hasLeft, hasRight)
+	}
+}
+

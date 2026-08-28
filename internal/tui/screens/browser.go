@@ -95,7 +95,8 @@ const colSep = " | "
 const colSepW = 3
 
 // RenderMainBrowser renders data from any DataView.
-func RenderMainBrowser(b *browser.Browser, width, height int) string {
+// colScroll is the index of the first visible column for tabular data.
+func RenderMainBrowser(b *browser.Browser, colScroll, width, height int) string {
 	if b == nil {
 		return styles.StyleHeaderDim.Render("no connection")
 	}
@@ -113,9 +114,9 @@ func RenderMainBrowser(b *browser.Browser, width, height int) string {
 				cols[i] = c.Name
 			}
 			if len(b.Rows) == 0 {
-				return renderEmptyTable(cols, b.Cursor, width)
+				return renderEmptyTable(cols, b.Cursor, colScroll, width)
 			}
-			return RenderDataTable(cols, b.Rows, b.Cursor, width, height)
+			return RenderDataTable(cols, b.Rows, b.Cursor, colScroll, width, height)
 		}
 		return styles.StyleHeaderDim.Render("select an item")
 	}
@@ -130,9 +131,9 @@ func RenderMainBrowser(b *browser.Browser, width, height int) string {
 			}
 		}
 		if len(v.Rows) == 0 {
-			return renderEmptyTable(cols, b.Cursor, width)
+			return renderEmptyTable(cols, b.Cursor, colScroll, width)
 		}
-		return RenderDataTable(cols, v.Rows, b.Cursor, width, height)
+		return RenderDataTable(cols, v.Rows, b.Cursor, colScroll, width, height)
 
 	case *store.DocumentData:
 		return RenderDocumentList(v, b.Cursor, width, height)
@@ -154,9 +155,9 @@ func RenderMainBrowser(b *browser.Browser, width, height int) string {
 				cols[i] = c.Name
 			}
 			if len(b.Rows) == 0 {
-				return renderEmptyTable(cols, b.Cursor, width)
+				return renderEmptyTable(cols, b.Cursor, colScroll, width)
 			}
-			return RenderDataTable(cols, b.Rows, b.Cursor, width, height)
+			return RenderDataTable(cols, b.Rows, b.Cursor, colScroll, width, height)
 		}
 		return styles.StyleHeaderDim.Render("unsupported view format")
 	}
@@ -167,11 +168,11 @@ func RenderMainBrowser(b *browser.Browser, width, height int) string {
 // table keeps the header and the separator and draws a centered empty-table
 // ASCII box"). When no column names are known (e.g. a view without schema
 // metadata), only the box is drawn.
-func renderEmptyTable(cols []string, cursor, width int) string {
+func renderEmptyTable(cols []string, cursor, colScroll, width int) string {
 	if len(cols) == 0 {
 		return RenderEmptyTable(cols, width)
 	}
-	return RenderDataTable(cols, nil, cursor, width, 2) + "\n\n" + RenderEmptyTable(cols, width)
+	return RenderDataTable(cols, nil, cursor, colScroll, width, 2) + "\n\n" + RenderEmptyTable(cols, width)
 }
 
 // RenderDocumentList renders a list of BSON/JSON documents.
@@ -236,7 +237,7 @@ func RenderKeyValue(kv *store.KeyValueData, cursor, width, height int) string {
 		}
 	}
 	header := styles.StyleHeaderDim.Render(fmt.Sprintf("Key: %s · Type: %s · TTL: %s", kv.Key, kv.Type, kv.TTL))
-	table := RenderDataTable(cols, rows, cursor, width, height-2)
+	table := RenderDataTable(cols, rows, cursor, 0, width, height-2)
 	return header + "\n" + table
 }
 
@@ -283,24 +284,135 @@ func RenderRawText(raw *store.RawTextData, width, height int) string {
 }
 
 // RenderDataTable renders columns + rows with cursor row highlighted.
-func RenderDataTable(cols []string, rows [][]string, cursor, width, height int) string {
+// colScroll is the index of the first visible column (0 = no horizontal scroll).
+func RenderDataTable(cols []string, rows [][]string, cursor, colScroll, width, height int) string {
 	if len(cols) == 0 {
 		return ""
 	}
 
-	widths := colWidths(cols, rows, width)
+	naturalW := colNaturalWidths(cols, rows)
+	visStart, visWidths, hasLeft, hasRight := colScrollWindow(naturalW, colScroll, width)
+	visCols := cols[visStart : visStart+len(visWidths)]
+
 	start, visible := TableWindow(len(rows), cursor, height)
 
 	var sb strings.Builder
-	sb.WriteString(renderHeader(cols, widths) + "\n")
-	sb.WriteString(renderSep(cols, widths) + "\n")
+	sb.WriteString(renderHeaderScrolled(visCols, visWidths, hasLeft, hasRight) + "\n")
+	sb.WriteString(renderSep(visCols, visWidths) + "\n")
 
 	for i := 0; i < visible; i++ {
 		row := start + i
 		if row >= len(rows) {
 			break
 		}
-		sb.WriteString(renderRow(rows[row], widths, row == cursor) + "\n")
+		visRow := rows[row][visStart : visStart+len(visWidths)]
+		sb.WriteString(renderRow(visRow, visWidths, row == cursor) + "\n")
+	}
+	return sb.String()
+}
+
+// colNaturalWidths computes the natural (uncompressed) width of each column,
+// capped at colMaxW. It scans up to 100 rows for content width.
+func colNaturalWidths(cols []string, rows [][]string) []int {
+	n := len(cols)
+	widths := make([]int, n)
+	for i, c := range cols {
+		widths[i] = runewidth.StringWidth(c)
+	}
+	maxRows := len(rows)
+	if maxRows > 100 {
+		maxRows = 100
+	}
+	for r := 0; r < maxRows; r++ {
+		for i, cell := range rows[r] {
+			if i >= n {
+				break
+			}
+			if w := runewidth.StringWidth(cell); w > widths[i] {
+				widths[i] = w
+			}
+		}
+	}
+	for i := range widths {
+		if widths[i] > colMaxW {
+			widths[i] = colMaxW
+		}
+		if widths[i] < colMinW {
+			widths[i] = colMinW
+		}
+	}
+	return widths
+}
+
+// colScrollWindow determines which columns are visible starting at colScroll,
+// returning the actual start index, their widths, and whether there are hidden
+// columns to the left or right.
+func colScrollWindow(naturalW []int, colScroll, width int) (start int, widths []int, hasLeft, hasRight bool) {
+	n := len(naturalW)
+	if n == 0 {
+		return 0, nil, false, false
+	}
+	// Reserve 2 chars for scroll indicator if needed (◀ / ▶ each take 1 rune = ~2 cells on some terminals)
+	// We use "◀ " / " ▶" as prefixes: each costs 2 visual chars in header.
+	if colScroll < 0 {
+		colScroll = 0
+	}
+	if colScroll >= n {
+		colScroll = n - 1
+	}
+
+	hasLeft = colScroll > 0
+	// When there's a left indicator, we need 2 extra chars
+	leftReserve := 0
+	if hasLeft {
+		leftReserve = 2
+	}
+
+	budget := width - leftReserve
+	var visible []int
+	used := 0
+	for i := colScroll; i < n; i++ {
+		w := naturalW[i]
+		sep := 0
+		if i > colScroll {
+			sep = colSepW
+		}
+		if used+sep+w > budget {
+			break
+		}
+		used += sep + w
+		visible = append(visible, w)
+	}
+	if len(visible) == 0 && colScroll < n {
+		// Always show at least one column
+		visible = []int{budget}
+		if budget < 1 {
+			visible = []int{1}
+		}
+	}
+
+	lastVisible := colScroll + len(visible) - 1
+	hasRight = lastVisible < n-1
+
+	return colScroll, visible, hasLeft, hasRight
+}
+
+func renderHeaderScrolled(cells []string, widths []int, hasLeft, hasRight bool) string {
+	var sb strings.Builder
+	if hasLeft {
+		sb.WriteString(styles.StyleBorder.Render("◀ "))
+	}
+	for i, c := range cells {
+		if i >= len(widths) {
+			break
+		}
+		sb.WriteString(styles.StyleColHeader.Render(pad(truncate(c, widths[i]), widths[i])))
+		if i < len(cells)-1 {
+			sb.WriteString(styles.StyleBorder.Render(colSep))
+		}
+	}
+	if hasRight {
+		sb.WriteString(styles.StyleBorder.Render(" ▶"))
 	}
 	return sb.String()
 }
