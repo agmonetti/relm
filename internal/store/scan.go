@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -67,7 +68,10 @@ func Stringify(v any) string {
 	case string:
 		return t
 	case []byte:
-		if utf8.Valid(t) {
+		if len(t) == 1 && (t[0] == 0 || t[0] == 1) {
+			return strconv.Itoa(int(t[0]))
+		}
+		if isPrintableUTF8(t) {
 			return string(t)
 		}
 		// binary value: show as 0x… instead of raw bytes
@@ -83,4 +87,16 @@ func Stringify(v any) string {
 	default:
 		return fmt.Sprintf("%v", t)
 	}
+}
+
+func isPrintableUTF8(b []byte) bool {
+	if !utf8.Valid(b) {
+		return false
+	}
+	for _, r := range string(b) {
+		if !unicode.IsPrint(r) && r != '\t' && r != '\n' && r != '\r' {
+			return false
+		}
+	}
+	return true
 }

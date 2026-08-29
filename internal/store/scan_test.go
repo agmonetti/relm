@@ -18,6 +18,10 @@ func TestStringify(t *testing.T) {
 		{"nil", nil, ""},
 		{"string", "abc", "abc"},
 		{"text bytes", []byte("hello"), "hello"},
+		{"mysql bit true", []byte{1}, "1"},
+		{"mysql bit false", []byte{0}, "0"},
+		{"control bytes", []byte{0x01, 0x02, 0x03}, "0x010203"},
+		{"utf8 accented bytes", []byte("válido ñañdú"), "válido ñañdú"},
 		{"binary bytes", []byte{0x00, 0xff, 0x10}, "0x00ff10"},
 		{"time", time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC), "2024-01-02 03:04:05"},
 		{"bool", true, "true"},
@@ -26,7 +30,7 @@ func TestStringify(t *testing.T) {
 	}
 	for _, tc := range cases {
 		if got := Stringify(tc.in); got != tc.want {
-			t.Errorf("Stringify(%v) = %q, want %q", tc.in, got, tc.want)
+			t.Errorf("Stringify(%v) [%s] = %q, want %q", tc.in, tc.name, got, tc.want)
 		}
 	}
 }

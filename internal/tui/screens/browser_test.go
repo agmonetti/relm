@@ -580,4 +580,109 @@ func TestRenderDataTable_LeftIndicatorAlignment(t *testing.T) {
 	}
 }
 
+func TestRenderDataTable_NullAlignment(t *testing.T) {
+	cols := []string{"id", "email", "is_active", "name", "password", "phone", "role", "surname", "username"}
+	rows := [][]string{
+		{"1", "buyerdemo@mail.com", "1", "Ana", "$2a$10$2y4HxHVDZnjgPyyLlDTNEOGaqoWUabcdef123", "", "BUYER", "Compradora", "buyerdemo"},
+		{"2", "sellerdemo@mail.com", "0", "Luis", "$2a$10$fY7oAN0uShWAeyVNl.pGYehUvoIvabcdef123", "", "SELLER", "Vendedor", "sellerdemo"},
+	}
+	nulls := [][]bool{
+		{false, false, false, false, false, true, false, false, false},
+		{false, false, false, false, false, true, false, false, false},
+	}
+
+	for _, cursor := range []int{-1, 0, 1} {
+		out := RenderDataTableWithNulls(cols, rows, nulls, cursor, 0, 200, 10)
+		lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+		if len(lines) != 4 {
+			t.Fatalf("cursor %d: expected 4 lines (header, sep, row0, row1), got %d: %v", cursor, len(lines), lines)
+		}
+
+		headerPlain := ansi.Strip(lines[0])
+		sepPlain := ansi.Strip(lines[1])
+		row0Plain := ansi.Strip(lines[2])
+		row1Plain := ansi.Strip(lines[3])
+
+		wHeader := runewidth.StringWidth(headerPlain)
+		wSep := runewidth.StringWidth(sepPlain)
+		wRow0 := runewidth.StringWidth(row0Plain)
+		wRow1 := runewidth.StringWidth(row1Plain)
+
+		if wRow0 != wHeader || wRow1 != wHeader || wSep != wHeader {
+			t.Errorf("cursor %d: line width mismatch: header=%d, sep=%d, row0=%d, row1=%d", cursor, wHeader, wSep, wRow0, wRow1)
+		}
+
+		// Find separator positions in header (using runes for unicode-safe visual column alignment)
+		rHeader := []rune(headerPlain)
+		rRow0 := []rune(row0Plain)
+		rRow1 := []rune(row1Plain)
+
+		var headerSepIndices []int
+		for i := 0; i < len(rHeader)-2; i++ {
+			if string(rHeader[i:i+3]) == " | " {
+				headerSepIndices = append(headerSepIndices, i)
+			}
+		}
+
+		// Verify every separator position matches in row0 and row1
+		for _, idx := range headerSepIndices {
+			if idx+3 > len(rRow0) || string(rRow0[idx:idx+3]) != " | " {
+				t.Errorf("cursor %d row0: missing separator ' | ' at rune index %d: line=%q", cursor, idx, row0Plain)
+			}
+			if idx+3 > len(rRow1) || string(rRow1[idx:idx+3]) != " | " {
+				t.Errorf("cursor %d row1: missing separator ' | ' at rune index %d: line=%q", cursor, idx, row1Plain)
+			}
+		}
+
+		// Verify NULL glyph is present in plain row text
+		if !strings.Contains(row0Plain, "∅") || !strings.Contains(row1Plain, "∅") {
+			t.Errorf("cursor %d: expected NULL glyph ∅ in rows: row0=%q, row1=%q", cursor, row0Plain, row1Plain)
+		}
+	}
+}
+
+func TestRenderDataTable_DistinguishesNullAndEmptyString(t *testing.T) {
+	cols := []string{"id", "notes"}
+	rows := [][]string{
+		{"1", ""}, // SQL NULL
+		{"2", ""}, // empty string VARCHAR
+	}
+	nulls := [][]bool{
+		{false, true},
+		{false, false},
+	}
+
+	out := RenderDataTableWithNulls(cols, rows, nulls, -1, 0, 50, 10)
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 4 {
+		t.Fatalf("expected 4 lines, got %d", len(lines))
+	}
+
+	row0Plain := ansi.Strip(lines[2])
+	row1Plain := ansi.Strip(lines[3])
+
+	// row 0 should contain the NULL symbol ∅
+	if !strings.Contains(row0Plain, "∅") {
+		t.Errorf("row 0 (NULL) should contain ∅: %q", row0Plain)
+	}
+
+	// row 1 (empty string) must NOT contain ∅
+	if strings.Contains(row1Plain, "∅") {
+		t.Errorf("row 1 (empty string) must NOT contain ∅: %q", row1Plain)
+	}
+
+	// Both rows must have identical total width
+	if runewidth.StringWidth(row0Plain) != runewidth.StringWidth(row1Plain) {
+		t.Errorf("row width mismatch: row0=%d, row1=%d", runewidth.StringWidth(row0Plain), runewidth.StringWidth(row1Plain))
+	}
+}
+
+func TestRenderRowDetail_NullValue(t *testing.T) {
+	out := RenderRowDetail("users", []string{"id", "phone"}, []string{"1", ""}, 1, 0, 40, 20)
+	plain := ansi.Strip(out)
+	if !strings.Contains(plain, "∅") {
+		t.Errorf("detail view for NULL field must contain ∅: %q", plain)
+	}
+}
+
 

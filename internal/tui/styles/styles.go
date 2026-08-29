@@ -94,6 +94,11 @@ var (
 	StyleNull = lipgloss.NewStyle().
 			Foreground(ColorNull)
 
+	// StyleNullCursor is the NULL value marker on a selected row.
+	StyleNullCursor = lipgloss.NewStyle().
+			Foreground(ColorNull).
+			Background(ColorAccent)
+
 	// StyleCursor is the selected row in the browser.
 	StyleCursor = lipgloss.NewStyle().
 			Background(ColorAccent).
@@ -140,8 +145,14 @@ var (
 				Padding(0, 2)
 )
 
+// NullGlyph is the default visual glyph used for SQL NULL values.
+const NullGlyph = "∅"
+
 // NullCell returns the representation of a NULL value.
-func NullCell() string { return StyleNull.Render("∅") }
+func NullCell() string { return StyleNull.Render(NullGlyph) }
+
+// NullCellSelected returns the representation of a NULL value in a selected row.
+func NullCellSelected() string { return StyleNullCursor.Render(NullGlyph) }
 
 var (
 	// StyleSidebarActiveTable marks the opened table when it is not under the

@@ -116,7 +116,7 @@ func RenderMainBrowser(b *browser.Browser, colScroll, width, height int) string 
 			if len(b.Rows) == 0 {
 				return renderEmptyTable(cols, b.Cursor, colScroll, width)
 			}
-			return RenderDataTable(cols, b.Rows, b.Cursor, colScroll, width, height)
+			return RenderDataTableWithNulls(cols, b.Rows, b.Nulls, b.Cursor, colScroll, width, height)
 		}
 		return styles.StyleHeaderDim.Render("select an item")
 	}
@@ -133,7 +133,7 @@ func RenderMainBrowser(b *browser.Browser, colScroll, width, height int) string 
 		if len(v.Rows) == 0 {
 			return renderEmptyTable(cols, b.Cursor, colScroll, width)
 		}
-		return RenderDataTable(cols, v.Rows, b.Cursor, colScroll, width, height)
+		return RenderDataTableWithNulls(cols, v.Rows, v.Nulls, b.Cursor, colScroll, width, height)
 
 	case *store.DocumentData:
 		return RenderDocumentList(v, b.Cursor, width, height)
@@ -157,7 +157,7 @@ func RenderMainBrowser(b *browser.Browser, colScroll, width, height int) string 
 			if len(b.Rows) == 0 {
 				return renderEmptyTable(cols, b.Cursor, colScroll, width)
 			}
-			return RenderDataTable(cols, b.Rows, b.Cursor, colScroll, width, height)
+			return RenderDataTableWithNulls(cols, b.Rows, b.Nulls, b.Cursor, colScroll, width, height)
 		}
 		return styles.StyleHeaderDim.Render("unsupported view format")
 	}
@@ -286,6 +286,11 @@ func RenderRawText(raw *store.RawTextData, width, height int) string {
 // RenderDataTable renders columns + rows with cursor row highlighted.
 // colScroll is the index of the first visible column (0 = no horizontal scroll).
 func RenderDataTable(cols []string, rows [][]string, cursor, colScroll, width, height int) string {
+	return RenderDataTableWithNulls(cols, rows, nil, cursor, colScroll, width, height)
+}
+
+// RenderDataTableWithNulls renders columns + rows with null indicators from the nulls mask.
+func RenderDataTableWithNulls(cols []string, rows [][]string, nulls [][]bool, cursor, colScroll, width, height int) string {
 	if len(cols) == 0 {
 		return ""
 	}
@@ -306,7 +311,15 @@ func RenderDataTable(cols []string, rows [][]string, cursor, colScroll, width, h
 			break
 		}
 		visRow := rows[row][visStart : visStart+len(visWidths)]
-		sb.WriteString(renderRow(visRow, visWidths, row == cursor, hasLeft) + "\n")
+		var visNulls []bool
+		if row < len(nulls) && nulls[row] != nil && visStart < len(nulls[row]) {
+			end := visStart + len(visWidths)
+			if end > len(nulls[row]) {
+				end = len(nulls[row])
+			}
+			visNulls = nulls[row][visStart:end]
+		}
+		sb.WriteString(renderRow(visRow, visNulls, visWidths, row == cursor, hasLeft) + "\n")
 	}
 	return sb.String()
 }
@@ -572,7 +585,7 @@ func colWidths(cols []string, rows [][]string, width int) []int {
 	return widths
 }
 
-func renderRow(cells []string, widths []int, selected bool, hasLeft bool) string {
+func renderRow(cells []string, nulls []bool, widths []int, selected bool, hasLeft bool) string {
 	var sb strings.Builder
 	if hasLeft {
 		if selected {
@@ -585,7 +598,8 @@ func renderRow(cells []string, widths []int, selected bool, hasLeft bool) string
 		if i >= len(widths) {
 			break
 		}
-		sb.WriteString(renderCellText(cell, widths[i], selected))
+		isNull := isCellNull(nulls, i, cell)
+		sb.WriteString(renderCellText(cell, isNull, widths[i], selected))
 		if i < len(cells)-1 {
 			if selected {
 				sb.WriteString(styles.StyleCursor.Render(colSep))
@@ -597,13 +611,32 @@ func renderRow(cells []string, widths []int, selected bool, hasLeft bool) string
 	return sb.String()
 }
 
-func renderCellText(cell string, width int, selected bool) string {
-	text := cell
-	if text == "" {
-		text = styles.NullCell()
-	} else {
-		text = truncate(text, width)
+func isCellNull(nulls []bool, i int, cell string) bool {
+	if i < len(nulls) {
+		return nulls[i]
 	}
+	return cell == ""
+}
+
+func renderCellText(cell string, isNull bool, width int, selected bool) string {
+	if width <= 0 {
+		return ""
+	}
+	if isNull {
+		if width == 1 {
+			if selected {
+				return styles.NullCellSelected()
+			}
+			return styles.NullCell()
+		}
+		padding := strings.Repeat(" ", width-1)
+		if selected {
+			return styles.NullCellSelected() + styles.StyleCursor.Render(padding)
+		}
+		return styles.NullCell() + padding
+	}
+
+	text := truncate(cell, width)
 	text = pad(text, width)
 	if selected {
 		text = styles.StyleCursor.Render(text)
@@ -694,17 +727,18 @@ func RenderRowDetail(title string, cols, vals []string, cursor, scroll, width, h
 		if i < len(vals) {
 			val = vals[i]
 		}
-		if val == "" {
-			val = styles.NullCell()
-		}
 		if i == cursor {
 			lines = append(lines, styles.StyleSidebarActive.Render("> ")+styles.StyleColHeader.Render(name+":"))
 		} else {
 			lines = append(lines, "  "+styles.StyleColHeader.Render(name+":"))
 		}
-		wrapped := WrapCells(val, contentW-4)
-		for _, wl := range wrapped {
-			lines = append(lines, "    "+wl)
+		if val == "" {
+			lines = append(lines, "    "+styles.NullCell())
+		} else {
+			wrapped := WrapCells(val, contentW-4)
+			for _, wl := range wrapped {
+				lines = append(lines, "    "+wl)
+			}
 		}
 		lines = append(lines, "")
 	}
