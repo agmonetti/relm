@@ -2,6 +2,7 @@ package editor
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/agmonetti/relm/internal/conn"
@@ -380,5 +381,56 @@ func TestEditor_CommentOnlyBufferDoesNotExecute(t *testing.T) {
 	}
 	if e.Data != nil {
 		t.Errorf("Data = %+v, want nil", e.Data)
+	}
+}
+
+type customSplitterStore struct {
+	recordingStore
+}
+
+func (c *customSplitterStore) Query() store.QueryExecutor {
+	return &customSplitterExec{recordingExec: recordingExec{r: &c.recordingStore}}
+}
+
+type customSplitterExec struct {
+	recordingExec
+}
+
+func (c *customSplitterExec) SplitStatements(buffer string) []store.Statement {
+	// Simple line-based splitter for testing
+	var stmts []store.Statement
+	for i, line := range strings.Split(buffer, "\n") {
+		if t := strings.TrimSpace(line); t != "" {
+			stmts = append(stmts, store.Statement{Text: t, Line: i})
+		}
+	}
+	return stmts
+}
+
+func TestEditor_ExecuteUsesStatementSplitterWhenAvailable(t *testing.T) {
+	ds := &customSplitterStore{}
+	e := New()
+	e.Buffer = "HGETALL instancia:101\nSMEMBERS tareas_pendientes:rol:soporte"
+
+	// Cursor on line 0 -> executes HGETALL
+	if err := e.ExecuteAt(context.Background(), ds, 0); err != nil {
+		t.Fatalf("ExecuteAt(0): %v", err)
+	}
+	if ds.buffer != "HGETALL instancia:101" {
+		t.Errorf("got ds.buffer = %q, want 'HGETALL instancia:101'", ds.buffer)
+	}
+	if e.LastQuery != "HGETALL instancia:101" {
+		t.Errorf("got e.LastQuery = %q, want 'HGETALL instancia:101'", e.LastQuery)
+	}
+
+	// Cursor on line 1 -> executes SMEMBERS
+	if err := e.ExecuteAt(context.Background(), ds, 1); err != nil {
+		t.Fatalf("ExecuteAt(1): %v", err)
+	}
+	if ds.buffer != "SMEMBERS tareas_pendientes:rol:soporte" {
+		t.Errorf("got ds.buffer = %q, want 'SMEMBERS tareas_pendientes:rol:soporte'", ds.buffer)
+	}
+	if e.LastQuery != "SMEMBERS tareas_pendientes:rol:soporte" {
+		t.Errorf("got e.LastQuery = %q, want 'SMEMBERS tareas_pendientes:rol:soporte'", e.LastQuery)
 	}
 }

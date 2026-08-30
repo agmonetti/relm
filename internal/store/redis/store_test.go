@@ -101,3 +101,86 @@ func TestRedis_FormatResult(t *testing.T) {
 		t.Errorf("slice result = %v", sliceRes)
 	}
 }
+
+func TestRedis_SplitRedisCommands(t *testing.T) {
+	t.Run("multiline commands without semicolon", func(t *testing.T) {
+		raw := "HGETALL instancia:101\nSMEMBERS tareas_pendientes:rol:soporte"
+		stmts := SplitRedisCommands(raw)
+		if len(stmts) != 2 {
+			t.Fatalf("len(stmts) = %d, want 2", len(stmts))
+		}
+		if stmts[0].Text != "HGETALL instancia:101" || stmts[0].Line != 0 {
+			t.Errorf("stmt[0] = %+v, want 'HGETALL instancia:101' at line 0", stmts[0])
+		}
+		if stmts[1].Text != "SMEMBERS tareas_pendientes:rol:soporte" || stmts[1].Line != 1 {
+			t.Errorf("stmt[1] = %+v, want 'SMEMBERS tareas_pendientes:rol:soporte' at line 1", stmts[1])
+		}
+
+		// Verify StatementAt selects the right statement based on cursor line
+		if idx := store.StatementAt(stmts, 0); idx != 0 {
+			t.Errorf("StatementAt(0) = %d, want 0", idx)
+		}
+		if idx := store.StatementAt(stmts, 1); idx != 1 {
+			t.Errorf("StatementAt(1) = %d, want 1", idx)
+		}
+	})
+
+	t.Run("semicolon separated on same line", func(t *testing.T) {
+		raw := "SET foo bar; GET foo"
+		stmts := SplitRedisCommands(raw)
+		if len(stmts) != 2 {
+			t.Fatalf("len(stmts) = %d, want 2", len(stmts))
+		}
+		if stmts[0].Text != "SET foo bar" || stmts[0].Line != 0 {
+			t.Errorf("stmt[0] = %+v", stmts[0])
+		}
+		if stmts[1].Text != "GET foo" || stmts[1].Line != 0 {
+			t.Errorf("stmt[1] = %+v", stmts[1])
+		}
+	})
+
+	t.Run("multiline string in quotes", func(t *testing.T) {
+		raw := "SET msg \"hello\nworld\"\nGET msg"
+		stmts := SplitRedisCommands(raw)
+		if len(stmts) != 2 {
+			t.Fatalf("len(stmts) = %d, want 2", len(stmts))
+		}
+		if stmts[0].Text != "SET msg \"hello\nworld\"" || stmts[0].Line != 0 {
+			t.Errorf("stmt[0] = %+v", stmts[0])
+		}
+		if stmts[1].Text != "GET msg" || stmts[1].Line != 2 {
+			t.Errorf("stmt[1] = %+v", stmts[1])
+		}
+	})
+
+	t.Run("comments ignored", func(t *testing.T) {
+		raw := "# comment 1\nGET key1\n// comment 2\nGET key2\n-- comment 3\nGET key3"
+		stmts := SplitRedisCommands(raw)
+		if len(stmts) != 3 {
+			t.Fatalf("len(stmts) = %d, want 3", len(stmts))
+		}
+		if stmts[0].Text != "GET key1" || stmts[0].Line != 1 {
+			t.Errorf("stmt[0] = %+v", stmts[0])
+		}
+		if stmts[1].Text != "GET key2" || stmts[1].Line != 3 {
+			t.Errorf("stmt[1] = %+v", stmts[1])
+		}
+		if stmts[2].Text != "GET key3" || stmts[2].Line != 5 {
+			t.Errorf("stmt[2] = %+v", stmts[2])
+		}
+	})
+
+	t.Run("inline comments", func(t *testing.T) {
+		raw := "GET key1 # inline note\nGET key2"
+		stmts := SplitRedisCommands(raw)
+		if len(stmts) != 2 {
+			t.Fatalf("len(stmts) = %d, want 2", len(stmts))
+		}
+		if stmts[0].Text != "GET key1" || stmts[0].Line != 0 {
+			t.Errorf("stmt[0] = %+v", stmts[0])
+		}
+		if stmts[1].Text != "GET key2" || stmts[1].Line != 1 {
+			t.Errorf("stmt[1] = %+v", stmts[1])
+		}
+	})
+}

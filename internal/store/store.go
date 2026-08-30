@@ -301,6 +301,12 @@ type QueryExecutor interface {
 	IsMutation(statement string) bool
 }
 
+// StatementSplitter is an optional interface that a QueryExecutor can implement
+// to provide engine-specific statement segmentation (e.g. Redis CLI splitting by newline).
+type StatementSplitter interface {
+	SplitStatements(buffer string) []Statement
+}
+
 // DataSource is the primary contract implemented by all database engines.
 type DataSource interface {
 	Driver() conn.Driver

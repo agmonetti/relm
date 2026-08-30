@@ -375,16 +375,126 @@ func (e *RedisExecutor) IsMutation(stmt string) bool {
 	return redisWriteCmds[cmd]
 }
 
-// Execute runs a Redis command. The QueryExecutor contract passes
-// (buffer, line, maxRows); line and maxRows are not applicable to RESP and are
-// ignored.
-func (e *RedisExecutor) Execute(ctx context.Context, buffer string, _line, _maxRows int) (store.DataView, error) {
+func (e *RedisExecutor) SplitStatements(buffer string) []store.Statement {
+	return SplitRedisCommands(buffer)
+}
+
+// SplitRedisCommands splits a multi-line or semicolon-separated Redis CLI buffer
+// into individual statements, tracking each statement's start line (0-indexed).
+// It respects single and double quotes (including multiline strings and escapes)
+// and comments starting with '#', '//', or '--'.
+func SplitRedisCommands(raw string) []store.Statement {
+	var stmts []store.Statement
+	var b strings.Builder
+	line := 0
+	startLine := 0
+	started := false
+
+	flush := func() {
+		if t := strings.TrimSpace(b.String()); t != "" {
+			stmts = append(stmts, store.Statement{Text: t, Line: startLine})
+		}
+		b.Reset()
+		started = false
+	}
+
+	inQuote := false
+	var quoteChar rune
+	inLineComment := false
+	runes := []rune(raw)
+
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if inLineComment {
+			if r == '\n' {
+				inLineComment = false
+				line++
+			}
+			continue
+		}
+
+		if inQuote {
+			b.WriteRune(r)
+			if r == '\n' {
+				line++
+			} else if r == '\\' && i+1 < len(runes) {
+				next := runes[i+1]
+				b.WriteRune(next)
+				if next == '\n' {
+					line++
+				}
+				i++
+			} else if r == quoteChar {
+				inQuote = false
+			}
+			continue
+		}
+
+		// Check for line comments: #, //, --
+		if r == '#' || (r == '/' && i+1 < len(runes) && runes[i+1] == '/') || (r == '-' && i+1 < len(runes) && runes[i+1] == '-') {
+			if started {
+				flush()
+			}
+			inLineComment = true
+			if r != '#' {
+				i++
+			}
+			continue
+		}
+
+		if r == '\n' {
+			flush()
+			line++
+			continue
+		}
+
+		if r == ';' {
+			flush()
+			continue
+		}
+
+		if r == '"' || r == '\'' {
+			inQuote = true
+			quoteChar = r
+			if !started {
+				startLine = line
+				started = true
+			}
+			b.WriteRune(r)
+			continue
+		}
+
+		if !started && (r != ' ' && r != '\t' && r != '\r') {
+			startLine = line
+			started = true
+		}
+		if started {
+			b.WriteRune(r)
+		}
+	}
+	flush()
+	return stmts
+}
+
+// Execute runs a Redis command. If a multi-statement buffer is provided,
+// it executes the statement at line using SplitStatements / StatementAt.
+func (e *RedisExecutor) Execute(ctx context.Context, buffer string, line, _maxRows int) (store.DataView, error) {
 	trimmed := strings.TrimSpace(buffer)
 	if trimmed == "" {
 		return nil, errors.New("empty command")
 	}
 
-	args, err := parseRedisCommandArgs(trimmed)
+	stmts := e.SplitStatements(buffer)
+	if len(stmts) == 0 {
+		return nil, errors.New("empty command")
+	}
+	stmtIdx := 0
+	if len(stmts) > 1 {
+		stmtIdx = store.StatementAt(stmts, line)
+	}
+	targetCmd := stmts[stmtIdx].Text
+
+	args, err := parseRedisCommandArgs(targetCmd)
 	if err != nil {
 		return nil, err
 	}

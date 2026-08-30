@@ -58,7 +58,12 @@ func (e *Editor) ExecuteAt(ctx context.Context, ds store.DataSource, line int) e
 	defer func() { e.Mode = EditorModeNormal }()
 
 	q := ds.Query()
-	stmts := store.SplitStatements(e.Buffer)
+	var stmts []store.Statement
+	if splitter, ok := q.(store.StatementSplitter); ok {
+		stmts = splitter.SplitStatements(e.Buffer)
+	} else {
+		stmts = store.SplitStatements(e.Buffer)
+	}
 	if len(stmts) == 0 {
 		// Only comments/whitespace in the buffer: nothing to run. Mirrors the
 		// relational executor, which treats an empty split the same way.
