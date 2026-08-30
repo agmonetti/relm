@@ -527,30 +527,72 @@ func parseRedisCommandArgs(raw string) ([]any, error) {
 	var current strings.Builder
 	inQuote := false
 	var quoteChar rune
+	inToken := false
+	escaped := false
+	runes := []rune(raw)
 
-	for _, r := range raw {
-		switch {
-		case inQuote:
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if inQuote {
+			if escaped {
+				switch r {
+				case 'n':
+					current.WriteRune('\n')
+				case 't':
+					current.WriteRune('\t')
+				case 'r':
+					current.WriteRune('\r')
+				case '\\':
+					current.WriteRune('\\')
+				case '"':
+					current.WriteRune('"')
+				case '\'':
+					current.WriteRune('\'')
+				default:
+					current.WriteRune('\\')
+					current.WriteRune(r)
+				}
+				escaped = false
+				continue
+			}
+			if r == '\\' {
+				escaped = true
+				continue
+			}
 			if r == quoteChar {
 				inQuote = false
-			} else {
-				current.WriteRune(r)
+				continue
 			}
+			current.WriteRune(r)
+			continue
+		}
+
+		// Outside quote
+		switch {
 		case r == '"' || r == '\'':
 			inQuote = true
 			quoteChar = r
-		case r == ' ' || r == '\t' || r == '\n':
-			if current.Len() > 0 {
+			inToken = true
+		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
+			if inToken {
 				args = append(args, current.String())
 				current.Reset()
+				inToken = false
 			}
 		default:
+			inToken = true
 			current.WriteRune(r)
 		}
 	}
-	if current.Len() > 0 {
+
+	if inQuote {
+		return nil, errors.New("unclosed quote in command")
+	}
+
+	if inToken {
 		args = append(args, current.String())
 	}
+
 	return args, nil
 }
 

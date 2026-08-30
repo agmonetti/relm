@@ -39,6 +39,39 @@ func TestRedis_ParseCommandArgs(t *testing.T) {
 	if err != nil || len(args2) != 2 || args2[0] != "HGETALL" || args2[1] != "users:1001" {
 		t.Errorf("args2 = %v, err = %v", args2, err)
 	}
+
+	// Empty string in double quotes
+	args3, err := parseRedisCommandArgs(`HSET instancia:101 estado "COMPLETADA" tarea_actual ""`)
+	if err != nil {
+		t.Fatalf("args3 error: %v", err)
+	}
+	if len(args3) != 6 {
+		t.Fatalf("args3 len = %d, want 6 (including empty string)", len(args3))
+	}
+	expected3 := []any{"HSET", "instancia:101", "estado", "COMPLETADA", "tarea_actual", ""}
+	for i, exp := range expected3 {
+		if args3[i] != exp {
+			t.Errorf("args3[%d] = %q, want %q", i, args3[i], exp)
+		}
+	}
+
+	// Empty string in single quotes
+	args4, err := parseRedisCommandArgs(`SET mykey ''`)
+	if err != nil || len(args4) != 3 || args4[2] != "" {
+		t.Errorf("args4 = %v, err = %v, want 3 args with empty string", args4, err)
+	}
+
+	// Escaped quotes inside double quotes
+	args5, err := parseRedisCommandArgs(`SET msg "hello \"world\""`)
+	if err != nil || len(args5) != 3 || args5[2] != `hello "world"` {
+		t.Errorf("args5 = %v, err = %v", args5, err)
+	}
+
+	// Unclosed quotes
+	_, err = parseRedisCommandArgs(`SET msg "unclosed string`)
+	if err == nil {
+		t.Error("expected error on unclosed quote")
+	}
 }
 
 func TestRedis_FormatTTL(t *testing.T) {
