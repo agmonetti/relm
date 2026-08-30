@@ -176,6 +176,9 @@ func SplitStatements(sql string) []Statement {
 				mode = 3
 				i++
 				b.WriteByte(' ')
+			case c == '/' && i+1 < len(sql) && sql[i+1] == '/':
+				mode = 2
+				i++
 			case c == ';':
 				flush()
 			default:

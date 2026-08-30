@@ -2,6 +2,7 @@ package neo4j
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/agmonetti/relm/internal/conn"
@@ -83,3 +84,52 @@ func TestNeo4j_LanguageAndTitle(t *testing.T) {
 		t.Errorf("PromptTitle = %q, want CYPHER QUERY", exec.PromptTitle())
 	}
 }
+
+func TestNeo4j_SplitStatements(t *testing.T) {
+	exec := &Neo4jExecutor{}
+
+	// Single statement without semicolon
+	stmts := exec.SplitStatements("MATCH (n) RETURN n")
+	if len(stmts) != 1 || stmts[0].Text != "MATCH (n) RETURN n" || stmts[0].Line != 0 {
+		t.Errorf("single statement mismatch: %+v", stmts)
+	}
+
+	// Multiple statements separated by semicolon on different lines
+	buffer := `match (n) return n;
+MATCH (os {name: 'Oscar'}) SET os: Person;
+RETURN 1`
+	stmts = exec.SplitStatements(buffer)
+	if len(stmts) != 3 {
+		t.Fatalf("expected 3 statements, got %d: %+v", len(stmts), stmts)
+	}
+	if stmts[0].Text != "match (n) return n" || stmts[0].Line != 0 {
+		t.Errorf("stmt 0 mismatch: %+v", stmts[0])
+	}
+	if stmts[1].Text != "MATCH (os {name: 'Oscar'}) SET os: Person" || stmts[1].Line != 1 {
+		t.Errorf("stmt 1 mismatch: %+v", stmts[1])
+	}
+	if stmts[2].Text != "RETURN 1" || stmts[2].Line != 2 {
+		t.Errorf("stmt 2 mismatch: %+v", stmts[2])
+	}
+
+	// Semicolons inside string literals and backtick identifiers
+	complexBuf := `// Query 1
+MATCH (n {val: "hello; world"})
+WHERE n.name = 'it\'s; fine'
+RETURN n;
+
+/* Block comment with ; inside */
+MATCH (n:` + "`" + `Special;Label` + "`" + `)
+RETURN n`
+	stmts = exec.SplitStatements(complexBuf)
+	if len(stmts) != 2 {
+		t.Fatalf("expected 2 statements with embedded semicolons, got %d: %+v", len(stmts), stmts)
+	}
+	if !strings.Contains(stmts[0].Text, `"hello; world"`) || !strings.Contains(stmts[0].Text, `'it\'s; fine'`) {
+		t.Errorf("stmt 0 should preserve strings with semicolons: %q", stmts[0].Text)
+	}
+	if !strings.Contains(stmts[1].Text, "`Special;Label`") {
+		t.Errorf("stmt 1 should preserve backtick identifier: %q", stmts[1].Text)
+	}
+}
+

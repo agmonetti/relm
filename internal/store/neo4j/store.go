@@ -436,16 +436,143 @@ func isCypherWord(c byte) bool {
 	return false
 }
 
-// Execute runs a Cypher query. The QueryExecutor contract passes
-// (buffer, line, maxRows): line is the cursor line (unused) and maxRows caps
-// how many records a read query materializes in memory.
-func (e *Neo4jExecutor) Execute(ctx context.Context, buffer string, _line int, maxRows int) (store.DataView, error) {
+// SplitStatements splits a Cypher script into individual statements by semicolon (;),
+// respecting single/double quoted strings, backtick-quoted identifiers, and comments
+// (// line comments and /* */ block comments).
+func (e *Neo4jExecutor) SplitStatements(buffer string) []store.Statement {
+	var stmts []store.Statement
+	var b strings.Builder
+	line := 0
+	startLine := 0
+	started := false
+
+	flush := func() {
+		if t := strings.TrimSpace(b.String()); t != "" {
+			stmts = append(stmts, store.Statement{Text: t, Line: startLine})
+		}
+		b.Reset()
+		started = false
+	}
+
+	// 0 = code, 1 = single-quoted string, 2 = line comment (//), 3 = block comment (/* */),
+	// 4 = double-quoted string, 5 = backtick-quoted identifier
+	mode := 0
+	n := len(buffer)
+	for i := 0; i < n; i++ {
+		c := buffer[i]
+		if c == '\n' {
+			line++
+		}
+		switch mode {
+		case 1: // single-quoted string '...'
+			b.WriteByte(c)
+			if c == '\\' && i+1 < n {
+				b.WriteByte(buffer[i+1])
+				if buffer[i+1] == '\n' {
+					line++
+				}
+				i++
+			} else if c == '\'' {
+				mode = 0
+			}
+		case 2: // line comment: // ...
+			if c == '\n' {
+				b.WriteByte(c)
+				mode = 0
+			}
+		case 3: // block comment: /* ... */
+			if c == '\n' {
+				line++
+			}
+			if c == '*' && i+1 < n && buffer[i+1] == '/' {
+				i++
+				mode = 0
+			}
+		case 4: // double-quoted string "..."
+			b.WriteByte(c)
+			if c == '\\' && i+1 < n {
+				b.WriteByte(buffer[i+1])
+				if buffer[i+1] == '\n' {
+					line++
+				}
+				i++
+			} else if c == '"' {
+				mode = 0
+			}
+		case 5: // backtick-quoted identifier `...`
+			b.WriteByte(c)
+			if c == '`' {
+				if i+1 < n && buffer[i+1] == '`' {
+					b.WriteByte(buffer[i+1])
+					i++
+				} else {
+					mode = 0
+				}
+			}
+		default: // code
+			switch {
+			case c == '\'':
+				mode = 1
+				if !started {
+					startLine = line
+					started = true
+				}
+				b.WriteByte(c)
+			case c == '"':
+				mode = 4
+				if !started {
+					startLine = line
+					started = true
+				}
+				b.WriteByte(c)
+			case c == '`':
+				mode = 5
+				if !started {
+					startLine = line
+					started = true
+				}
+				b.WriteByte(c)
+			case c == '/' && i+1 < n && buffer[i+1] == '/':
+				mode = 2
+				i++
+			case c == '/' && i+1 < n && buffer[i+1] == '*':
+				mode = 3
+				i++
+				b.WriteByte(' ')
+			case c == ';':
+				flush()
+			default:
+				if !started && (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+					startLine = line
+					started = true
+				}
+				b.WriteByte(c)
+			}
+		}
+	}
+	flush()
+	return stmts
+}
+
+// Execute runs a Cypher query. If a multi-statement buffer is provided,
+// it executes the statement at line using SplitStatements / StatementAt.
+func (e *Neo4jExecutor) Execute(ctx context.Context, buffer string, line int, maxRows int) (store.DataView, error) {
 	trimmed := strings.TrimSpace(buffer)
 	if trimmed == "" {
 		return nil, errors.New("empty Cypher query")
 	}
 
-	isMut := e.IsMutation(trimmed)
+	stmts := e.SplitStatements(buffer)
+	if len(stmts) == 0 {
+		return nil, errors.New("empty Cypher query")
+	}
+	stmtIdx := 0
+	if len(stmts) > 1 {
+		stmtIdx = store.StatementAt(stmts, line)
+	}
+	targetQuery := stmts[stmtIdx].Text
+
+	isMut := e.IsMutation(targetQuery)
 	if e.source.readOnly && isMut {
 		return nil, errors.New("mutations are blocked in read-only mode")
 	}
@@ -461,7 +588,7 @@ func (e *Neo4jExecutor) Execute(ctx context.Context, buffer string, _line int, m
 	})
 	defer session.Close(ctx)
 
-	result, err := session.Run(ctx, trimmed, nil)
+	result, err := session.Run(ctx, targetQuery, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cypher error: %w", err)
 	}

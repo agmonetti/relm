@@ -71,7 +71,7 @@ go run ./cmd/demo
 - `r`: Reload current item.
 - `Alt+E`: Export query result or browsed page to `.csv` or `.json`.
 - `Alt+C` / `Ctrl+Y`: Copy editor query to clipboard.
-- `Ctrl+R`: Execute query in editor.
+- `Ctrl+R`: Execute query under cursor in editor (separate multiple queries with `;` in SQL/CQL/Cypher, or newlines in Redis).
 - `Esc`: Cancel running query or close detail/structure overlay.
 
 ---
