@@ -473,4 +473,3 @@ func (m *Model) detailPlainText(innerW int) string {
 	rendered := m.renderActiveDetail(innerW, 10000)
 	return ansi.Strip(rendered)
 }
-

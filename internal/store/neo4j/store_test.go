@@ -132,4 +132,3 @@ RETURN n`
 		t.Errorf("stmt 1 should preserve backtick identifier: %q", stmts[1].Text)
 	}
 }
-

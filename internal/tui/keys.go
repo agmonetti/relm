@@ -4,23 +4,23 @@ import "github.com/charmbracelet/bubbles/key"
 
 // KeyMap groups all the keybindings of the application.
 type KeyMap struct {
-	Quit          key.Binding
-	NewSession    key.Binding
-	SaveConn      key.Binding
-	Settings      key.Binding
-	ToggleSidebar key.Binding
-	ToggleMain    key.Binding
-	ToggleEditor  key.Binding
-	ZoomPane      key.Binding
-	Help          key.Binding
-	Switch        key.Binding
-	Inspect       key.Binding
-	Detail        key.Binding
-	Refresh       key.Binding
-	Execute       key.Binding
-	ClearInput    key.Binding
-	LineStart     key.Binding
-	LineEnd       key.Binding
+	Quit           key.Binding
+	NewSession     key.Binding
+	SaveConn       key.Binding
+	Settings       key.Binding
+	ToggleSidebar  key.Binding
+	ToggleMain     key.Binding
+	ToggleEditor   key.Binding
+	ZoomPane       key.Binding
+	Help           key.Binding
+	Switch         key.Binding
+	Inspect        key.Binding
+	Detail         key.Binding
+	Refresh        key.Binding
+	Execute        key.Binding
+	ClearInput     key.Binding
+	LineStart      key.Binding
+	LineEnd        key.Binding
 	Back           key.Binding
 	Export         key.Binding
 	CopyQuery      key.Binding
@@ -42,26 +42,26 @@ type KeyMap struct {
 // DefaultKeyMap returns the full keymap.
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
-		Quit:          key.NewBinding(key.WithKeys("ctrl+c", "q"), key.WithHelp("ctrl+c / q", "quit")),
-		NewSession:    key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n", "new connection")),
-		SaveConn:      key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save connection")),
-		Settings:      key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "settings")),
-		ToggleSidebar: key.NewBinding(key.WithKeys("alt+b"), key.WithHelp("alt+b", "sidebar")),
-		ToggleMain:    key.NewBinding(key.WithKeys("alt+m"), key.WithHelp("alt+m", "main view")),
-		ToggleEditor:  key.NewBinding(key.WithKeys("alt+q"), key.WithHelp("alt+q", "editor")),
-		ZoomPane:      key.NewBinding(key.WithKeys("alt+z"), key.WithHelp("alt+z", "zoom pane")),
-		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		Switch:        key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next pane")),
-		Inspect:       key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "structure")),
-		Detail:        key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "row detail")),
-		Refresh:       key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
-		Execute:       key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("ctrl+r", "run")),
-		ClearInput:    key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear")),
-		LineStart:     key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "line start")),
-		LineEnd:       key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "line end")),
-		Back:          key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
-		Export:        key.NewBinding(key.WithKeys("alt+e"), key.WithHelp("alt+e", "export result")),
-		CopyQuery:     key.NewBinding(key.WithKeys("alt+c", "ctrl+y"), key.WithHelp("alt+c", "copy query")),
+		Quit:           key.NewBinding(key.WithKeys("ctrl+c", "q"), key.WithHelp("ctrl+c / q", "quit")),
+		NewSession:     key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n", "new connection")),
+		SaveConn:       key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save connection")),
+		Settings:       key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "settings")),
+		ToggleSidebar:  key.NewBinding(key.WithKeys("alt+b"), key.WithHelp("alt+b", "sidebar")),
+		ToggleMain:     key.NewBinding(key.WithKeys("alt+m"), key.WithHelp("alt+m", "main view")),
+		ToggleEditor:   key.NewBinding(key.WithKeys("alt+q"), key.WithHelp("alt+q", "editor")),
+		ZoomPane:       key.NewBinding(key.WithKeys("alt+z"), key.WithHelp("alt+z", "zoom pane")),
+		Help:           key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Switch:         key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next pane")),
+		Inspect:        key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "structure")),
+		Detail:         key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "row detail")),
+		Refresh:        key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
+		Execute:        key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("ctrl+r", "run")),
+		ClearInput:     key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "clear")),
+		LineStart:      key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "line start")),
+		LineEnd:        key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("ctrl+e", "line end")),
+		Back:           key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
+		Export:         key.NewBinding(key.WithKeys("alt+e"), key.WithHelp("alt+e", "export result")),
+		CopyQuery:      key.NewBinding(key.WithKeys("alt+c", "ctrl+y"), key.WithHelp("alt+c", "copy query")),
 		ScrollColLeft:  key.NewBinding(key.WithKeys("alt+left", "alt+h", "shift+left"), key.WithHelp("alt+←", "scroll col left")),
 		ScrollColRight: key.NewBinding(key.WithKeys("alt+right", "alt+l", "shift+right"), key.WithHelp("alt+→", "scroll col right")),
 

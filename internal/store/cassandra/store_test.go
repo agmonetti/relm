@@ -80,4 +80,3 @@ func TestCassandra_SortCQLColumns(t *testing.T) {
 		}
 	}
 }
-

@@ -607,8 +607,6 @@ func TestModel_DetailView_NavigateAndCopy(t *testing.T) {
 	}
 }
 
-
-
 func TestModel_ClickFocusesConnectField(t *testing.T) {
 	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30}) // innerW=98, contentHeight=26
@@ -1585,5 +1583,3 @@ func TestModel_EditorHorizontalScroll_KeysAndMouse(t *testing.T) {
 		t.Errorf("editor colScroll = %d, want 0 after running new query", m.editorScreen.ColScroll())
 	}
 }
-
-

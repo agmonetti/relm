@@ -684,5 +684,3 @@ func TestRenderRowDetail_NullValue(t *testing.T) {
 		t.Errorf("detail view for NULL field must contain ∅: %q", plain)
 	}
 }
-
-
