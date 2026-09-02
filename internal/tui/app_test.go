@@ -27,6 +27,7 @@ import (
 // Cursor blink, spinner wait, and flash message timers would block the synchronous step()
 // helper for their real duration; tiny durations keep the tests fast.
 func init() {
+	clipboardWriteAll = func(text string) error { return nil }
 	screens.CursorBlink = time.Millisecond
 	FlashMessageDuration = time.Millisecond
 }

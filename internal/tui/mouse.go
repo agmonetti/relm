@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
@@ -117,7 +116,7 @@ func (m *Model) handleWorkspaceMouse(msg tea.MouseMsg) tea.Cmd {
 				selected := screens.ExtractTextRange(m.editorScreen.Value(),
 					m.dragStartLine, m.dragStartCol, m.dragEndLine, m.dragEndCol)
 				if strings.TrimSpace(selected) != "" {
-					if err := clipboard.WriteAll(selected); err == nil {
+					if err := clipboardWriteAll(selected); err == nil {
 						return m.setSuccess("selection copied to clipboard")
 					}
 				}
@@ -422,7 +421,7 @@ func (m *Model) handleDetailMouse(msg tea.MouseMsg) tea.Cmd {
 					selected := screens.ExtractTextRange(text,
 						m.dragStartLine, m.dragStartCol, m.dragEndLine, m.dragEndCol)
 					if strings.TrimSpace(selected) != "" {
-						if err := clipboard.WriteAll(selected); err == nil {
+						if err := clipboardWriteAll(selected); err == nil {
 							return m.setSuccess("selection copied to clipboard")
 						}
 					}

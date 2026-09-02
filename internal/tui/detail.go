@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -211,7 +210,7 @@ func (m *Model) copyDetailValue() tea.Cmd {
 			if m.detailCursor < len(m.detailVals) {
 				val = m.detailVals[m.detailCursor]
 			}
-			if err := clipboard.WriteAll(val); err == nil {
+			if err := clipboardWriteAll(val); err == nil {
 				return m.setSuccess(fmt.Sprintf("copied '%s' value to clipboard", col))
 			} else {
 				return m.setError("failed to copy: " + err.Error())
@@ -220,7 +219,7 @@ func (m *Model) copyDetailValue() tea.Cmd {
 		return nil
 	}
 	if m.detailDoc != "" {
-		if err := clipboard.WriteAll(m.detailDoc); err == nil {
+		if err := clipboardWriteAll(m.detailDoc); err == nil {
 			return m.setSuccess("document copied to clipboard")
 		} else {
 			return m.setError("failed to copy: " + err.Error())
@@ -231,7 +230,7 @@ func (m *Model) copyDetailValue() tea.Cmd {
 		for k, v := range m.detailGraph.Properties {
 			b.WriteString(fmt.Sprintf("%s: %s\n", k, v))
 		}
-		if err := clipboard.WriteAll(b.String()); err == nil {
+		if err := clipboardWriteAll(b.String()); err == nil {
 			return m.setSuccess("node details copied to clipboard")
 		} else {
 			return m.setError("failed to copy: " + err.Error())
@@ -249,7 +248,7 @@ func (m *Model) copyDetailField() tea.Cmd {
 				val = m.detailVals[m.detailCursor]
 			}
 			text := fmt.Sprintf("%s: %s", col, val)
-			if err := clipboard.WriteAll(text); err == nil {
+			if err := clipboardWriteAll(text); err == nil {
 				return m.setSuccess(fmt.Sprintf("copied field '%s' to clipboard", col))
 			} else {
 				return m.setError("failed to copy: " + err.Error())
@@ -270,14 +269,14 @@ func (m *Model) copyDetailAll() tea.Cmd {
 			}
 			b.WriteString(fmt.Sprintf("%s: %s\n", c, val))
 		}
-		if err := clipboard.WriteAll(strings.TrimSpace(b.String())); err == nil {
+		if err := clipboardWriteAll(strings.TrimSpace(b.String())); err == nil {
 			return m.setSuccess("all fields copied to clipboard")
 		} else {
 			return m.setError("failed to copy: " + err.Error())
 		}
 	}
 	if m.detailDoc != "" {
-		if err := clipboard.WriteAll(m.detailDoc); err == nil {
+		if err := clipboardWriteAll(m.detailDoc); err == nil {
 			return m.setSuccess("document copied to clipboard")
 		} else {
 			return m.setError("failed to copy: " + err.Error())
@@ -289,7 +288,7 @@ func (m *Model) copyDetailAll() tea.Cmd {
 		for k, v := range m.detailGraph.Properties {
 			b.WriteString(fmt.Sprintf("%s: %s\n", k, v))
 		}
-		if err := clipboard.WriteAll(strings.TrimSpace(b.String())); err == nil {
+		if err := clipboardWriteAll(strings.TrimSpace(b.String())); err == nil {
 			return m.setSuccess("node details copied to clipboard")
 		} else {
 			return m.setError("failed to copy: " + err.Error())

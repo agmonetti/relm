@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -401,7 +400,7 @@ func (m *Model) copyQueryToClipboard() tea.Cmd {
 	if strings.TrimSpace(buf) == "" {
 		return m.setWarn("no query to copy")
 	}
-	if err := clipboard.WriteAll(buf); err != nil {
+	if err := clipboardWriteAll(buf); err != nil {
 		return m.setError("failed to copy: " + err.Error())
 	}
 	return m.setSuccess("query copied to clipboard")
