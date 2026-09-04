@@ -124,6 +124,84 @@ relm --read-only redis://localhost:6379/0
 | right-click drag | Resize panes |
 | scroll wheel / swipe | Scroll pane / table columns under cursor |
 
+## MCP Server (Model Context Protocol)
+
+`relm` includes a dedicated Model Context Protocol (MCP) server that exposes browsing and querying capabilities for all 9 database engines to AI agents (such as Antigravity / agy, Claude Desktop, Cursor, etc.).
+
+### Tools Provided
+
+| Tool | Description |
+|---|---|
+| `list_objects` | Discover all catalog items (tables, collections, keys, node labels) |
+| `browse` | Paginate data with keyset, skip/limit, SCAN, or cursor mechanics |
+| `inspect` | Inspect schemas, columns, types, indexes, and engine metadata |
+| `query` | Execute native queries (SQL, MQL, RESP, CQL, Cypher). Mutations blocked in read-only mode |
+| `connect` | Switch or open database connections dynamically via DSN or saved connection name |
+| `list_connections` | Read saved connection profiles from `~/.config/relm/connections.json` |
+
+### Setup & Configuration
+
+#### 1. Run directly with Go (No install needed)
+
+Run on the fly using `go run`:
+
+```json
+{
+  "mcpServers": {
+    "relm": {
+      "command": "go",
+      "args": ["run", "github.com/agmonetti/relm/cmd/relm-mcp@latest", "--read-only", "postgres://user:pass@localhost:5432/mydb"]
+    }
+  }
+}
+```
+
+#### 2. Install Globally
+
+Install the binary into `$GOPATH/bin`:
+
+```bash
+go install github.com/agmonetti/relm/cmd/relm-mcp@latest
+```
+
+Configuration:
+
+```json
+{
+  "mcpServers": {
+    "relm": {
+      "command": "relm-mcp",
+      "args": ["--read-only", "/path/to/database.db"]
+    }
+  }
+}
+```
+
+#### 3. Install from Source
+
+Clone the repository and build the binary locally:
+
+```bash
+git clone https://github.com/agmonetti/relm.git
+cd relm
+go build -o relm-mcp ./cmd/relm-mcp
+```
+
+Configuration:
+
+```json
+{
+  "mcpServers": {
+    "relm": {
+      "command": "/absolute/path/to/relm/relm-mcp",
+      "args": ["--read-only", "/absolute/path/to/demo.db"]
+    }
+  }
+}
+```
+
+> **Note:** The DSN argument is optional. If omitted, the AI agent can use the `connect` tool to connect to any supported database on demand.
+
 ## Development
 
 ```bash

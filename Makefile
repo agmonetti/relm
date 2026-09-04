@@ -1,10 +1,15 @@
-BINARY := relm
-PKG    := ./cmd/relm
+BINARY     := relm
+MCP_BINARY := relm-mcp
+PKG        := ./cmd/relm
+MCP_PKG    := ./cmd/relm-mcp
 
-.PHONY: build test lint clean demo demo-pg demo-mysql demo-maria demo-mssql demo-mongo demo-redis demo-cassandra demo-neo4j demo-all
+.PHONY: build build-mcp test lint clean demo demo-pg demo-mysql demo-maria demo-mssql demo-mongo demo-redis demo-cassandra demo-neo4j demo-all
 
 build:
 	go build -o bin/$(BINARY) $(PKG)
+
+build-mcp:
+	go build -o bin/$(MCP_BINARY) $(MCP_PKG)
 
 # Network engine tests are skipped without env vars. See README.
 test:

@@ -1,6 +1,8 @@
 # Binaries
 /relm
 /relm.exe
+/relm-mcp
+/relm-mcp.exe
 /bin/
 *.exe~
 
