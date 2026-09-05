@@ -1,0 +1,30 @@
+# Smithery configuration file
+# https://smithery.ai/docs/config
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      readOnly:
+        type: boolean
+        default: true
+        description: "Enforce read-only mode to prevent mutation queries"
+      dsn:
+        type: string
+        description: "Database DSN or SQLite file path (optional)"
+  commandFunction:
+    |-
+    (config) => {
+      const args = [];
+      if (config?.readOnly) {
+        args.push('--read-only');
+      }
+      if (config?.dsn) {
+        args.push(config.dsn);
+      }
+      return {
+        command: 'relm-mcp',
+        args: args
+      };
+    }

@@ -1,0 +1,8 @@
+.git
+relm
+relm-mcp
+bin/
+demo.db
+assets/
+*.png
+*.gif
